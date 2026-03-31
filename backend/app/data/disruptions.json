@@ -1,0 +1,388 @@
+[
+  {
+    "id": "eu-steel-quotas|europe",
+    "event": "EU Steel Safeguard Quotas Tightening",
+    "description": "European Commission reduced 2026 steel import quotas by 3% across product categories. Hot-rolled coil prices up 8% in Q1. SKF's European bearing plants face rising input costs for ring and roller production.",
+    "category": "Trade Policy",
+    "severity": "High",
+    "trend": "Escalating",
+    "region": "Europe",
+    "lat": 50.85,
+    "lng": 4.35,
+    "skf_exposure": "Direct cost impact on Gothenburg, Landskrona, Bietigheim, Steyr ring production. Steel is SKF's #1 input cost.",
+    "recommended_action": "Accelerate dual-sourcing from Indian and Turkish steel mills. Review Q2 pricing pass-through with OEM customers.",
+    "status": "active",
+    "first_seen": "2026-01-15T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 12,
+    "impact": {
+      "affected_sites": [
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Landskrona", "type": "mfg", "distance_km": 0},
+        {"name": "Bietigheim", "type": "mfg", "distance_km": 0},
+        {"name": "Steyr", "type": "mfg", "distance_km": 0},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0},
+        {"name": "Hofors", "type": "mfg", "distance_km": 0},
+        {"name": "Katrineholm", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 22, "countries": ["Germany", "Sweden", "Austria", "Italy"]},
+      "estimated_units_per_week": 85000,
+      "recovery_weeks_with_mitigation": 6,
+      "recovery_weeks_without": 16
+    },
+    "actions": [
+      {"priority": 1, "action": "Negotiate forward contracts with Indian steel mills (JSW, Tata) for Q2-Q3 ring-grade steel", "owner": "Procurement", "urgency": "immediate"},
+      {"priority": 2, "action": "Initiate pricing pass-through discussions with top 20 OEM customers for Q2 contracts", "owner": "Commercial", "urgency": "24h"},
+      {"priority": 3, "action": "Qualify Turkish flat steel suppliers (Erdemir, Kardemir) for Steyr and Bietigheim plants", "owner": "Procurement", "urgency": "1w"},
+      {"priority": 4, "action": "Review inventory buffer policy for steel rings at Tongeren logistics hub", "owner": "SC Planning", "urgency": "48h"}
+    ],
+    "confidence": 0.94,
+    "sources": ["European Commission Official Journal", "S&P Global Platts", "Eurometal"]
+  },
+  {
+    "id": "red-sea-shipping|middle-east",
+    "event": "Red Sea Shipping Disruptions Continue",
+    "description": "Houthi attacks on commercial shipping persist, forcing EU-Asia container traffic via Cape of Good Hope. Transit times increased 10-14 days, freight rates 2.5x above pre-crisis levels on Asia-Europe routes.",
+    "category": "Logistics/Port",
+    "severity": "Critical",
+    "trend": "Stable",
+    "region": "Middle East",
+    "lat": 14.5,
+    "lng": 42.5,
+    "skf_exposure": "Delays to components from China/India factories to European assembly. Nilai (Malaysia) to EU shipments +12 days. Bearing exports from Pune to EU customers affected.",
+    "recommended_action": "Pre-position 2 additional weeks safety stock at Tongeren logistics hub. Shift urgent shipments to air freight for critical OEM deliveries.",
+    "status": "active",
+    "first_seen": "2024-01-10T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 45,
+    "impact": {
+      "affected_sites": [
+        {"name": "Nilai", "type": "mfg", "distance_km": 7200},
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 4100},
+        {"name": "Ahmedabad", "type": "mfg", "distance_km": 3800},
+        {"name": "Dalian", "type": "mfg", "distance_km": 9500},
+        {"name": "Tongeren", "type": "log", "distance_km": 6200},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 8800},
+        {"name": "Bangalore", "type": "mfg", "distance_km": 4500}
+      ],
+      "affected_suppliers": {"count": 145, "countries": ["China", "India", "Malaysia", "Japan", "Korea", "Indonesia"]},
+      "estimated_units_per_week": 42000,
+      "recovery_weeks_with_mitigation": 2,
+      "recovery_weeks_without": 14
+    },
+    "actions": [
+      {"priority": 1, "action": "Pre-position 2 additional weeks of safety stock at Tongeren hub for Asia-sourced components", "owner": "SC Planning", "urgency": "immediate"},
+      {"priority": 2, "action": "Shift critical OEM delivery shipments (automotive, wind) from Pune and Nilai to air freight", "owner": "Logistics", "urgency": "immediate"},
+      {"priority": 3, "action": "Negotiate volume discounts on Cape of Good Hope routing with Maersk and MSC", "owner": "Procurement", "urgency": "24h"},
+      {"priority": 4, "action": "Evaluate rail-freight corridor via China-Europe (Chengdu to Duisburg) for Dalian/Wuhu output", "owner": "Logistics", "urgency": "1w"},
+      {"priority": 5, "action": "Update customer lead times for Asia-sourced bearing lines by +10 days", "owner": "Commercial", "urgency": "48h"}
+    ],
+    "confidence": 0.98,
+    "sources": ["Lloyd's List", "Drewry Maritime", "Reuters", "UNCTAD"]
+  },
+  {
+    "id": "ukraine-war-lutsk|europe",
+    "event": "Ukraine-Russia War — Lutsk Plant Operating Under Constraints",
+    "description": "Ongoing conflict continues to affect SKF's Lutsk manufacturing facility in western Ukraine. Intermittent power outages and logistics challenges persist, though the plant remains operational.",
+    "category": "Geopolitical",
+    "severity": "High",
+    "trend": "Stable",
+    "region": "Europe",
+    "lat": 50.75,
+    "lng": 25.33,
+    "skf_exposure": "Lutsk bearing plant operating at ~70% capacity. Employee safety protocols active. Alternative supply from Chodov (Czech) and Karnare (Bulgaria) partially compensating.",
+    "recommended_action": "Maintain dual-sourcing from Czech/Bulgaria plants. Continue employee support programs. Monitor escalation risk to western Ukraine.",
+    "status": "active",
+    "first_seen": "2022-02-24T06:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 120,
+    "impact": {
+      "affected_sites": [
+        {"name": "Lutsk", "type": "mfg", "distance_km": 0},
+        {"name": "Chodov", "type": "mfg", "distance_km": 980},
+        {"name": "Karnare", "type": "mfg", "distance_km": 1250},
+        {"name": "Sopot", "type": "mfg", "distance_km": 1300},
+        {"name": "Poznan", "type": "mfg", "distance_km": 650}
+      ],
+      "affected_suppliers": {"count": 6, "countries": ["Ukraine", "Poland"]},
+      "estimated_units_per_week": 8500,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 52
+    },
+    "actions": [
+      {"priority": 1, "action": "Continue dual-sourcing Lutsk production lines to Chodov (Czech) and Karnare (Bulgaria)", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 2, "action": "Maintain 4-week buffer stock of Lutsk-specific bearing SKUs at Tongeren", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 3, "action": "Review employee safety protocols and evacuation plans quarterly", "owner": "HR / Site Ops", "urgency": "1w"},
+      {"priority": 4, "action": "Monitor frontline movement for escalation risk to Volyn Oblast (Lutsk region)", "owner": "Risk Management", "urgency": "ongoing"}
+    ],
+    "confidence": 0.96,
+    "sources": ["Reuters", "ISW (Institute for the Study of War)", "SKF Internal Reports"]
+  },
+  {
+    "id": "china-rare-earth|china",
+    "event": "China Rare Earth Export Controls Expanded",
+    "description": "Beijing expanded export licensing requirements for rare earth permanent magnets and processing technology. New controls affect samarium-cobalt and neodymium materials used in high-performance bearings.",
+    "category": "Trade Policy",
+    "severity": "High",
+    "trend": "Escalating",
+    "region": "China",
+    "lat": 39.9,
+    "lng": 116.4,
+    "skf_exposure": "Sensor-bearing integrated units at Xinchang (SXC) and Yuyao (NGBC) plants use rare earth components. Supply for magnetic bearing lines at risk.",
+    "recommended_action": "Qualify alternative magnet suppliers in Japan and Vietnam. Build 6-month buffer stock of critical rare earth components.",
+    "status": "active",
+    "first_seen": "2025-11-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 8,
+    "impact": {
+      "affected_sites": [
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 0},
+        {"name": "Yuyao (NGBC)", "type": "mfg", "distance_km": 0},
+        {"name": "Calgary, AB", "type": "mfg", "distance_km": 9200},
+        {"name": "Vernon", "type": "mfg", "distance_km": 9800},
+        {"name": "Tanger", "type": "mfg", "distance_km": 9600}
+      ],
+      "affected_suppliers": {"count": 12, "countries": ["China", "Japan", "Vietnam"]},
+      "estimated_units_per_week": 6500,
+      "recovery_weeks_with_mitigation": 8,
+      "recovery_weeks_without": 24
+    },
+    "actions": [
+      {"priority": 1, "action": "Build 6-month buffer stock of samarium-cobalt and neodymium magnets at Xinchang and Yuyao", "owner": "Procurement", "urgency": "immediate"},
+      {"priority": 2, "action": "Qualify alternative magnet suppliers: Shin-Etsu (Japan) and Vietnam Rare Earth JSC", "owner": "Procurement", "urgency": "1w"},
+      {"priority": 3, "action": "Assess magnetic bearing product lines for rare-earth reduction redesigns", "owner": "R&D / Engineering", "urgency": "1m"},
+      {"priority": 4, "action": "Engage SKF Government Affairs for trade diplomacy with Chinese MOFCOM", "owner": "Legal / Gov Affairs", "urgency": "48h"}
+    ],
+    "confidence": 0.88,
+    "sources": ["MOFCOM (China Ministry of Commerce)", "Nikkei Asia", "Reuters"]
+  },
+  {
+    "id": "india-monsoon|india",
+    "event": "India Monsoon Season — Pune/Chakan Logistics",
+    "description": "Heavier than normal pre-monsoon rainfall affecting road infrastructure in Maharashtra. Pune-Mumbai expressway intermittent closures impacting container movement to JNPT port.",
+    "category": "Natural Disaster",
+    "severity": "Medium",
+    "trend": "New",
+    "region": "India",
+    "lat": 18.76,
+    "lng": 73.86,
+    "skf_exposure": "Pune-Chakan factory export shipments delayed 2-4 days. Ahmedabad and Haridwar plants unaffected. Bangalore facility monitoring Karnataka rainfall levels.",
+    "recommended_action": "Pre-ship Q3 export orders before peak monsoon. Coordinate with freight forwarders for alternative road routes.",
+    "status": "active",
+    "first_seen": "2026-03-20T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 3,
+    "impact": {
+      "affected_sites": [
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 0},
+        {"name": "Mumbai", "type": "admin", "distance_km": 150},
+        {"name": "Bangalore", "type": "mfg", "distance_km": 840}
+      ],
+      "affected_suppliers": {"count": 18, "countries": ["India"]},
+      "estimated_units_per_week": 15000,
+      "recovery_weeks_with_mitigation": 1,
+      "recovery_weeks_without": 4
+    },
+    "actions": [
+      {"priority": 1, "action": "Pre-ship Q3 export orders from Pune-Chakan before peak monsoon onset (target: April 15)", "owner": "SC Planning", "urgency": "immediate"},
+      {"priority": 2, "action": "Arrange alternative road routes via NH48 bypassing flooded expressway sections", "owner": "Logistics", "urgency": "24h"},
+      {"priority": 3, "action": "Coordinate with JNPT port for priority container slots before monsoon peak", "owner": "Logistics", "urgency": "48h"},
+      {"priority": 4, "action": "Monitor Karnataka rainfall levels for potential Bangalore plant impact", "owner": "Site Ops", "urgency": "ongoing"}
+    ],
+    "confidence": 0.85,
+    "sources": ["India Meteorological Department", "Reuters India", "JNPT Port Authority"]
+  },
+  {
+    "id": "rotterdam-labour|europe",
+    "event": "Port of Rotterdam Labour Negotiations",
+    "description": "Dockworkers' union FNV in negotiations for new collective agreement. Previous rounds included work slowdowns. Key gateway for SKF European distribution.",
+    "category": "Labour/Strike",
+    "severity": "Medium",
+    "trend": "Escalating",
+    "region": "Europe",
+    "lat": 51.92,
+    "lng": 4.48,
+    "skf_exposure": "Rotterdam is primary import/export hub for SKF's European supply chain. Work stoppages would delay inbound steel and outbound finished bearings across EU.",
+    "recommended_action": "Identify contingency routing through Antwerp and Hamburg. Pre-position critical inventory at Tongeren before negotiation deadline.",
+    "status": "active",
+    "first_seen": "2026-02-15T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 5,
+    "impact": {
+      "affected_sites": [
+        {"name": "Tongeren", "type": "log", "distance_km": 180},
+        {"name": "Barendrecht", "type": "sales", "distance_km": 15},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 520},
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 680},
+        {"name": "Enschede", "type": "mfg", "distance_km": 220}
+      ],
+      "affected_suppliers": {"count": 35, "countries": ["Netherlands", "Germany", "Belgium", "Sweden"]},
+      "estimated_units_per_week": 55000,
+      "recovery_weeks_with_mitigation": 1,
+      "recovery_weeks_without": 3
+    },
+    "actions": [
+      {"priority": 1, "action": "Pre-position 3 weeks of critical bearing inventory at Tongeren hub before negotiation deadline (April 10)", "owner": "SC Planning", "urgency": "immediate"},
+      {"priority": 2, "action": "Activate contingency routing agreements with Port of Antwerp and Port of Hamburg", "owner": "Logistics", "urgency": "24h"},
+      {"priority": 3, "action": "Notify European OEM customers of potential 5-7 day delivery delays if strike occurs", "owner": "Commercial", "urgency": "48h"},
+      {"priority": 4, "action": "Redirect inbound Asia shipments to Hamburg if Rotterdam work slowdown exceeds 48 hours", "owner": "Logistics", "urgency": "contingent"}
+    ],
+    "confidence": 0.78,
+    "sources": ["FNV Union Press Release", "Port of Rotterdam Authority", "NRC Handelsblad"]
+  },
+  {
+    "id": "us-301-tariffs|americas",
+    "event": "US Section 301 Tariffs on Chinese Bearings",
+    "description": "USTR maintaining 25% tariffs on Chinese-origin bearings entering the US. No indication of relief in current review cycle. Chinese competitors absorbing partial cost, creating pricing pressure.",
+    "category": "Trade Policy",
+    "severity": "Medium",
+    "trend": "Stable",
+    "region": "Americas",
+    "lat": 38.9,
+    "lng": -77.0,
+    "skf_exposure": "Positive for SKF US manufacturing (Waukegan, Salt Lake City, Crossville) vs Chinese imports. But Dalian/Wuhu exports to US market face 25% duty.",
+    "recommended_action": "Maximize US-origin production for domestic market. Route China production to non-US markets.",
+    "status": "active",
+    "first_seen": "2024-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 20,
+    "impact": {
+      "affected_sites": [
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Wuhu", "type": "mfg", "distance_km": 0},
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 0},
+        {"name": "Salt Lake City", "type": "mfg", "distance_km": 0},
+        {"name": "Crossville, TN", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 5, "countries": ["China", "United States"]},
+      "estimated_units_per_week": 28000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Maximize production loading at Waukegan, Salt Lake City, and Crossville for US-market bearings", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 2, "action": "Reroute Dalian and Wuhu output to EMEA, APAC, and Mercosur markets instead of US", "owner": "Commercial", "urgency": "ongoing"},
+      {"priority": 3, "action": "Evaluate Guadalupe NL (Mexico) capacity expansion for USMCA-origin production serving US", "owner": "Operations", "urgency": "1m"},
+      {"priority": 4, "action": "Monitor USTR review cycle for potential tariff changes in Q3 2026", "owner": "Legal / Gov Affairs", "urgency": "ongoing"}
+    ],
+    "confidence": 0.95,
+    "sources": ["USTR Federal Register", "International Trade Administration", "Bloomberg"]
+  },
+  {
+    "id": "taiwan-strait|china",
+    "event": "Taiwan Strait Military Exercises",
+    "description": "PLA conducting increased naval exercises near Taiwan. Shipping insurance premiums for Taiwan Strait transit rose 15%. No direct trade disruption yet but contingency planning accelerating across industry.",
+    "category": "Geopolitical",
+    "severity": "Medium",
+    "trend": "Stable",
+    "region": "China",
+    "lat": 24.5,
+    "lng": 119.5,
+    "skf_exposure": "Taiwan offices (New Taipei, Taichung, Kaohsiung) manage semiconductor-bearing customer relationships. Strait closure would disrupt all East Asia maritime logistics.",
+    "recommended_action": "Map Taiwan-dependent component flows. Prepare air-freight contingency for critical sensor components sourced from Taiwan.",
+    "status": "active",
+    "first_seen": "2025-09-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 10,
+    "impact": {
+      "affected_sites": [
+        {"name": "New Taipei", "type": "sales", "distance_km": 180},
+        {"name": "Taichung", "type": "sales", "distance_km": 120},
+        {"name": "Kaohsiung", "type": "sales", "distance_km": 350},
+        {"name": "Dalian", "type": "mfg", "distance_km": 1800},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 650},
+        {"name": "Yuyao (NGBC)", "type": "mfg", "distance_km": 600},
+        {"name": "Busan MFG", "type": "mfg", "distance_km": 900},
+        {"name": "Chino, Nagano", "type": "mfg", "distance_km": 2100}
+      ],
+      "affected_suppliers": {"count": 42, "countries": ["Taiwan", "China", "Japan", "Korea"]},
+      "estimated_units_per_week": 65000,
+      "recovery_weeks_with_mitigation": 4,
+      "recovery_weeks_without": 26
+    },
+    "actions": [
+      {"priority": 1, "action": "Map all Taiwan-dependent component flows including semiconductor-bearing sensor inputs", "owner": "SC Planning", "urgency": "immediate"},
+      {"priority": 2, "action": "Pre-negotiate air-freight capacity with EVA Air Cargo and China Airlines for sensor components", "owner": "Logistics", "urgency": "1w"},
+      {"priority": 3, "action": "Develop contingency plan to reroute East Asia maritime traffic south of Philippines if Strait closes", "owner": "Logistics", "urgency": "1m"},
+      {"priority": 4, "action": "Brief executive team on Taiwan scenario impact: worst case 65K units/week across APAC plants", "owner": "Risk Management", "urgency": "48h"},
+      {"priority": 5, "action": "Identify alternative semiconductor-bearing sensor suppliers outside Taiwan (Japan, Korea candidates)", "owner": "Procurement", "urgency": "1m"}
+    ],
+    "confidence": 0.72,
+    "sources": ["Reuters", "South China Morning Post", "Lloyd's List", "US DoD Press Releases"]
+  },
+  {
+    "id": "argentina-peso|americas",
+    "event": "Argentina Peso Devaluation Impact",
+    "description": "Argentine peso continued depreciation affecting Rosario plant cost competitiveness. Dollar-denominated input costs rising while local revenue partially hedged.",
+    "category": "Currency",
+    "severity": "Low",
+    "trend": "Stable",
+    "region": "Americas",
+    "lat": -32.9,
+    "lng": -60.9,
+    "skf_exposure": "Rosario manufacturing plant margins under pressure. Buenos Aires admin costs rising in USD terms. Export competitiveness improving for Mercosur customers.",
+    "recommended_action": "Review hedging strategy for ARS exposure. Leverage improved export pricing to grow regional market share.",
+    "status": "active",
+    "first_seen": "2025-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 8,
+    "impact": {
+      "affected_sites": [
+        {"name": "Rosario", "type": "mfg", "distance_km": 0},
+        {"name": "Buenos Aires Admin", "type": "admin", "distance_km": 300},
+        {"name": "Buenos Aires Sales", "type": "sales", "distance_km": 300}
+      ],
+      "affected_suppliers": {"count": 4, "countries": ["Argentina", "Brazil"]},
+      "estimated_units_per_week": 3200,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Review and extend ARS/USD hedging strategy with Treasury for next 12 months", "owner": "Finance", "urgency": "24h"},
+      {"priority": 2, "action": "Leverage improved export pricing to grow lubrication system sales in Brazil and Chile", "owner": "Commercial", "urgency": "1w"},
+      {"priority": 3, "action": "Negotiate USD-denominated contracts for key imported raw materials at Rosario", "owner": "Procurement", "urgency": "1m"},
+      {"priority": 4, "action": "Evaluate shifting some Rosario production to export-focused lines to capture FX advantage", "owner": "SC Planning", "urgency": "1m"}
+    ],
+    "confidence": 0.91,
+    "sources": ["Bloomberg", "Banco Central de la Republica Argentina", "Reuters LatAm"]
+  },
+  {
+    "id": "german-energy|europe",
+    "event": "German Energy Cost Stabilization",
+    "description": "Industrial electricity prices in Germany stabilized at pre-2022 levels following new LNG terminal capacity. Positive for energy-intensive bearing manufacturing operations.",
+    "category": "Other",
+    "severity": "Low",
+    "trend": "De-escalating",
+    "region": "Europe",
+    "lat": 50.04,
+    "lng": 10.22,
+    "skf_exposure": "Schweinfurt, Leverkusen, Heinsberg, Bietigheim plants benefit from normalized energy costs. Competitive position vs Asian imports improving.",
+    "recommended_action": "Lock in favorable long-term energy contracts. Reinvest savings into automation at German facilities.",
+    "status": "active",
+    "first_seen": "2025-12-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 4,
+    "impact": {
+      "affected_sites": [
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0},
+        {"name": "Leverkusen", "type": "mfg", "distance_km": 0},
+        {"name": "Heinsberg", "type": "mfg", "distance_km": 0},
+        {"name": "Bietigheim", "type": "mfg", "distance_km": 0},
+        {"name": "Hamburg", "type": "mfg", "distance_km": 0},
+        {"name": "Berlin/Walldorf", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 14, "countries": ["Germany"]},
+      "estimated_units_per_week": 48000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Lock in 3-year fixed-rate industrial electricity contracts at current stabilized prices", "owner": "Procurement", "urgency": "immediate"},
+      {"priority": 2, "action": "Reinvest energy savings into automation upgrades at Schweinfurt and Bietigheim", "owner": "Operations", "urgency": "1m"},
+      {"priority": 3, "action": "Reassess total cost competitiveness of German plants vs Asian alternatives for EU-market bearings", "owner": "SC Planning", "urgency": "1m"},
+      {"priority": 4, "action": "Explore on-site solar/battery installations at Schweinfurt to further reduce energy cost baseline", "owner": "Facilities", "urgency": "3m"}
+    ],
+    "confidence": 0.93,
+    "sources": ["Bundesnetzagentur", "BDEW", "Reuters Energy"]
+  }
+]

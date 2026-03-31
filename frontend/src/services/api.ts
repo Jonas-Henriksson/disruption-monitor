@@ -1,0 +1,262 @@
+/**
+ * API service layer for the SC Hub Disruption Monitor backend.
+ *
+ * Base URL is configurable via VITE_API_URL env var (default: http://localhost:3101).
+ * All functions gracefully return null on failure so callers can fall back to sample data.
+ */
+
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, Ticket, TicketStatus } from "../types";
+
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
+const API_PREFIX = "/api/v1";
+
+/** Structured recommendation from backend */
+export interface BackendRecommendation {
+  event_id: string;
+  event: string;
+  severity: string;
+  impact: {
+    affected_sites: { name: string; type: string; distance_km: number }[];
+    affected_suppliers: { count: number; countries: string[] };
+    estimated_units_per_week: number;
+    recovery_weeks_with_mitigation: number;
+    recovery_weeks_without: number;
+  };
+  actions: { priority: number; action: string; owner: string; urgency: string }[];
+  confidence: number;
+  sources: string[];
+  skf_exposure: string;
+}
+
+/** Shape returned by GET /api/v1/scans/latest/{mode} and POST /api/v1/scans */
+export interface ScanResponse {
+  mode: ScanMode;
+  source: "sample" | "live";
+  scanned_at: string;
+  count: number;
+  /** Items may arrive under the mode key (GET latest) or under "items" (POST scan) */
+  items?: ScanItem[];
+  disruptions?: ScanItem[];
+  geopolitical?: ScanItem[];
+  trade?: ScanItem[];
+  /** Present on POST responses */
+  scan_id?: string;
+  status?: string;
+  progress?: number;
+  started_at?: string;
+  completed_at?: string;
+  fallback?: boolean;
+  error?: string;
+}
+
+/** Extract the items array from a ScanResponse regardless of key layout */
+export function extractItems(res: ScanResponse): ScanItem[] {
+  // POST /scans returns items under "items"
+  if (res.items && res.items.length > 0) return res.items;
+  // GET /scans/latest/{mode} returns items under the mode key
+  const modeItems = res[res.mode as keyof ScanResponse];
+  if (Array.isArray(modeItems) && modeItems.length > 0) return modeItems as ScanItem[];
+  return [];
+}
+
+/**
+ * Fetch the latest scan results for a given mode.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchLatestScan(mode: ScanMode): Promise<ScanResponse | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/scans/latest/${mode}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as ScanResponse;
+  } catch {
+    // Network error, timeout, backend down -- all silently return null
+    return null;
+  }
+}
+
+/**
+ * Trigger a new scan on the backend.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+/**
+ * Fetch structured recommendations for a specific event from the backend.
+ * Returns null if not available (404 = no structured recs, or backend down).
+ */
+export async function fetchRecommendations(eventId: string): Promise<BackendRecommendation | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/recommendations`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as BackendRecommendation;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update event lifecycle status on the backend.
+ */
+export async function updateEventStatus(eventId: string, status: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Narrative response from POST /api/v1/events/{id}/narrative */
+export interface NarrativeResponse {
+  event_id: string;
+  narrative: string;
+  generated_at: string;
+}
+
+/**
+ * Generate an executive briefing narrative for a specific event.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchNarrative(eventId: string): Promise<NarrativeResponse | null> {
+  const url = `${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/narrative`;
+  console.log('[SC Hub] Fetching narrative:', url);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(90000), // 90s for Lambda cold start + Bedrock
+    });
+    console.log('[SC Hub] Narrative response:', resp.status, resp.statusText);
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.warn('[SC Hub] Narrative failed:', body);
+      return null;
+    }
+    const data = (await resp.json()) as NarrativeResponse;
+    // Backend returns generated_by, frontend expects generated_at — normalize
+    if (!data.generated_at && (data as Record<string, unknown>).generated_by) {
+      data.generated_at = new Date().toISOString();
+    }
+    return data;
+  } catch (err) {
+    console.error('[SC Hub] Narrative error:', err);
+    return null;
+  }
+}
+
+/** Shape of computed severity from the backend scoring algorithm */
+export interface ComputedSeverity {
+  score: number;
+  label: string;
+  components: {
+    magnitude: number;
+    proximity: number;
+    asset_criticality: number;
+    supply_chain_impact: number;
+  };
+  affected_site_count: number;
+}
+
+/** Timeline data point returned by GET /api/v1/events/timeline */
+export interface TimelineDataPoint {
+  date: string;
+  event_count: number;
+  critical_count: number;
+  high_count: number;
+  affected_sites_count: number;
+}
+
+/**
+ * Fetch risk timeline data from the backend.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchTimeline(days: number = 30): Promise<TimelineDataPoint[] | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/timeline?days=${days}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    return data as TimelineDataPoint[];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch supplier alternatives for a disrupted country.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchSupplierAlternatives(country: string): Promise<SupplierAlternativesResponse | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/suppliers/alternatives?country=${encodeURIComponent(country)}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as SupplierAlternativesResponse;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Assign a ticket to a team member for a specific event.
+ * Returns the created/updated Ticket or null on failure.
+ */
+export async function assignTicket(eventId: string, owner: string): Promise<Ticket | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner, notes: "" }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as Ticket;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update the ticket status for a specific event.
+ * Returns the updated Ticket or null on failure.
+ */
+export async function updateTicketStatus(eventId: string, status: TicketStatus): Promise<Ticket | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as Ticket;
+  } catch {
+    return null;
+  }
+}
+
+export async function triggerScan(mode: ScanMode): Promise<ScanResponse | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/scans`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+      // Live scans with Claude API can take up to 30s
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as ScanResponse;
+  } catch {
+    return null;
+  }
+}

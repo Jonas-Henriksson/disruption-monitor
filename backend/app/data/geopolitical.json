@@ -1,0 +1,312 @@
+[
+  {
+    "id": "russia-ukraine-war",
+    "risk": "Russia-Ukraine War",
+    "trend": "Stable",
+    "trend_arrow": "\u2192",
+    "this_week": "Continued frontline fighting in Donetsk. EU 15th sanctions package in preparation targeting metals trade. Grain corridor negotiations stalled.",
+    "skf_relevance": "Lutsk plant in western Ukraine operating at reduced capacity. Russian market fully exited. Sanctions compliance ongoing for indirect supply chains.",
+    "risk_level": "Critical",
+    "region": "Europe",
+    "lat": 48.38,
+    "lng": 31.17,
+    "watchpoint": "Escalation to western Ukraine. New EU sanctions on steel/metals. Energy infrastructure targeting before winter.",
+    "status": "active",
+    "first_seen": "2022-02-24T06:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 200,
+    "impact": {
+      "affected_sites": [
+        {"name": "Lutsk", "type": "mfg", "distance_km": 0},
+        {"name": "Chodov", "type": "mfg", "distance_km": 980},
+        {"name": "Karnare", "type": "mfg", "distance_km": 1250},
+        {"name": "Sopot", "type": "mfg", "distance_km": 1300},
+        {"name": "Poznan", "type": "mfg", "distance_km": 650}
+      ],
+      "affected_suppliers": {"count": 6, "countries": ["Ukraine", "Poland"]},
+      "estimated_units_per_week": 8500,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 52
+    },
+    "actions": [
+      {"priority": 1, "action": "Maintain dual-sourcing of Lutsk production lines to Chodov (Czech) and Karnare (Bulgaria)", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 2, "action": "Ensure 4-week buffer stock of Lutsk-specific bearing SKUs at Tongeren hub", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 3, "action": "Review employee safety protocols and evacuation plans quarterly", "owner": "HR / Site Ops", "urgency": "1w"},
+      {"priority": 4, "action": "Monitor EU 15th sanctions package for steel/metals trade implications on supplier base", "owner": "Legal / Compliance", "urgency": "24h"},
+      {"priority": 5, "action": "Update sanctions compliance screening for Central Asian and Turkish indirect supply chains", "owner": "Legal / Compliance", "urgency": "1w"}
+    ],
+    "confidence": 0.97,
+    "sources": ["Reuters", "ISW (Institute for the Study of War)", "European Council", "SKF Internal Reports"]
+  },
+  {
+    "id": "us-china-competition",
+    "risk": "US-China Strategic Competition",
+    "trend": "Escalating",
+    "trend_arrow": "\u2197",
+    "this_week": "New semiconductor export controls announced. PLA exercises near Taiwan increased. Diplomatic channels remain open but tense.",
+    "skf_relevance": "32 SKF sites in China. Dual-use technology scrutiny on sensor-integrated bearings. Customer relationship management across both blocs increasingly complex.",
+    "risk_level": "High",
+    "region": "China",
+    "lat": 35.86,
+    "lng": 104.2,
+    "watchpoint": "Taiwan contingency. Technology decoupling acceleration. Secondary sanctions risk on Chinese entities.",
+    "status": "active",
+    "first_seen": "2023-01-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 80,
+    "impact": {
+      "affected_sites": [
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 0},
+        {"name": "Yuyao (NGBC)", "type": "mfg", "distance_km": 0},
+        {"name": "Wuhu", "type": "mfg", "distance_km": 0},
+        {"name": "Beijing - Nankou", "type": "mfg", "distance_km": 0},
+        {"name": "Suzhou", "type": "mfg", "distance_km": 0},
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 0},
+        {"name": "Salt Lake City", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 85, "countries": ["China", "United States", "Taiwan", "Japan", "Korea"]},
+      "estimated_units_per_week": 120000,
+      "recovery_weeks_with_mitigation": 12,
+      "recovery_weeks_without": 52
+    },
+    "actions": [
+      {"priority": 1, "action": "Audit all sensor-integrated bearing product lines for dual-use export control classification", "owner": "Legal / Compliance", "urgency": "immediate"},
+      {"priority": 2, "action": "Develop China-for-China and West-for-West production strategies to minimize cross-bloc dependency", "owner": "SC Planning", "urgency": "1w"},
+      {"priority": 3, "action": "Map semiconductor component suppliers for sensor bearings and identify non-Chinese alternatives", "owner": "Procurement", "urgency": "1m"},
+      {"priority": 4, "action": "Brief executive team on Taiwan contingency plan including 120K units/week exposure", "owner": "Risk Management", "urgency": "48h"},
+      {"priority": 5, "action": "Engage trade counsel on secondary sanctions risk for Chinese entity transactions", "owner": "Legal / Gov Affairs", "urgency": "1w"}
+    ],
+    "confidence": 0.85,
+    "sources": ["Reuters", "Financial Times", "US BIS Federal Register", "SCMP"]
+  },
+  {
+    "id": "middle-east-instability",
+    "risk": "Middle East Instability \u2014 Red Sea / Iran",
+    "trend": "Escalating",
+    "trend_arrow": "\u2197",
+    "this_week": "Houthi attacks continue despite US/UK strikes. Iran nuclear talks at impasse. Israel-Gaza situation unresolved.",
+    "skf_relevance": "Suez Canal and Strait of Hormuz both under elevated risk. EU-Asia shipping corridor disrupted. Dubai and Dammam sales offices monitoring regional stability.",
+    "risk_level": "High",
+    "region": "Middle East",
+    "lat": 26.0,
+    "lng": 44.0,
+    "watchpoint": "Strait of Hormuz closure risk. Expansion of Red Sea conflict. Oil price spikes affecting logistics costs.",
+    "status": "active",
+    "first_seen": "2023-10-07T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 50,
+    "impact": {
+      "affected_sites": [
+        {"name": "Dubai", "type": "sales", "distance_km": 800},
+        {"name": "Dammam", "type": "sales", "distance_km": 1200},
+        {"name": "Nilai", "type": "mfg", "distance_km": 7200},
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 4100},
+        {"name": "Tongeren", "type": "log", "distance_km": 6200}
+      ],
+      "affected_suppliers": {"count": 145, "countries": ["China", "India", "Malaysia", "Japan", "Korea"]},
+      "estimated_units_per_week": 42000,
+      "recovery_weeks_with_mitigation": 2,
+      "recovery_weeks_without": 14
+    },
+    "actions": [
+      {"priority": 1, "action": "Maintain 2-week additional safety stock at Tongeren for Asia-sourced components on Cape routing", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 2, "action": "Develop Strait of Hormuz closure contingency for Dubai and Dammam offices (employee safety + operations)", "owner": "Risk Management", "urgency": "1w"},
+      {"priority": 3, "action": "Monitor oil price trajectory for logistics cost pass-through decisions", "owner": "Finance", "urgency": "ongoing"},
+      {"priority": 4, "action": "Pre-negotiate air freight capacity for critical OEM shipments if sea lanes further degrade", "owner": "Logistics", "urgency": "48h"}
+    ],
+    "confidence": 0.90,
+    "sources": ["Lloyd's List", "Reuters", "UNCTAD", "US CENTCOM"]
+  },
+  {
+    "id": "eu-political-fragmentation",
+    "risk": "EU Political Fragmentation",
+    "trend": "Escalating",
+    "trend_arrow": "\u2197",
+    "this_week": "Rising nationalist parties challenging industrial policy consensus. Debates on trade defense instruments intensifying. Green Deal implementation timelines under pressure.",
+    "skf_relevance": "EU is SKF's largest market. Industrial policy changes affect steel safeguards, anti-dumping duties, and carbon border adjustments \u2014 all directly impacting bearing manufacturing costs.",
+    "risk_level": "Medium",
+    "region": "Europe",
+    "lat": 50.85,
+    "lng": 4.35,
+    "watchpoint": "EU elections aftermath. Trade defense instrument revisions. CBAM implementation timeline.",
+    "status": "active",
+    "first_seen": "2024-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 15,
+    "impact": {
+      "affected_sites": [
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0},
+        {"name": "Steyr", "type": "mfg", "distance_km": 0},
+        {"name": "Landskrona", "type": "mfg", "distance_km": 0},
+        {"name": "Bietigheim", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 40, "countries": ["Germany", "Sweden", "Austria", "Italy", "France"]},
+      "estimated_units_per_week": 95000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Track CBAM implementation timeline for steel and aluminum input cost impacts", "owner": "Legal / Gov Affairs", "urgency": "ongoing"},
+      {"priority": 2, "action": "Engage EU trade defense instrument consultations to protect bearing anti-dumping duties", "owner": "Legal / Gov Affairs", "urgency": "1w"},
+      {"priority": 3, "action": "Model cost scenarios for different steel safeguard quota outcomes in 2026 review", "owner": "Finance", "urgency": "1m"},
+      {"priority": 4, "action": "Prepare briefing for Board on EU industrial policy shift implications for SKF's EU manufacturing footprint", "owner": "Strategy", "urgency": "1m"}
+    ],
+    "confidence": 0.75,
+    "sources": ["European Commission", "Politico EU", "Financial Times"]
+  },
+  {
+    "id": "india-china-border",
+    "risk": "India-China Border Tensions",
+    "trend": "Stable",
+    "trend_arrow": "\u2192",
+    "this_week": "Continued military deployments at LAC. Bilateral trade paradoxically growing. Some diplomatic thaw in business relations.",
+    "skf_relevance": "SKF has 5 factories in India and 7+ in China. Component flows between the two countries minimal but customer relationships span both. India positioning as China+1 alternative.",
+    "risk_level": "Medium",
+    "region": "India",
+    "lat": 28.6,
+    "lng": 77.2,
+    "watchpoint": "LAC escalation. India trade restrictions on Chinese imports. Supply chain China+1 acceleration.",
+    "status": "active",
+    "first_seen": "2024-01-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 12,
+    "impact": {
+      "affected_sites": [
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 0},
+        {"name": "Ahmedabad", "type": "mfg", "distance_km": 0},
+        {"name": "Bangalore", "type": "mfg", "distance_km": 0},
+        {"name": "Haridwar", "type": "mfg", "distance_km": 0},
+        {"name": "Mysore", "type": "mfg", "distance_km": 0},
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 30, "countries": ["India", "China"]},
+      "estimated_units_per_week": 45000,
+      "recovery_weeks_with_mitigation": 4,
+      "recovery_weeks_without": 16
+    },
+    "actions": [
+      {"priority": 1, "action": "Accelerate India capacity expansion at Pune-Chakan for China+1 bearing production serving APAC and EU", "owner": "Operations", "urgency": "1m"},
+      {"priority": 2, "action": "Minimize India-China cross-border component dependencies in production planning", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 3, "action": "Monitor Indian government restrictions on Chinese imports for bearing raw materials", "owner": "Procurement", "urgency": "ongoing"},
+      {"priority": 4, "action": "Develop dual customer relationship strategies for accounts active in both India and China", "owner": "Commercial", "urgency": "1m"}
+    ],
+    "confidence": 0.78,
+    "sources": ["Reuters India", "Economic Times", "SCMP"]
+  },
+  {
+    "id": "global-recession-signals",
+    "risk": "Global Industrial Recession Signals",
+    "trend": "De-escalating",
+    "trend_arrow": "\u2198",
+    "this_week": "European PMI showing tentative recovery. US manufacturing orders stabilizing. China stimulus measures showing some effect on industrial output.",
+    "skf_relevance": "Bearing demand is a direct proxy for industrial activity. Recovery in EU/US manufacturing benefits all SKF segments. China construction sector remains weak affecting infrastructure bearings.",
+    "risk_level": "Medium",
+    "region": "Global",
+    "lat": 20.0,
+    "lng": 0.0,
+    "watchpoint": "EU PMI trend confirmation. China property sector. US interest rate trajectory and capex investment cycle.",
+    "status": "active",
+    "first_seen": "2025-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 10,
+    "impact": {
+      "affected_sites": [
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0},
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 0},
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 200, "countries": ["Global"]},
+      "estimated_units_per_week": 300000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Track monthly PMI data for EU, US, and China to calibrate production planning", "owner": "SC Planning", "urgency": "ongoing"},
+      {"priority": 2, "action": "Prepare demand ramp-up scenarios for EU manufacturing recovery in H2 2026", "owner": "Commercial", "urgency": "1m"},
+      {"priority": 3, "action": "Review China infrastructure bearing inventory levels given weak construction sector", "owner": "SC Planning", "urgency": "1w"},
+      {"priority": 4, "action": "Lock in favorable raw material contracts during demand trough before recovery pricing kicks in", "owner": "Procurement", "urgency": "immediate"}
+    ],
+    "confidence": 0.80,
+    "sources": ["IHS Markit PMI", "Bloomberg", "IMF World Economic Outlook"]
+  },
+  {
+    "id": "mexico-nearshoring",
+    "risk": "Mexico Nearshoring Boom",
+    "trend": "Escalating",
+    "trend_arrow": "\u2197",
+    "this_week": "Record FDI into Mexican manufacturing. New automotive plants announced. Infrastructure constraints emerging in northern border states.",
+    "skf_relevance": "Guadalupe (Monterrey) plant well-positioned for nearshoring demand. Growing customer base in Mexican automotive sector. Logistics infrastructure in NL state under strain.",
+    "risk_level": "Low",
+    "region": "Americas",
+    "lat": 25.67,
+    "lng": -100.15,
+    "watchpoint": "US-Mexico trade policy stability. Infrastructure investment in NL state. Competitive dynamics vs Asian suppliers.",
+    "status": "active",
+    "first_seen": "2025-01-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 6,
+    "impact": {
+      "affected_sites": [
+        {"name": "Guadalupe NL", "type": "mfg", "distance_km": 0},
+        {"name": "La Silla (Monterrey)", "type": "mfg", "distance_km": 15},
+        {"name": "Zapopan", "type": "mfg", "distance_km": 550},
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 2800},
+        {"name": "Salt Lake City", "type": "mfg", "distance_km": 2400}
+      ],
+      "affected_suppliers": {"count": 8, "countries": ["Mexico", "United States"]},
+      "estimated_units_per_week": 18000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Evaluate Guadalupe NL capacity expansion to capture nearshoring-driven automotive demand", "owner": "Operations", "urgency": "1m"},
+      {"priority": 2, "action": "Proactively engage new automotive OEM plants in Mexico for bearing supply agreements", "owner": "Commercial", "urgency": "1w"},
+      {"priority": 3, "action": "Monitor Nuevo Leon infrastructure (power, water, logistics) for constraints on plant operations", "owner": "Site Ops", "urgency": "ongoing"},
+      {"priority": 4, "action": "Assess USMCA rules-of-origin compliance for Mexico-produced bearings entering US market", "owner": "Legal / Trade", "urgency": "1m"}
+    ],
+    "confidence": 0.88,
+    "sources": ["Mexico Economy Ministry", "Bloomberg", "Reuters LatAm"]
+  },
+  {
+    "id": "africa-critical-minerals",
+    "risk": "Africa Critical Minerals Competition",
+    "trend": "Escalating",
+    "trend_arrow": "\u2197",
+    "this_week": "EU and US competing with China for cobalt, lithium, and manganese access in DRC, Zambia, and South Africa. New bilateral mining agreements signed.",
+    "skf_relevance": "SKF mining equipment bearings used across African mining operations. Kitwe and Solwezi sales offices positioned for growth. Critical minerals supply security relevant for EV bearing production.",
+    "risk_level": "Low",
+    "region": "Africa",
+    "lat": -12.8,
+    "lng": 28.2,
+    "watchpoint": "Mining regulation changes. Infrastructure development. China vs West competition for mineral access.",
+    "status": "active",
+    "first_seen": "2025-03-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 5,
+    "impact": {
+      "affected_sites": [
+        {"name": "Solwezi", "type": "sales", "distance_km": 0},
+        {"name": "Kitwe", "type": "sales", "distance_km": 0},
+        {"name": "Boksburg", "type": "sales", "distance_km": 2200},
+        {"name": "Nairobi", "type": "sales", "distance_km": 2800}
+      ],
+      "affected_suppliers": {"count": 3, "countries": ["South Africa", "Zambia"]},
+      "estimated_units_per_week": 1200,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Position mining bearing product lines for growth as African mining investment accelerates", "owner": "Commercial", "urgency": "1m"},
+      {"priority": 2, "action": "Strengthen Kitwe and Solwezi sales presence to capture mining equipment aftermarket demand", "owner": "Commercial", "urgency": "1m"},
+      {"priority": 3, "action": "Monitor critical minerals supply chain for cobalt and manganese inputs to EV bearing production", "owner": "Procurement", "urgency": "ongoing"},
+      {"priority": 4, "action": "Assess partnership opportunities with EU Critical Raw Materials Act-backed mining projects", "owner": "Strategy", "urgency": "3m"}
+    ],
+    "confidence": 0.72,
+    "sources": ["Reuters Africa", "Mining Weekly", "EU Commission CRM Act"]
+  }
+]

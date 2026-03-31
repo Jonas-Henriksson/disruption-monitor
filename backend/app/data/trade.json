@@ -1,0 +1,322 @@
+[
+  {
+    "id": "eu-steel-safeguard|europe",
+    "event": "EU Steel Safeguard Measures \u2014 2026 Review",
+    "description": "European Commission reviewing steel safeguard quotas with potential 3-5% reduction for 2026. Hot-rolled coil and cold-rolled products directly affected. Domestic steel prices trending upward.",
+    "category": "Tariffs",
+    "severity": "High",
+    "trend": "Escalating",
+    "region": "Europe",
+    "lat": 50.85,
+    "lng": 4.35,
+    "corridor": "GLOBAL",
+    "friction_level": "Moderate",
+    "skf_cost_impact": "Steel is 25-30% of bearing production cost. A 5% quota reduction could increase input costs by 2-3% across European factories.",
+    "recommended_action": "Diversify steel sourcing to India (JSW, Tata) and Turkey. Negotiate long-term supply agreements before quota changes take effect.",
+    "status": "active",
+    "first_seen": "2025-12-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 8,
+    "impact": {
+      "affected_sites": [
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Landskrona", "type": "mfg", "distance_km": 0},
+        {"name": "Steyr", "type": "mfg", "distance_km": 0},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0},
+        {"name": "Bietigheim", "type": "mfg", "distance_km": 0},
+        {"name": "Hofors", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 22, "countries": ["Germany", "Sweden", "Austria", "Italy"]},
+      "estimated_units_per_week": 85000,
+      "recovery_weeks_with_mitigation": 4,
+      "recovery_weeks_without": 12
+    },
+    "actions": [
+      {"priority": 1, "action": "Negotiate forward contracts with Indian steel mills (JSW, Tata) for Q2-Q3 ring-grade steel", "owner": "Procurement", "urgency": "immediate"},
+      {"priority": 2, "action": "Model cost impact of 3-5% quota reduction across all EU bearing plants", "owner": "Finance", "urgency": "24h"},
+      {"priority": 3, "action": "Qualify Turkish flat steel suppliers (Erdemir, Kardemir) for Steyr and Bietigheim", "owner": "Procurement", "urgency": "1w"},
+      {"priority": 4, "action": "Initiate pricing pass-through discussions with top 20 OEM customers for Q2", "owner": "Commercial", "urgency": "48h"}
+    ],
+    "confidence": 0.90,
+    "sources": ["European Commission Official Journal", "S&P Global Platts", "Eurometal"]
+  },
+  {
+    "id": "us-232-steel|americas",
+    "event": "US Section 232 Steel Tariffs Maintained",
+    "description": "25% steel tariffs remain in effect. EU TRQ arrangement provides limited relief but quotas frequently exhausted by mid-year. Aluminum tariffs also impacting packaging costs.",
+    "category": "Tariffs",
+    "severity": "High",
+    "trend": "Stable",
+    "region": "Americas",
+    "lat": 38.9,
+    "lng": -77.0,
+    "corridor": "EU-US",
+    "friction_level": "High",
+    "skf_cost_impact": "US plants (Waukegan, SLC, Crossville) face higher domestic steel prices. EU-origin bearing imports face derivative steel tariff scrutiny.",
+    "recommended_action": "Maximize US-sourced steel for domestic production. Monitor TRQ utilization rates for timing of EU steel shipments.",
+    "status": "active",
+    "first_seen": "2024-01-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 20,
+    "impact": {
+      "affected_sites": [
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 0},
+        {"name": "Salt Lake City", "type": "mfg", "distance_km": 0},
+        {"name": "Crossville, TN", "type": "mfg", "distance_km": 0},
+        {"name": "Flowery Branch", "type": "mfg", "distance_km": 0},
+        {"name": "Sumter, SC", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 15, "countries": ["United States", "Germany", "Sweden"]},
+      "estimated_units_per_week": 35000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Maximize US-sourced steel procurement for all domestic bearing plants", "owner": "Procurement", "urgency": "ongoing"},
+      {"priority": 2, "action": "Monitor EU TRQ utilization rates and time EU steel shipments before quota exhaustion", "owner": "Procurement", "urgency": "ongoing"},
+      {"priority": 3, "action": "Evaluate derivative steel tariff exposure for EU-manufactured bearings entering US", "owner": "Legal / Trade", "urgency": "1m"},
+      {"priority": 4, "action": "Negotiate volume agreements with US steel mills (Nucor, US Steel) for preferential pricing", "owner": "Procurement", "urgency": "1w"}
+    ],
+    "confidence": 0.95,
+    "sources": ["US Department of Commerce", "International Trade Administration", "American Iron and Steel Institute"]
+  },
+  {
+    "id": "eu-ad-chinese-bearings|europe",
+    "event": "EU Anti-Dumping Duties on Chinese Bearings",
+    "description": "EU maintaining anti-dumping duties of 30-45% on Chinese-origin ball bearings, tapered roller bearings, and certain bicycle bearings. Annual review ongoing with no indication of reduction.",
+    "category": "Anti-Dumping",
+    "severity": "Medium",
+    "trend": "Stable",
+    "region": "Europe",
+    "lat": 50.85,
+    "lng": 4.35,
+    "corridor": "EU-CN",
+    "friction_level": "Prohibitive",
+    "skf_cost_impact": "Protective for SKF EU manufacturing. Chinese competitors face 30-45% duty disadvantage. SKF China-to-EU internal transfers subject to related-party scrutiny.",
+    "recommended_action": "Ensure transfer pricing compliance for intra-group China-EU bearing shipments. Leverage cost advantage vs Chinese competitors in EU market.",
+    "status": "active",
+    "first_seen": "2023-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 15,
+    "impact": {
+      "affected_sites": [
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Wuhu", "type": "mfg", "distance_km": 0},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 0},
+        {"name": "Gothenburg MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Schweinfurt", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 8, "countries": ["China"]},
+      "estimated_units_per_week": 55000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Ensure transfer pricing documentation compliance for all China-to-EU intra-group bearing transfers", "owner": "Legal / Trade", "urgency": "ongoing"},
+      {"priority": 2, "action": "Leverage 30-45% duty advantage in EU market competitive positioning vs Chinese imports", "owner": "Commercial", "urgency": "ongoing"},
+      {"priority": 3, "action": "Monitor annual review proceedings for any duty rate changes", "owner": "Legal / Trade", "urgency": "1m"},
+      {"priority": 4, "action": "Review China plant export mix to minimize EU-destined volumes subject to AD scrutiny", "owner": "SC Planning", "urgency": "1m"}
+    ],
+    "confidence": 0.93,
+    "sources": ["European Commission DG Trade", "Official Journal of the EU", "Eurofer"]
+  },
+  {
+    "id": "china-export-controls|china",
+    "event": "China Export Controls on Germanium and Gallium",
+    "description": "Beijing restricting exports of germanium, gallium, and antimony \u2014 critical for semiconductor and advanced materials. Export licensing now required with approval taking 30-60 days.",
+    "category": "Export Controls",
+    "severity": "High",
+    "trend": "Escalating",
+    "region": "China",
+    "lat": 39.9,
+    "lng": 116.4,
+    "corridor": "EU-CN",
+    "friction_level": "High",
+    "skf_cost_impact": "Indirect impact through semiconductor supply for sensor-integrated bearings. Direct impact on specialty alloy availability for aerospace bearing production.",
+    "recommended_action": "Map germanium/gallium content in bearing supply chain. Qualify alternative sources from Canada, Belgium, and Japan.",
+    "status": "active",
+    "first_seen": "2025-08-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 10,
+    "impact": {
+      "affected_sites": [
+        {"name": "Lons-Le-Saunier", "type": "mfg", "distance_km": 0},
+        {"name": "Valenciennes", "type": "mfg", "distance_km": 0},
+        {"name": "Clevedon", "type": "mfg", "distance_km": 0},
+        {"name": "Falconer, NY", "type": "mfg", "distance_km": 0},
+        {"name": "Xinchang (SXC)", "type": "mfg", "distance_km": 0},
+        {"name": "Calgary, AB", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 12, "countries": ["China", "Japan", "Belgium", "Canada"]},
+      "estimated_units_per_week": 8500,
+      "recovery_weeks_with_mitigation": 8,
+      "recovery_weeks_without": 20
+    },
+    "actions": [
+      {"priority": 1, "action": "Map germanium and gallium content across aerospace bearing and sensor-bearing supply chains", "owner": "Procurement", "urgency": "immediate"},
+      {"priority": 2, "action": "Qualify alternative germanium sources: Umicore (Belgium), Teck (Canada), and Japanese recyclers", "owner": "Procurement", "urgency": "1w"},
+      {"priority": 3, "action": "Build 6-month buffer stock of critical semiconductor components for sensor-bearing lines", "owner": "Procurement", "urgency": "24h"},
+      {"priority": 4, "action": "Engage aerospace customers on potential lead time extensions for sensor-integrated bearings", "owner": "Commercial", "urgency": "48h"}
+    ],
+    "confidence": 0.87,
+    "sources": ["MOFCOM (China Ministry of Commerce)", "Nikkei Asia", "Reuters", "US Geological Survey"]
+  },
+  {
+    "id": "eu-india-fta|india",
+    "event": "EU-India FTA Negotiations Advancing",
+    "description": "EU-India free trade agreement negotiations progressing with target conclusion in 2026. Industrial goods chapter could reduce bearing import duties from current 7.5% to 0% over 5 years.",
+    "category": "FTA",
+    "severity": "Medium",
+    "trend": "Escalating",
+    "region": "India",
+    "lat": 20.59,
+    "lng": 78.96,
+    "corridor": "EU-IN",
+    "friction_level": "Moderate",
+    "skf_cost_impact": "Positive for SKF India exports to EU. Pune, Ahmedabad, Bangalore factories could serve EU market more competitively. Risk of increased Indian bearing competition in EU.",
+    "recommended_action": "Position India factories for EU export growth. Prepare competitive analysis of Indian bearing producers who would benefit from FTA.",
+    "status": "active",
+    "first_seen": "2025-06-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 6,
+    "impact": {
+      "affected_sites": [
+        {"name": "Pune - Chakan", "type": "mfg", "distance_km": 0},
+        {"name": "Ahmedabad", "type": "mfg", "distance_km": 0},
+        {"name": "Bangalore", "type": "mfg", "distance_km": 0},
+        {"name": "Mysore", "type": "mfg", "distance_km": 0},
+        {"name": "Haridwar", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 18, "countries": ["India"]},
+      "estimated_units_per_week": 25000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Position Pune-Chakan and Ahmedabad plants for EU export growth under potential FTA", "owner": "SC Planning", "urgency": "1m"},
+      {"priority": 2, "action": "Prepare competitive analysis of Indian bearing producers (NEI, ABC Bearings) who would benefit from duty reduction", "owner": "Strategy", "urgency": "1m"},
+      {"priority": 3, "action": "Engage EU trade negotiators on rules-of-origin requirements for bearing products", "owner": "Legal / Gov Affairs", "urgency": "1w"},
+      {"priority": 4, "action": "Evaluate India plant capacity expansion for EU-export-grade bearing lines", "owner": "Operations", "urgency": "3m"}
+    ],
+    "confidence": 0.75,
+    "sources": ["European Commission DG Trade", "India Ministry of Commerce", "Financial Times"]
+  },
+  {
+    "id": "russia-sanctions-15|europe",
+    "event": "Russia Sanctions \u2014 15th EU Package in Preparation",
+    "description": "New sanctions package targeting Russian metals, chemicals, and technology sectors. Expanded circumvention measures targeting third-country re-exports through Central Asia and Turkey.",
+    "category": "Sanctions",
+    "severity": "Medium",
+    "trend": "Escalating",
+    "region": "Europe",
+    "lat": 55.75,
+    "lng": 37.62,
+    "corridor": "GLOBAL",
+    "friction_level": "Prohibitive",
+    "skf_cost_impact": "SKF fully exited Russia. Residual risk from third-country circumvention scrutiny. Turkish and Kazakh customer due diligence costs increasing.",
+    "recommended_action": "Strengthen KYC procedures for customers in circumvention-risk countries. Review Central Asian distributor relationships for sanctions compliance.",
+    "status": "active",
+    "first_seen": "2025-10-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 7,
+    "impact": {
+      "affected_sites": [
+        {"name": "Istanbul", "type": "sales", "distance_km": 0},
+        {"name": "Almaty", "type": "sales", "distance_km": 0},
+        {"name": "Baku", "type": "sales", "distance_km": 0},
+        {"name": "Lutsk", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 5, "countries": ["Turkey", "Kazakhstan", "Azerbaijan"]},
+      "estimated_units_per_week": 2500,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Strengthen KYC and end-use verification for customers in Turkey, Kazakhstan, and Azerbaijan", "owner": "Legal / Compliance", "urgency": "immediate"},
+      {"priority": 2, "action": "Review Central Asian distributor relationships for circumvention risk indicators", "owner": "Legal / Compliance", "urgency": "1w"},
+      {"priority": 3, "action": "Update internal sanctions screening against 15th package entity lists when published", "owner": "Legal / Compliance", "urgency": "24h"},
+      {"priority": 4, "action": "Brief sales teams in Istanbul, Almaty, and Baku on expanded circumvention measures", "owner": "Commercial", "urgency": "48h"}
+    ],
+    "confidence": 0.88,
+    "sources": ["European Council", "Official Journal of the EU", "OFAC", "Reuters"]
+  },
+  {
+    "id": "rcep-apac|china",
+    "event": "RCEP Utilization Growing for APAC Trade",
+    "description": "Regional Comprehensive Economic Partnership (RCEP) utilization rates increasing, reducing tariffs on industrial components traded between ASEAN, China, Japan, Korea, and Australia.",
+    "category": "FTA",
+    "severity": "Low",
+    "trend": "Stable",
+    "region": "China",
+    "lat": 23.7,
+    "lng": 120.96,
+    "corridor": "JP-CN",
+    "friction_level": "Low",
+    "skf_cost_impact": "Beneficial for intra-APAC component flows. Dalian, Wuhu bearing exports to ASEAN countries benefit from reduced duties. Nilai (Malaysia) plant gains access advantages.",
+    "recommended_action": "Maximize RCEP certificate of origin usage for APAC shipments. Review rules of origin compliance for China-ASEAN bearing flows.",
+    "status": "active",
+    "first_seen": "2025-01-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 5,
+    "impact": {
+      "affected_sites": [
+        {"name": "Dalian", "type": "mfg", "distance_km": 0},
+        {"name": "Wuhu", "type": "mfg", "distance_km": 0},
+        {"name": "Nilai", "type": "mfg", "distance_km": 0},
+        {"name": "Busan MFG", "type": "mfg", "distance_km": 0},
+        {"name": "Chino, Nagano", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 25, "countries": ["China", "Japan", "Korea", "Malaysia", "Indonesia"]},
+      "estimated_units_per_week": 60000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Maximize RCEP certificate-of-origin usage for all intra-APAC bearing shipments", "owner": "Logistics", "urgency": "ongoing"},
+      {"priority": 2, "action": "Review rules-of-origin compliance for Dalian and Wuhu exports to ASEAN markets", "owner": "Legal / Trade", "urgency": "1w"},
+      {"priority": 3, "action": "Evaluate Nilai (Malaysia) as RCEP hub for ASEAN distribution", "owner": "SC Planning", "urgency": "1m"},
+      {"priority": 4, "action": "Train APAC logistics teams on RCEP documentation and preferential tariff procedures", "owner": "Logistics", "urgency": "1m"}
+    ],
+    "confidence": 0.85,
+    "sources": ["ASEAN Secretariat", "Japan Customs", "RCEP Joint Committee"]
+  },
+  {
+    "id": "us-ad-bearings|americas",
+    "event": "US Anti-Dumping Review on Japanese/Chinese Bearings",
+    "description": "US Department of Commerce conducting annual review of anti-dumping duties on tapered roller bearings from China (up to 92%) and Japan (varying rates). Preliminary results expected Q3.",
+    "category": "Anti-Dumping",
+    "severity": "Low",
+    "trend": "Stable",
+    "region": "Americas",
+    "lat": 38.9,
+    "lng": -77.0,
+    "corridor": "CN-US",
+    "friction_level": "Prohibitive",
+    "skf_cost_impact": "Protective for SKF US manufacturing operations. Extremely high duties on Chinese bearings virtually eliminate direct competition. Japanese competitors face moderate duties.",
+    "recommended_action": "Monitor DOC review for any rate changes. Maintain US manufacturing positioning as tariff-advantaged supplier.",
+    "status": "active",
+    "first_seen": "2025-04-01T08:00:00Z",
+    "last_seen": "2026-03-28T06:00:00Z",
+    "scan_count": 4,
+    "impact": {
+      "affected_sites": [
+        {"name": "Waukegan, IL", "type": "mfg", "distance_km": 0},
+        {"name": "Salt Lake City", "type": "mfg", "distance_km": 0},
+        {"name": "Crossville, TN", "type": "mfg", "distance_km": 0},
+        {"name": "Flowery Branch", "type": "mfg", "distance_km": 0}
+      ],
+      "affected_suppliers": {"count": 3, "countries": ["United States"]},
+      "estimated_units_per_week": 28000,
+      "recovery_weeks_with_mitigation": 0,
+      "recovery_weeks_without": 0
+    },
+    "actions": [
+      {"priority": 1, "action": "Monitor DOC preliminary review results for any duty rate changes in Q3", "owner": "Legal / Trade", "urgency": "ongoing"},
+      {"priority": 2, "action": "Maintain US-manufactured positioning as tariff-advantaged supplier in customer discussions", "owner": "Commercial", "urgency": "ongoing"},
+      {"priority": 3, "action": "Prepare competitive response scenarios if Japanese duty rates are reduced", "owner": "Strategy", "urgency": "1m"},
+      {"priority": 4, "action": "Ensure all US-origin documentation is audit-ready for customs compliance", "owner": "Legal / Trade", "urgency": "1w"}
+    ],
+    "confidence": 0.92,
+    "sources": ["US Department of Commerce Federal Register", "ITC", "American Bearing Manufacturers Association"]
+  }
+]
