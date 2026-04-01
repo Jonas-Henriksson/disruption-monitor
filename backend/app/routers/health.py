@@ -1,7 +1,10 @@
 """Health check endpoint."""
 
-from fastapi import APIRouter
+from typing import Any
 
+from fastapi import APIRouter, Depends
+
+from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..db.database import get_db_stats
 from ..services.scanner import check_claude_api_status
@@ -27,7 +30,7 @@ async def health():
 
 
 @router.post("/telegram/test")
-async def test_telegram():
+async def test_telegram(user: dict[str, Any] = Depends(get_current_user)):
     """Send a test message via Telegram to verify the bot is working."""
     ok = await send_telegram_message(
         "\ud83d\udfe2 <b>SC Hub Disruption Monitor</b>\n\n"

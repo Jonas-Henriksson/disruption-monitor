@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from ..auth.dependencies import get_current_user
 from ..data import load_disruptions, load_geopolitical, load_trade
 from ..db.database import (
     get_events,
@@ -66,7 +68,7 @@ async def get_latest_scan_results(mode: ScanMode):
 
 
 @router.post("")
-async def trigger_scan(request: ScanRequest):
+async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_current_user)):
     """Trigger a new scan.
 
     Uses Claude API with web search when API key is configured,

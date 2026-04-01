@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_trade
 from ..db.database import get_event, get_events, get_timeline_data, update_event_status
@@ -101,7 +103,7 @@ async def get_event_recommendations(event_id: str):
 
 
 @router.patch("/{event_id}/status")
-async def patch_event_status(event_id: str, body: StatusUpdate):
+async def patch_event_status(event_id: str, body: StatusUpdate, user: dict[str, Any] = Depends(get_current_user)):
     """Update event lifecycle status (active, watching, archived)."""
     if body.status not in ("active", "watching", "archived"):
         raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
@@ -112,7 +114,7 @@ async def patch_event_status(event_id: str, body: StatusUpdate):
 
 
 @router.post("/{event_id}/alert")
-async def send_event_alert(event_id: str):
+async def send_event_alert(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Send a Telegram alert for a specific event on demand."""
     event = _find_event(event_id)
     if event is None:
@@ -167,7 +169,7 @@ Event data:
 
 
 @router.post("/{event_id}/narrative", response_model=NarrativeResponse)
-async def generate_narrative(event_id: str):
+async def generate_narrative(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Generate a Claude-powered SKF-specific exposure narrative for a disruption.
 
     Returns a 2-3 sentence executive briefing suitable for Monday leadership meetings.

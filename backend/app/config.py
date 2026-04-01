@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     scan_interval_minutes_geopolitical: int = 30
     scan_interval_minutes_trade: int = 60
 
+    # Azure Entra ID authentication (MSAL SSO)
+    azure_client_id: str = os.environ.get("TARS_AZURE_CLIENT_ID", "") or os.environ.get("AZURE_CLIENT_ID", "") or "6b72bb18-c3ae-4fc1-a2ed-ae335e43c2a0"
+    azure_tenant_id: str = os.environ.get("TARS_AZURE_TENANT_ID", "") or os.environ.get("AZURE_TENANT_ID", "") or "41875f2b-33e8-4670-92a8-f643afbb243a"
+    auth_enabled: bool = os.environ.get("TARS_AUTH_ENABLED", "").lower() in ("1", "true", "yes") or os.environ.get("AUTH_ENABLED", "").lower() in ("1", "true", "yes")
+
     # Telegram push notifications
     telegram_bot_token: str = os.environ.get("TARS_TELEGRAM_BOT_TOKEN", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_ids: str = os.environ.get("TARS_TELEGRAM_ALLOWED_USER_IDS", "") or os.environ.get("TELEGRAM_ALLOWED_USER_IDS", "")

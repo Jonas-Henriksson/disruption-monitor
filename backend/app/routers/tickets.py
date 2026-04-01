@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..auth.dependencies import get_current_user
 from ..db.database import create_ticket, get_tickets, update_ticket
 from ..models.schemas import Ticket, TicketCreate, TicketUpdate
 
@@ -68,7 +70,7 @@ async def get_event_ticket(event_id: str):
 
 
 @router.post("/events/{event_id}/ticket", response_model=Ticket, status_code=200)
-async def create_or_update_ticket(event_id: str, body: TicketUpdate):
+async def create_or_update_ticket(event_id: str, body: TicketUpdate, user: dict[str, Any] = Depends(get_current_user)):
     """Create or update (upsert) a ticket for an event.
 
     If a ticket already exists for this event_id, updates it with the
@@ -83,7 +85,7 @@ async def create_or_update_ticket(event_id: str, body: TicketUpdate):
 
 
 @router.patch("/events/{event_id}/ticket", response_model=Ticket)
-async def update_event_ticket(event_id: str, body: TicketUpdate):
+async def update_event_ticket(event_id: str, body: TicketUpdate, user: dict[str, Any] = Depends(get_current_user)):
     """Update ticket status, owner, or notes.
 
     Returns the updated ticket. Creates a new ticket if none exists

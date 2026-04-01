@@ -27,7 +27,7 @@ mkdir -p "$PACKAGE_DIR"
 echo "Installing Python dependencies..."
 pip install \
   fastapi pydantic pydantic-settings python-dotenv \
-  anthropic httpx mangum boto3 \
+  anthropic httpx mangum boto3 "python-jose[cryptography]" \
   --target "$PACKAGE_DIR" \
   --quiet --no-cache-dir \
   --platform manylinux2014_x86_64 \
@@ -90,7 +90,7 @@ aws lambda update-function-configuration \
   --runtime "python3.12" \
   --timeout 300 \
   --memory-size 512 \
-  --environment "Variables={USE_BEDROCK=true,AWS_REGION=$REGION,TARS_CLAUDE_MODEL=eu.anthropic.claude-sonnet-4-6,ALLOWED_ORIGIN=*}" \
+  --environment "Variables={USE_BEDROCK=true,AWS_REGION=$REGION,TARS_CLAUDE_MODEL=eu.anthropic.claude-sonnet-4-6,ALLOWED_ORIGIN=*,AUTH_ENABLED=false,AZURE_CLIENT_ID=6b72bb18-c3ae-4fc1-a2ed-ae335e43c2a0,AZURE_TENANT_ID=41875f2b-33e8-4670-92a8-f643afbb243a}" \
   --region "$REGION" $PROFILE_ARG \
   2>&1 | grep -E "FunctionName|Handler|Runtime|Timeout|MemorySize"
 
