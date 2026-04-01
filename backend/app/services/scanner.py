@@ -15,8 +15,9 @@ from typing import Any, Literal
 
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_sites, load_trade
-from ..services.severity import compute_severity_score
 from ..services.dedup import tag_duplicates
+from ..services.serper import fetch_search_context
+from ..services.severity import compute_severity_score
 from ..utils.geo import haversine_km
 
 logger = logging.getLogger(__name__)
@@ -318,13 +319,32 @@ def _build_sample_result(
 async def _run_live_scan(
     mode: ScanMode, scan_id: str, started_at: datetime
 ) -> dict:
-    """Execute a live scan via Claude API (direct or Bedrock) with web search."""
+    """Execute a live scan via Claude API (direct or Bedrock) with web search.
+
+    Pre-step: fetch recent news via Serper API and inject as prompt context.
+    Falls back gracefully if Serper is unavailable.
+    """
     client = _get_claude_client()
 
     prompt = _PROMPTS[mode]
     id_maker = _ID_MAKERS[mode]
 
     logger.info("Starting live %s scan (id=%s) via %s", mode, scan_id, "Bedrock" if settings.use_bedrock else "Claude API")
+
+    # ── Serper web search pre-step ──────────────────────────────
+    search_context = await fetch_search_context(mode)
+    if search_context:
+        prompt = (
+            f"{prompt}\n\n"
+            f"── Recent news articles (from live web search) ──\n"
+            f"Use these as primary source material. Cross-reference and verify "
+            f"across multiple articles before including an event. Do NOT simply "
+            f"repeat headlines — synthesize into actionable intelligence.\n\n"
+            f"{search_context}"
+        )
+        logger.info("Injected Serper context into %s prompt (%d chars)", mode, len(search_context))
+    else:
+        logger.info("No Serper context for %s — Claude will use training knowledge only", mode)
 
     # Build request kwargs — web_search tool is only available on direct Anthropic API, not Bedrock
     create_kwargs: dict[str, Any] = {
