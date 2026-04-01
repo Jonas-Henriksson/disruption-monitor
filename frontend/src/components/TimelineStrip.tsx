@@ -10,7 +10,7 @@ interface TimelineStripProps {
   mapWidth: number;
 }
 
-export function TimelineStrip({ dis, kpi, mapWidth }: TimelineStripProps) {
+export function TimelineStrip({ dis, mapWidth }: TimelineStripProps) {
   const isOpen = dis.timelineOpen;
   // Use backend timeline data if available, otherwise show empty state
   const hasBackendTimeline = !!dis.timelineData && dis.timelineData.length > 0;

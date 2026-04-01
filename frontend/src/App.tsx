@@ -24,7 +24,7 @@ import { topoToGeo, COUNTRY_NAMES, CENTROID_OVERRIDES } from "./utils/geo";
 import { computeImpactWithGraph, computeExposureScores } from "./utils/impact";
 import { eventId } from "./utils/format";
 import { getSev } from "./utils/scan";
-import type { Severity, FrictionLevel } from "./types";
+import type { FrictionLevel } from "./types";
 import { useMapState } from "./hooks/useMapState";
 import { useDisruptionState } from "./hooks/useDisruptionState";
 import { useFilterState } from "./hooks/useFilterState";
@@ -234,7 +234,7 @@ export default function App() {
   const sr = Math.max(1, 3 * inv);
   const mr = Math.max(1.5, 4.5 * inv);
   const cs = Math.max(2, 5 * inv);
-  const ha = dis.items && dis.items.length > 0;
+  const ha = !!(dis.items && dis.items.length > 0);
   const cc = dis.items ? dis.items.filter(d => getSev(d) === 'Critical').length : 0;
 
   void dis.impactView; // used in future phases

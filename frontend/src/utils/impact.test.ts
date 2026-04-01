@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeImpact, computeImpactWithGraph } from './impact';
 import { ROUTES } from '../data/logistics';
-import type { ScanItem, ImpactResult } from '../types';
+import type { ScanItem } from '../types';
 
 // Helper to create a minimal disruption for testing
 function mkDisruption(region: string): ScanItem {
@@ -14,7 +14,7 @@ function mkDisruption(region: string): ScanItem {
     coordinates: { lat: 0, lng: 0 },
     affected_sites: [],
     trend: 'Stable',
-  } as ScanItem;
+  } as unknown as ScanItem;
 }
 
 // ── Result shape ─────────────────────────────────────────

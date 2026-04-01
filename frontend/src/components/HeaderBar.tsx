@@ -1,9 +1,9 @@
 import { relTime } from '../utils/format';
-import { getSev } from '../utils/scan';
-import { FM, F, countryCount } from '../data';
+import { FM, countryCount } from '../data';
 import type { ScanMode } from '../types';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import type { useFilterState } from '../hooks/useFilterState';
+import { UserBadge } from '../auth/UserBadge';
 
 type DisruptionState = ReturnType<typeof useDisruptionState>;
 type FilterState = ReturnType<typeof useFilterState>;
@@ -38,7 +38,7 @@ export function HeaderBar({ dis, fil, vis, ha, cc }: HeaderBarProps) {
         {!dis.loading && dis.sTime && (() => {
           const isLive = dis.dataSource === 'live';
           const isApi = dis.dataSource === 'sample';
-          const staleDelta = isLive ? Date.now() - dis.sTime : 0;
+          const staleDelta = isLive ? Date.now() - dis.sTime.getTime() : 0;
           const isStale24h = staleDelta > 24 * 60 * 60 * 1000;
           const isStale1h = staleDelta > 60 * 60 * 1000;
           const statusColor = isLive
@@ -123,6 +123,8 @@ export function HeaderBar({ dis, fil, vis, ha, cc }: HeaderBarProps) {
           <span className="sc-spin" style={{ width: 10, height: 10, border: '2px solid #2563eb33', borderTop: '2px solid #2563eb', borderRadius: '50%', display: 'inline-block' }} />
           Scanning...
         </div>}
+
+        <UserBadge />
 
         {ha && <button title="Notifications" onClick={() => { if (dis.dOpen) dis.closeD(); else { dis.setDOpen(true); dis.setDClosing(false); } }} style={{ position: 'relative', padding: '5px 8px', border: '1px solid #1a2744', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1 }}>
           {'\ud83d\udd14'}<span style={{ position: 'absolute', top: -3, right: -3, background: '#ef4444', color: '#fff', fontSize: 8, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FM, border: '2px solid #060a12' }}>{dis.items!.length}</span>

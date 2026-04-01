@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { relTime, eventId, stripCitations, cleanItems, parseAIResponse } from './format';
+import { relTime, eventId, stripCitations, parseAIResponse } from './format';
 
 // ── relTime ──────────────────────────────────────────────
 

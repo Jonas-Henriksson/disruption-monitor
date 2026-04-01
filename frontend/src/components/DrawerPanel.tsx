@@ -5,8 +5,6 @@ import {
   SEV, SBG, SO, CAT, RMC, FRIC, FM, F,
   STATUS_CFG, TEAM, TEAM_MAP,
   SITES, SUPPLIERS, ROUTES, SUPPLY_GRAPH,
-  TYPE_CFG, REGION_CFG, BU_CFG,
-  typeCounts, regionCounts,
 } from '../data';
 import { relTime, eventId } from '../utils/format';
 import { computeImpactWithGraph } from '../utils/impact';
@@ -350,7 +348,7 @@ function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId 
   const it = dis.mode === 'trade';
   const priorityColors = ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e', '#8b5cf6'];
   const urgencyColors: Record<string, string> = { immediate: '#ef4444', '24h': '#f59e0b', '48h': '#f59e0b', '1w': '#3b82f6', '1m': '#22c55e', '3m': '#8b5cf6', ongoing: '#64748b', contingent: '#94a3b8' };
-  const backendId = (d as Record<string, unknown>).id as string | undefined;
+  const backendId = (d as unknown as Record<string, unknown>).id as string | undefined;
   const recId = backendId || eid;
   const rec = dis.recs[recId];
 
@@ -375,17 +373,17 @@ function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId 
   return (
     <div style={{ marginTop: 10, fontSize: 11, lineHeight: 1.6 }}>
       {/* Duplicate warning banner */}
-      {('possible_duplicate_of' in d) && (d as Record<string, unknown>).possible_duplicate_of && <div style={{
+      {('possible_duplicate_of' in d) && (d as unknown as Record<string, unknown>).possible_duplicate_of && <div style={{
         background: '#78350f18', border: '1px solid #92400e44', borderRadius: 6,
         padding: '5px 10px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6,
       }}>
         <span style={{ fontSize: 10, opacity: .7 }}>{'\u26A0'}</span>
-        <span style={{ fontSize: 10, color: '#d97706', fontFamily: FM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>Possible duplicate of: <span style={{ fontWeight: 600, color: '#fbbf24' }}>{String((d as Record<string, unknown>).possible_duplicate_of)}</span></span>
+        <span style={{ fontSize: 10, color: '#d97706', fontFamily: FM, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>Possible duplicate of: <span style={{ fontWeight: 600, color: '#fbbf24' }}>{String((d as unknown as Record<string, unknown>).possible_duplicate_of)}</span></span>
       </div>}
 
       {/* Computed severity score badge */}
-      {('computed_severity' in d) && (d as Record<string, unknown>).computed_severity && (() => {
-        const cs = (d as Record<string, unknown>).computed_severity as { score: number; label: string; components: Record<string, number> };
+      {('computed_severity' in d) && (d as unknown as Record<string, unknown>).computed_severity && (() => {
+        const cs = (d as unknown as Record<string, unknown>).computed_severity as { score: number; label: string; components: Record<string, number> };
         const scoreColor = cs.score >= 75 ? '#ef4444' : cs.score >= 50 ? '#f97316' : cs.score >= 25 ? '#eab308' : '#22c55e';
         return <div style={{
           display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
@@ -664,7 +662,7 @@ function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId 
                 e.stopPropagation();
                 navigator.clipboard.writeText(narrative.narrative).then(() => {
                   setCopiedId(recId);
-                  setTimeout(() => setCopiedId(prev => prev === recId ? null : prev), 1500);
+                  setTimeout(() => { if (copiedId === recId) setCopiedId(null); }, 1500);
                 }).catch(() => { /* clipboard access denied or unavailable */ });
               }}
               style={{
@@ -732,7 +730,7 @@ function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId 
           const region = getRegion(d);
           const trend = getTrend(d);
           const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-          const cs = ('computed_severity' in d) ? (d as Record<string, unknown>).computed_severity as { score: number } | undefined : undefined;
+          const cs = ('computed_severity' in d) ? (d as unknown as Record<string, unknown>).computed_severity as { score: number } | undefined : undefined;
           const recData = dis.recs[backendId || eid];
           const hasBackendImpact = recData?.impact;
           const mfgCount = hasBackendImpact ? recData.impact.affected_sites.filter((s: { type: string }) => s.type === 'mfg').length : (impact ? impact.factories.length : 0);
@@ -774,7 +772,7 @@ function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId 
 
           navigator.clipboard.writeText(lines.join('\n')).then(() => {
             setCopiedId('copy-event-' + eid);
-            setTimeout(() => setCopiedId(prev => prev === 'copy-event-' + eid ? null : prev), 1500);
+            setTimeout(() => setCopiedId(null), 1500);
           }).catch(() => {});
         }} style={{
           background: '#0d1525', color: copiedId === 'copy-event-' + eid ? '#22c55e' : '#94a3b8',

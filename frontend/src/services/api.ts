@@ -6,9 +6,24 @@
  */
 
 import type { ScanMode, ScanItem, SupplierAlternativesResponse, Ticket, TicketStatus } from "../types";
+import { getToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
 const API_PREFIX = "/api/v1";
+
+/** Build headers with optional Bearer token for authenticated requests. */
+async function authHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...extra };
+  try {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  } catch {
+    // Proceed without auth header — graceful fallback
+  }
+  return headers;
+}
 
 /** Structured recommendation from backend */
 export interface BackendRecommendation {
@@ -65,7 +80,9 @@ export function extractItems(res: ScanResponse): ScanItem[] {
  */
 export async function fetchLatestScan(mode: ScanMode): Promise<ScanResponse | null> {
   try {
+    const headers = await authHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/scans/latest/${mode}`, {
+      headers,
       signal: AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
@@ -86,7 +103,9 @@ export async function fetchLatestScan(mode: ScanMode): Promise<ScanResponse | nu
  */
 export async function fetchRecommendations(eventId: string): Promise<BackendRecommendation | null> {
   try {
+    const headers = await authHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/recommendations`, {
+      headers,
       signal: AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
@@ -101,9 +120,10 @@ export async function fetchRecommendations(eventId: string): Promise<BackendReco
  */
 export async function updateEventStatus(eventId: string, status: string): Promise<boolean> {
   try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/status`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ status }),
       signal: AbortSignal.timeout(5000),
     });
@@ -128,9 +148,10 @@ export async function fetchNarrative(eventId: string): Promise<NarrativeResponse
   const url = `${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/narrative`;
   console.log('[SC Hub] Fetching narrative:', url);
   try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       signal: AbortSignal.timeout(90000), // 90s for Lambda cold start + Bedrock
     });
     console.log('[SC Hub] Narrative response:', resp.status, resp.statusText);
@@ -141,7 +162,7 @@ export async function fetchNarrative(eventId: string): Promise<NarrativeResponse
     }
     const data = (await resp.json()) as NarrativeResponse;
     // Backend returns generated_by, frontend expects generated_at — normalize
-    if (!data.generated_at && (data as Record<string, unknown>).generated_by) {
+    if (!data.generated_at && (data as unknown as Record<string, unknown>).generated_by) {
       data.generated_at = new Date().toISOString();
     }
     return data;
@@ -179,7 +200,9 @@ export interface TimelineDataPoint {
  */
 export async function fetchTimeline(days: number = 30): Promise<TimelineDataPoint[] | null> {
   try {
+    const headers = await authHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/timeline?days=${days}`, {
+      headers,
       signal: AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
@@ -197,7 +220,9 @@ export async function fetchTimeline(days: number = 30): Promise<TimelineDataPoin
  */
 export async function fetchSupplierAlternatives(country: string): Promise<SupplierAlternativesResponse | null> {
   try {
+    const headers = await authHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/suppliers/alternatives?country=${encodeURIComponent(country)}`, {
+      headers,
       signal: AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
@@ -213,9 +238,10 @@ export async function fetchSupplierAlternatives(country: string): Promise<Suppli
  */
 export async function assignTicket(eventId: string, owner: string): Promise<Ticket | null> {
   try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ owner, notes: "" }),
       signal: AbortSignal.timeout(5000),
     });
@@ -232,9 +258,10 @@ export async function assignTicket(eventId: string, owner: string): Promise<Tick
  */
 export async function updateTicketStatus(eventId: string, status: TicketStatus): Promise<Ticket | null> {
   try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ status }),
       signal: AbortSignal.timeout(5000),
     });
@@ -247,9 +274,10 @@ export async function updateTicketStatus(eventId: string, status: TicketStatus):
 
 export async function triggerScan(mode: ScanMode): Promise<ScanResponse | null> {
   try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/scans`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ mode }),
       // Live scans with Claude API can take up to 30s
       signal: AbortSignal.timeout(60000),
