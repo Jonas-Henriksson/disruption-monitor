@@ -93,6 +93,7 @@ export function MapMode({
   } | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
   const [hoveredSupplier, setHoveredSupplier] = useState<{ x: number; y: number; country: string; n: number; cats: string[] } | null>(null);
+  const [hoveredSite, setHoveredSite] = useState<{ x: number; y: number; name: string; type: string; country: string; bu?: string } | null>(null);
   const [panelClosing, setPanelClosing] = useState(false);
 
   // Theme-aware map tokens
@@ -428,8 +429,35 @@ export function MapMode({
             const color = isMfg ? '#3b82f6' : s.type === 'log' ? '#f59e0b' : '#4a5568';
             const opacity = isMfg ? 0.7 : 0.35;
 
+            const handleSiteEnter = (e: React.MouseEvent) => {
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              setHoveredSite({
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+                name: s.name,
+                type: s.type,
+                country: s.country,
+                bu: (s as any).bu,
+              });
+            };
+
             return (
-              <g key={'s-' + i}>
+              <g
+                key={'s-' + i}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={handleSiteEnter}
+                onMouseMove={handleSiteEnter}
+                onMouseLeave={() => setHoveredSite(null)}
+              >
+                {/* Invisible larger hit area */}
+                <circle
+                  cx={p[0]}
+                  cy={p[1]}
+                  r={Math.max(4, 8 * inv)}
+                  fill="transparent"
+                  pointerEvents="all"
+                />
                 {isMfg ? (
                   // Triangle for manufacturing
                   <polygon
@@ -438,6 +466,7 @@ export function MapMode({
                     stroke={color}
                     strokeWidth={Math.max(0.2, 0.4 * inv)}
                     opacity={opacity}
+                    pointerEvents="none"
                   />
                 ) : (
                   <circle
@@ -446,6 +475,7 @@ export function MapMode({
                     r={r}
                     fill={color}
                     opacity={opacity}
+                    pointerEvents="none"
                   />
                 )}
               </g>
@@ -652,6 +682,35 @@ export function MapMode({
               {hoveredSupplier.cats.join(' \u00b7 ')}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Site hover tooltip */}
+      {hoveredSite && (
+        <div
+          style={{
+            position: 'absolute',
+            left: hoveredSite.x + 14,
+            top: hoveredSite.y - 16,
+            background: V3.tooltipBg,
+            border: `1px solid ${V3.tooltipBorder}`,
+            borderRadius: 8,
+            padding: '6px 10px',
+            fontFamily: V3.font,
+            boxShadow: themeMode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.12)',
+            zIndex: 120,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            maxWidth: 280,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, color: V3.tooltipTitle }}>
+            {hoveredSite.name}
+          </div>
+          <div style={{ fontSize: 10, color: V3.tooltipText, marginTop: 2 }}>
+            {hoveredSite.type.toUpperCase()} · {hoveredSite.country}
+            {hoveredSite.bu ? ` · ${hoveredSite.bu}` : ''}
+          </div>
         </div>
       )}
 
