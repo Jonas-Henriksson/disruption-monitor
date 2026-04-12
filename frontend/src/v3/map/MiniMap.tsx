@@ -11,34 +11,7 @@ import type { GeoPermissibleObjects } from 'd3';
 import type { ScanItem, Site } from '../../types';
 import { getSev } from '../../utils/scan';
 import { topoToGeo } from '../../utils/geo';
-
-// V3 map tokens (inline since v3/theme.ts doesn't exist yet)
-const V3_MAP = {
-  ocean: '#0a0f1a',
-  land: '#1a2332',
-  landStroke: '#1e2d45',
-  graticule: '#0e1525',
-  dotCritical: '#ef4444',
-  dotHigh: '#f97316',
-  dotMedium: '#3b82f6',
-  dotLow: '#22c55e',
-  siteDot: '#4a5568',
-  hoverGlow: '#ffffff',
-  expandIcon: '#4a6080',
-  expandIconHover: '#94a3b8',
-  tooltipBg: '#0b1525ee',
-  tooltipText: '#94a3b8',
-  font: "'DM Sans', sans-serif",
-} as const;
-
-const SEV_COLORS: Record<string, string> = {
-  Critical: V3_MAP.dotCritical,
-  High: V3_MAP.dotHigh,
-  Medium: V3_MAP.dotMedium,
-  Low: V3_MAP.dotLow,
-};
-
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+import { useV3Theme } from '../ThemeContext';
 
 // CSS for pulse animation
 const PULSE_CSS = `
@@ -52,6 +25,8 @@ const PULSE_CSS = `
   100% { r: 16; opacity: 0; stroke-width: 0.5; }
 }
 `;
+
+const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
 export interface MiniMapProps {
   events: ScanItem[];
@@ -80,10 +55,35 @@ export function MiniMap({
   onSelectEvent,
   onExpandMap,
 }: MiniMapProps) {
+  const { theme: V3, mode: themeMode } = useV3Theme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 380, h: 220 });
   const [land, setLand] = useState<{ features: Array<{ id: string; geometry: GeoPermissibleObjects }> } | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
+
+  // Theme-aware map tokens
+  const V3_MAP = useMemo(() => {
+    const isDark = themeMode === 'dark';
+    return {
+      ocean: isDark ? '#0a0f1a' : '#dbeafe',
+      land: isDark ? '#1a2332' : '#f1f5f9',
+      landStroke: isDark ? '#1e2d45' : '#cbd5e1',
+      graticule: isDark ? '#0e1525' : '#e2e8f0',
+      siteDot: isDark ? '#4a5568' : '#94a3b8',
+      expandIcon: isDark ? '#4a6080' : '#94a3b8',
+      tooltipBg: isDark ? '#0b1525ee' : '#ffffffee',
+      tooltipText: isDark ? '#94a3b8' : '#475569',
+      borderColor: isDark ? '#1e293b' : '#cbd5e1',
+      sphereStroke: isDark ? '#162040' : '#93c5fd',
+    };
+  }, [themeMode]);
+
+  const SEV_COLORS: Record<string, string> = useMemo(() => ({
+    Critical: V3.severity.critical,
+    High: V3.severity.high,
+    Medium: V3.accent.blue,
+    Low: V3.accent.green,
+  }), [V3]);
 
   // Inject pulse CSS
   useEffect(() => {
@@ -175,7 +175,7 @@ export function MiniMap({
         overflow: 'hidden',
         cursor: 'pointer',
         background: V3_MAP.ocean,
-        border: '1px solid #1e293b',
+        border: `1px solid ${V3_MAP.borderColor}`,
         transition: 'border-color 0.2s ease',
       }}
       title="Click to expand map"
@@ -210,7 +210,7 @@ export function MiniMap({
         <path
           d={pathGen({ type: 'Sphere' } as GeoPermissibleObjects) || ''}
           fill={V3_MAP.ocean}
-          stroke="#162040"
+          stroke={V3_MAP.sphereStroke}
           strokeWidth={0.5}
         />
 
@@ -306,7 +306,7 @@ export function MiniMap({
                   cy={m.p![1]}
                   r={r + 2}
                   fill="none"
-                  stroke="#ffffff"
+                  stroke={themeMode === 'dark' ? '#ffffff' : '#0f172a'}
                   strokeWidth={1}
                   opacity={0.6}
                   strokeDasharray="3,2"
@@ -326,8 +326,8 @@ export function MiniMap({
           width: 22,
           height: 22,
           borderRadius: 4,
-          background: 'rgba(10, 15, 26, 0.7)',
-          border: '1px solid #1e293b',
+          background: themeMode === 'dark' ? 'rgba(10, 15, 26, 0.7)' : 'rgba(255, 255, 255, 0.8)',
+          border: `1px solid ${V3_MAP.borderColor}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -354,7 +354,7 @@ export function MiniMap({
             padding: '3px 8px',
             fontSize: 10,
             color: V3_MAP.tooltipText,
-            fontFamily: V3_MAP.font,
+            fontFamily: "'DM Sans', sans-serif",
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
           }}

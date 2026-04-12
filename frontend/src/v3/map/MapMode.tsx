@@ -19,34 +19,7 @@ import { CHOKEPOINTS, ROUTES } from '../../data/logistics';
 import { SUPPLIERS } from '../../data/suppliers';
 import { RoutingOverlay } from './RoutingOverlay';
 import { ExpandedCard } from '../components/ExpandedCard';
-
-// V3 tokens
-const V3 = {
-  ocean: '#0a0f1a',
-  oceanGradient: '#0d1525',
-  land: '#1a2332',
-  landStroke: '#1e2d45',
-  graticule: '#0e1525',
-  conflictFill: '#1a1520',
-  conflictStroke: '#2a1525',
-  conflictOverlay: '#ef4444',
-  font: "'DM Sans', sans-serif",
-  fontMono: "'JetBrains Mono', monospace",
-  mapLabel: '#2a4060',
-  panelBg: '#0b1525e8',
-  panelBorder: '#1e293b',
-  closeBg: '#0b1525dd',
-  closeBorder: '#334155',
-  closeColor: '#94a3b8',
-  closeHover: '#e2e8f0',
-} as const;
-
-const SEV_COLORS: Record<string, string> = {
-  Critical: '#ef4444',
-  High: '#f97316',
-  Medium: '#eab308',
-  Low: '#22c55e',
-};
+import { useV3Theme } from '../ThemeContext';
 
 const SUPPLIER_COLOR = '#06b6d4'; // cyan/teal for supplier bubbles
 const MIN_SUPPLIER_BUBBLE = 20; // only show countries with >= 20 suppliers
@@ -107,6 +80,7 @@ export function MapMode({
   onCloseMap,
   filters: _filters,
 }: MapModeProps) {
+  const { theme: V3T, mode: themeMode } = useV3Theme();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
@@ -120,6 +94,51 @@ export function MapMode({
   const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
   const [hoveredSupplier, setHoveredSupplier] = useState<{ x: number; y: number; country: string; n: number; cats: string[] } | null>(null);
   const [panelClosing, setPanelClosing] = useState(false);
+
+  // Theme-aware map tokens
+  const V3 = useMemo(() => {
+    const isDark = themeMode === 'dark';
+    return {
+      ocean: isDark ? '#0a0f1a' : '#dbeafe',
+      oceanGradient: isDark ? '#0d1525' : '#bfdbfe',
+      land: isDark ? '#1a2332' : '#f1f5f9',
+      landStroke: isDark ? '#1e2d45' : '#cbd5e1',
+      graticule: isDark ? '#0e1525' : '#e2e8f0',
+      conflictFill: isDark ? '#1a1520' : '#fef2f2',
+      conflictStroke: isDark ? '#2a1525' : '#fca5a5',
+      conflictOverlay: isDark ? '#ef4444' : '#dc2626',
+      font: "'DM Sans', sans-serif",
+      fontMono: "'JetBrains Mono', monospace",
+      mapLabel: isDark ? '#2a4060' : '#64748b',
+      panelBg: isDark ? '#0b1525e8' : '#ffffffe8',
+      panelBorder: isDark ? '#1e293b' : '#cbd5e1',
+      closeBg: isDark ? '#0b1525dd' : '#ffffffdd',
+      closeBorder: isDark ? '#334155' : '#cbd5e1',
+      closeColor: isDark ? '#94a3b8' : '#64748b',
+      closeHover: isDark ? '#e2e8f0' : '#0f172a',
+      sphereStroke: isDark ? '#162040' : '#93c5fd',
+      zoomText: isDark ? '#64748b' : '#94a3b8',
+      hintText: isDark ? '#1e3050' : '#94a3b8',
+      legendBg: isDark ? '#0b1525e0' : '#ffffffee',
+      legendBorder: isDark ? '#1e293b' : '#e2e8f0',
+      legendSection: isDark ? '#475569' : '#64748b',
+      legendText: isDark ? '#94a3b8' : '#475569',
+      legendTextDim: isDark ? '#64748b' : '#94a3b8',
+      selRing: isDark ? '#ffffff' : '#0f172a',
+      dotStroke: isDark ? '#000000' : '#ffffff',
+      tooltipBg: isDark ? '#0b1525ee' : '#ffffffee',
+      tooltipBorder: isDark ? '#1e3a5c' : '#cbd5e1',
+      tooltipTitle: isDark ? '#e2e8f0' : '#0f172a',
+      tooltipText: isDark ? '#94a3b8' : '#475569',
+    };
+  }, [themeMode]);
+
+  const SEV_COLORS: Record<string, string> = useMemo(() => ({
+    Critical: V3T.severity.critical,
+    High: V3T.severity.high,
+    Medium: V3T.severity.medium,
+    Low: V3T.accent.green,
+  }), [V3T]);
 
   // Inject CSS
   useEffect(() => {
@@ -187,8 +206,6 @@ export function MapMode({
   const pt = useCallback((la: number, ln: number) => proj([ln, la]) as [number, number] | null, [proj]);
 
   const inv = 1 / zoomLevel;
-
-  // Route arcs computed by RoutingOverlay directly
 
   // Selected event data
   const selectedEvent = useMemo(() => {
@@ -269,7 +286,7 @@ export function MapMode({
 
         <g ref={gRef}>
           {/* Sphere + graticule */}
-          <path d={pathGen({ type: 'Sphere' } as GeoPermissibleObjects) || ''} fill="url(#v3-map-bg)" stroke="#162040" strokeWidth={0.5} />
+          <path d={pathGen({ type: 'Sphere' } as GeoPermissibleObjects) || ''} fill="url(#v3-map-bg)" stroke={V3.sphereStroke} strokeWidth={0.5} />
           <path d={pathGen(graticule) || ''} fill="none" stroke={V3.graticule} strokeWidth={0.3} />
 
           {/* Countries */}
@@ -514,7 +531,7 @@ export function MapMode({
                   cx={p[0]} cy={p[1]}
                   r={isSelected ? baseR * 1.3 : baseR}
                   fill={color}
-                  stroke={isSelected ? '#ffffff' : '#000000'}
+                  stroke={isSelected ? V3.selRing : V3.dotStroke}
                   strokeWidth={isSelected ? Math.max(1, 2 * inv) : Math.max(0.5, inv)}
                   filter="url(#v3-map-glow)"
                 />
@@ -525,7 +542,7 @@ export function MapMode({
                     cx={p[0]} cy={p[1]}
                     r={baseR * 2}
                     fill="none"
-                    stroke="#ffffff"
+                    stroke={V3.selRing}
                     strokeWidth={Math.max(0.4, 0.8 * inv)}
                     strokeDasharray={`${Math.max(1.5, 3 * inv)},${Math.max(1, 2 * inv)}`}
                     opacity={0.5}
@@ -542,7 +559,7 @@ export function MapMode({
           y={dims.h - 10}
           textAnchor="end"
           fontSize={9}
-          fill="#1e3050"
+          fill={V3.hintText}
           fontFamily={V3.font}
         >
           Scroll to zoom {'\u00b7'} Drag to pan
@@ -574,7 +591,7 @@ export function MapMode({
         }}
         onMouseEnter={e => {
           (e.target as HTMLElement).style.color = V3.closeHover;
-          (e.target as HTMLElement).style.borderColor = '#64748b';
+          (e.target as HTMLElement).style.borderColor = themeMode === 'dark' ? '#64748b' : '#94a3b8';
         }}
         onMouseLeave={e => {
           (e.target as HTMLElement).style.color = V3.closeColor;
@@ -597,7 +614,7 @@ export function MapMode({
           padding: '4px 10px',
           fontSize: 11,
           fontFamily: V3.fontMono,
-          color: '#64748b',
+          color: V3.zoomText,
           backdropFilter: 'blur(8px)',
           zIndex: 110,
         }}
@@ -612,26 +629,26 @@ export function MapMode({
             position: 'absolute',
             left: hoveredSupplier.x + 16,
             top: hoveredSupplier.y - 20,
-            background: '#0b1525ee',
-            border: '1px solid #1e3a5c',
+            background: V3.tooltipBg,
+            border: `1px solid ${V3.tooltipBorder}`,
             borderRadius: 8,
             padding: '8px 12px',
             fontFamily: V3.font,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            boxShadow: themeMode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.12)',
             zIndex: 120,
             pointerEvents: 'none',
             whiteSpace: 'nowrap',
             maxWidth: 260,
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: V3.tooltipTitle }}>
             {hoveredSupplier.country}
           </div>
           <div style={{ fontSize: 11, color: SUPPLIER_COLOR, fontWeight: 600, marginTop: 2 }}>
             {hoveredSupplier.n.toLocaleString()} suppliers
           </div>
           {hoveredSupplier.cats.length > 0 && (
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: V3.tooltipText, marginTop: 4 }}>
               {hoveredSupplier.cats.join(' \u00b7 ')}
             </div>
           )}
@@ -651,7 +668,7 @@ export function MapMode({
             background: V3.panelBg,
             border: `1px solid ${V3.panelBorder}`,
             borderRadius: 12,
-            boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+            boxShadow: themeMode === 'dark' ? '0 12px 48px rgba(0,0,0,0.6)' : '0 12px 48px rgba(0,0,0,0.15)',
             backdropFilter: 'blur(16px)',
             overflow: 'auto',
             zIndex: 110,
@@ -674,8 +691,8 @@ export function MapMode({
           position: 'absolute',
           top: 16,
           left: 16,
-          background: '#0b1525e0',
-          border: '1px solid #1e293b',
+          background: V3.legendBg,
+          border: `1px solid ${V3.legendBorder}`,
           borderRadius: 8,
           padding: '10px 14px',
           backdropFilter: 'blur(10px)',
@@ -687,7 +704,7 @@ export function MapMode({
         }}
       >
         {/* Section: Event Severity */}
-        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: V3.legendSection, fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
           Events
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -695,71 +712,71 @@ export function MapMode({
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Critical }} />
             <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', border: `1.5px solid ${SEV_COLORS.Critical}`, opacity: 0.4, animation: 'v3-map-critical-pulse 1.5s ease-in-out infinite' }} />
           </div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Critical</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Critical</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.High }} /></div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>High</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>High</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Medium }} /></div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Medium</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Medium</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Low }} /></div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Low</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Low</span>
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#1e293b', margin: '3px 0' }} />
+        <div style={{ height: 1, background: V3.legendBorder, margin: '3px 0' }} />
 
         {/* Section: Site Types */}
-        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: V3.legendSection, fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
           Sites
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width={12} height={12} style={{ flexShrink: 0 }}>
             <polygon points="6,1.5 10.5,9.5 1.5,9.5" fill="#3b82f6" opacity={0.7} />
           </svg>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Manufacturing</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Manufacturing</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', opacity: 0.7 }} />
           </div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Logistics</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Logistics</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#4a5568', opacity: 0.5 }} />
           </div>
-          <span style={{ fontSize: 10, color: '#64748b', fontFamily: V3.font }}>Sales / Admin</span>
+          <span style={{ fontSize: 10, color: V3.legendTextDim, fontFamily: V3.font }}>Sales / Admin</span>
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#1e293b', margin: '3px 0' }} />
+        <div style={{ height: 1, background: V3.legendBorder, margin: '3px 0' }} />
 
         {/* Section: Network */}
-        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: V3.legendSection, fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
           Network
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width={12} height={12} style={{ flexShrink: 0 }}>
             <line x1={0} y1={6} x2={12} y2={6} stroke="#38bdf8" strokeWidth={1.2} strokeDasharray="3,2" opacity={0.5} />
           </svg>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Sea Route</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Sea Route</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: SUPPLIER_COLOR, opacity: 0.18, border: `1px solid ${SUPPLIER_COLOR}` }} />
           </div>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Supplier Cluster</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Supplier Cluster</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width={12} height={12} style={{ flexShrink: 0 }}>
-            <polygon points="6,1 10,6 6,11 2,6" fill="#1e2d44" stroke="#3a506c" strokeWidth={0.8} opacity={0.9} />
+            <polygon points="6,1 10,6 6,11 2,6" fill={themeMode === 'dark' ? '#1e2d44' : '#e2e8f0'} stroke={themeMode === 'dark' ? '#3a506c' : '#94a3b8'} strokeWidth={0.8} opacity={0.9} />
           </svg>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Chokepoint</span>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Chokepoint</span>
         </div>
       </div>
     </div>

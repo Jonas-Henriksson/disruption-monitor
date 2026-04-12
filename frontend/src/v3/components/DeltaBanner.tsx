@@ -4,7 +4,8 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { V3, TYPE, V3_FONT, sevColor } from '../theme';
+import { TYPE, V3_FONT, sevColor } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import type { ScanItem, ScanMode, EventRegistryEntry } from '../../types';
 import { eventId } from '../../utils/format';
 import { getSev } from '../../utils/scan';
@@ -70,6 +71,7 @@ function formatTimeSince(hours: number): string {
 }
 
 export function DeltaBanner({ items, registry, mode: _mode, onOpenWeeklyBriefing }: DeltaBannerProps) {
+  const { theme: V3 } = useV3Theme();
   const [dismissed, setDismissed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [lastVisit, setLastVisit] = useState<string | null>(null);
@@ -138,13 +140,13 @@ export function DeltaBanner({ items, registry, mode: _mode, onOpenWeeklyBriefing
       {hasChanges ? (
         <span style={{ color: V3.text.secondary }}>
           {delta.newCritical > 0 && (
-            <span style={{ color: sevColor('Critical'), fontWeight: 600 }}>
+            <span style={{ color: sevColor('Critical', V3), fontWeight: 600 }}>
               +{delta.newCritical} Critical
             </span>
           )}
           {delta.newCritical > 0 && (delta.newHigh > 0 || delta.resolved > 0) && ', '}
           {delta.newHigh > 0 && (
-            <span style={{ color: sevColor('High'), fontWeight: 600 }}>
+            <span style={{ color: sevColor('High', V3), fontWeight: 600 }}>
               +{delta.newHigh} High
             </span>
           )}

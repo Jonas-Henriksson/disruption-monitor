@@ -1,11 +1,11 @@
 /**
  * V3 Design Token System — SC Hub Disruption Monitor
  *
- * Consolidated dark theme tokens for the V3 mission-control UI.
+ * Consolidated dark + light theme tokens for the V3 mission-control UI.
  * Based on V2's theme.ts with refinements for the feed-centric layout.
  */
 
-export const V3 = {
+export const V3_DARK = {
   bg: {
     base: '#0a0f1a',
     card: '#111827',
@@ -71,6 +71,78 @@ export const V3 = {
   },
 } as const;
 
+export const V3_LIGHT = {
+  bg: {
+    base: '#f8fafc',
+    card: '#ffffff',
+    cardHover: '#f1f5f9',
+    sidebar: '#f1f5f9',
+    topbar: '#ffffff',
+    expanded: '#f8fafc',
+    overlay: 'rgba(0,0,0,0.15)',
+    input: '#f1f5f9',
+    badge: '#e2e8f0',
+  },
+  text: {
+    primary: '#0f172a',
+    secondary: '#475569',
+    muted: '#94a3b8',
+    accent: '#2563eb',
+    inverse: '#f8fafc',
+  },
+  severity: {
+    critical: '#dc2626',
+    criticalBg: 'rgba(220,38,38,0.08)',
+    criticalBorder: 'rgba(220,38,38,0.20)',
+    high: '#ea580c',
+    highBg: 'rgba(234,88,12,0.08)',
+    highBorder: 'rgba(234,88,12,0.20)',
+    medium: '#ca8a04',
+    mediumBg: 'rgba(202,138,4,0.06)',
+    mediumBorder: 'rgba(202,138,4,0.15)',
+    low: '#16a34a',
+    lowBg: 'rgba(22,163,74,0.06)',
+    lowBorder: 'rgba(22,163,74,0.15)',
+  },
+  accent: {
+    blue: '#2563eb',
+    blueDim: 'rgba(37,99,235,0.10)',
+    green: '#16a34a',
+    red: '#dc2626',
+    amber: '#d97706',
+    purple: '#7c3aed',
+    cyan: '#0891b2',
+  },
+  border: {
+    subtle: '#e2e8f0',
+    default: '#cbd5e1',
+    strong: '#94a3b8',
+    focus: '#2563eb',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    '2xl': 24,
+    '3xl': 32,
+  },
+  radius: {
+    sm: 4,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    full: 9999,
+  },
+} as const;
+
+/** Theme type — identical structure for dark and light */
+export type V3Theme = typeof V3_DARK;
+
+/** Backwards-compatible alias — defaults to dark */
+export const V3 = V3_DARK;
+
 export const TYPE = {
   title: { fontSize: 14, fontWeight: 600 as const },
   meta: { fontSize: 12, fontWeight: 400 as const },
@@ -91,31 +163,31 @@ export const V3_FONT = 'Inter, DM Sans, system-ui, sans-serif';
 export const V3_FONT_MONO = 'JetBrains Mono, monospace';
 
 /** Map a severity string to its color token */
-export function sevColor(severity: string): string {
+export function sevColor(severity: string, theme: V3Theme = V3_DARK): string {
   const s = severity.toLowerCase();
-  if (s === 'critical') return V3.severity.critical;
-  if (s === 'high') return V3.severity.high;
-  if (s === 'medium') return V3.severity.medium;
-  if (s === 'low') return V3.severity.low;
-  return V3.text.muted;
+  if (s === 'critical') return theme.severity.critical;
+  if (s === 'high') return theme.severity.high;
+  if (s === 'medium') return theme.severity.medium;
+  if (s === 'low') return theme.severity.low;
+  return theme.text.muted;
 }
 
 /** Map a severity string to its background token */
-export function sevBg(severity: string): string {
+export function sevBg(severity: string, theme: V3Theme = V3_DARK): string {
   const s = severity.toLowerCase();
-  if (s === 'critical') return V3.severity.criticalBg;
-  if (s === 'high') return V3.severity.highBg;
-  if (s === 'medium') return V3.severity.mediumBg;
-  if (s === 'low') return V3.severity.lowBg;
+  if (s === 'critical') return theme.severity.criticalBg;
+  if (s === 'high') return theme.severity.highBg;
+  if (s === 'medium') return theme.severity.mediumBg;
+  if (s === 'low') return theme.severity.lowBg;
   return 'transparent';
 }
 
 /** Map a severity string to its border token */
-export function sevBorder(severity: string): string {
+export function sevBorder(severity: string, theme: V3Theme = V3_DARK): string {
   const s = severity.toLowerCase();
-  if (s === 'critical') return V3.severity.criticalBorder;
-  if (s === 'high') return V3.severity.highBorder;
-  if (s === 'medium') return V3.severity.mediumBorder;
-  if (s === 'low') return V3.severity.lowBorder;
-  return V3.border.subtle;
+  if (s === 'critical') return theme.severity.criticalBorder;
+  if (s === 'high') return theme.severity.highBorder;
+  if (s === 'medium') return theme.severity.mediumBorder;
+  if (s === 'low') return theme.severity.lowBorder;
+  return theme.border.subtle;
 }

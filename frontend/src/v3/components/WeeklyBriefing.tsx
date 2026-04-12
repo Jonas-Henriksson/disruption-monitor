@@ -3,7 +3,8 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { V3, TYPE, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import { fetchWeeklySummary } from '../../services/api';
 import type { WeeklySummary, Severity } from '../../types';
 import { getEvent, getSev } from '../../utils/scan';
@@ -14,6 +15,7 @@ export interface WeeklyBriefingProps {
 }
 
 export function WeeklyBriefing({ open, onClose }: WeeklyBriefingProps) {
+  const { theme: V3, mode: themeMode } = useV3Theme();
   const [data, setData] = useState<WeeklySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -84,7 +86,7 @@ export function WeeklyBriefing({ open, onClose }: WeeklyBriefingProps) {
         background: V3.bg.sidebar,
         border: `1px solid ${V3.border.default}`,
         borderRadius: V3.radius.xl,
-        boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+        boxShadow: themeMode === 'dark' ? '0 16px 48px rgba(0,0,0,0.5)' : '0 16px 48px rgba(0,0,0,0.15)',
         padding: V3.spacing['3xl'],
       }}>
         {/* Header */}
@@ -212,12 +214,12 @@ export function WeeklyBriefing({ open, onClose }: WeeklyBriefingProps) {
                     padding: V3.spacing.sm,
                     borderRadius: V3.radius.sm,
                     background: V3.bg.card,
-                    border: `1px solid ${sevColor(s)}22`,
+                    border: `1px solid ${sevColor(s, V3)}22`,
                   }}>
-                    <div style={{ ...TYPE.heroSm, color: sevColor(s) }}>
+                    <div style={{ ...TYPE.heroSm, color: sevColor(s, V3) }}>
                       {data.severity_snapshot[s] || 0}
                     </div>
-                    <div style={{ fontSize: 9, color: sevColor(s), fontWeight: 600, textTransform: 'uppercase', marginTop: 2 }}>
+                    <div style={{ fontSize: 9, color: sevColor(s, V3), fontWeight: 600, textTransform: 'uppercase', marginTop: 2 }}>
                       {s}
                     </div>
                   </div>
@@ -243,7 +245,7 @@ export function WeeklyBriefing({ open, onClose }: WeeklyBriefingProps) {
                       width: 6,
                       height: 6,
                       borderRadius: '50%',
-                      background: sevColor(getSev(e)),
+                      background: sevColor(getSev(e), V3),
                       flexShrink: 0,
                     }} />
                     <span style={{ ...TYPE.body, color: V3.text.secondary, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

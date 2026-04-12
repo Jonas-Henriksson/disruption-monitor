@@ -5,16 +5,8 @@
 
 import { useState } from 'react';
 import type { ActionItem } from '../../types';
-
-/* ── V3 Tokens (inline until v3/theme.ts exists) ── */
-const V3 = {
-  bg:   { base: '#0a0f1a', card: '#111827', elevated: '#1a2740' },
-  text: { primary: '#f1f5f9', secondary: '#cbd5e1', muted: '#64748b' },
-  border: { subtle: '#1e293b' },
-  accent: { green: '#22c55e', red: '#ef4444', blue: '#3b82f6' },
-  font: 'Inter, DM Sans, system-ui, sans-serif',
-  mono: 'JetBrains Mono, monospace',
-} as const;
+import { V3_FONT, V3_FONT_MONO } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 
 export interface ActionCheckboxProps {
   action: ActionItem;
@@ -22,6 +14,7 @@ export interface ActionCheckboxProps {
 }
 
 export function ActionCheckbox({ action, onToggle }: ActionCheckboxProps) {
+  const { theme: V3 } = useV3Theme();
   const [animating, setAnimating] = useState(false);
   const isDone = action.status === 'done';
 
@@ -58,7 +51,7 @@ export function ActionCheckbox({ action, onToggle }: ActionCheckboxProps) {
     flex: 1, fontSize: 12, lineHeight: 1.5,
     color: isDone ? V3.text.muted : V3.text.secondary,
     textDecoration: isDone ? 'line-through' : 'none',
-    fontFamily: V3.font,
+    fontFamily: V3_FONT,
     transition: 'color 200ms ease',
   };
 
@@ -68,14 +61,14 @@ export function ActionCheckbox({ action, onToggle }: ActionCheckboxProps) {
     color: V3.accent.blue,
     padding: '1px 6px', borderRadius: 4,
     fontSize: 9, fontWeight: 600,
-    fontFamily: V3.mono,
+    fontFamily: V3_FONT_MONO,
     border: `1px solid ${V3.accent.blue}22`,
     whiteSpace: 'nowrap',
   };
 
   const dueStyle: React.CSSProperties = {
     fontSize: 9, fontWeight: 600,
-    fontFamily: V3.mono,
+    fontFamily: V3_FONT_MONO,
     color: isOverdue ? V3.accent.red : V3.text.muted,
     whiteSpace: 'nowrap',
   };

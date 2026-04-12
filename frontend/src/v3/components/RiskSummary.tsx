@@ -3,7 +3,8 @@
  */
 
 import { useMemo, useEffect, useState } from 'react';
-import { V3, TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import type { ScanItem, Severity } from '../../types';
 import { getSev, getRegion } from '../../utils/scan';
 import { fetchTimeline, type TimelineDataPoint } from '../../services/api';
@@ -62,7 +63,7 @@ function computeTopRegions(items: ScanItem[] | null): { region: string; count: n
 }
 
 /** Tiny inline sparkline component */
-function Sparkline({ data }: { data: TimelineDataPoint[] }) {
+function Sparkline({ data, theme }: { data: TimelineDataPoint[]; theme: ReturnType<typeof useV3Theme>['theme'] }) {
   if (data.length < 2) return null;
   const maxVal = Math.max(...data.map(d => d.event_count), 1);
   const w = 200;
@@ -83,7 +84,7 @@ function Sparkline({ data }: { data: TimelineDataPoint[] }) {
       <polyline
         points={points.join(' ')}
         fill="none"
-        stroke={V3.accent.blue}
+        stroke={theme.accent.blue}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -92,7 +93,7 @@ function Sparkline({ data }: { data: TimelineDataPoint[] }) {
       <polyline
         points={critPoints.join(' ')}
         fill="none"
-        stroke={V3.severity.critical}
+        stroke={theme.severity.critical}
         strokeWidth={1}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -104,6 +105,7 @@ function Sparkline({ data }: { data: TimelineDataPoint[] }) {
 }
 
 export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
+  const { theme: V3 } = useV3Theme();
   const [timeline, setTimeline] = useState<TimelineDataPoint[] | null>(null);
 
   useEffect(() => {
@@ -135,8 +137,8 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
               style={{
                 padding: V3.spacing.md,
                 borderRadius: V3.radius.md,
-                background: sevBg(s.severity),
-                border: `1px solid ${sevColor(s.severity)}22`,
+                background: sevBg(s.severity, V3),
+                border: `1px solid ${sevColor(s.severity, V3)}22`,
                 display: 'flex',
                 alignItems: 'baseline',
                 gap: V3.spacing.xs,
@@ -144,7 +146,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
             >
               <span style={{
                 ...(hasCritical && s.severity === 'Critical' ? TYPE.hero : TYPE.heroSm),
-                color: sevColor(s.severity),
+                color: sevColor(s.severity, V3),
               }}>
                 {s.count}
               </span>
@@ -152,7 +154,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
                 <div style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: sevColor(s.severity),
+                  color: sevColor(s.severity, V3),
                   textTransform: 'uppercase',
                 }}>
                   {s.severity}
@@ -203,7 +205,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
                   <div style={{
                     height: '100%',
                     width: `${(r.count / maxRegionCount) * 100}%`,
-                    background: sevColor(r.severity),
+                    background: sevColor(r.severity, V3),
                     borderRadius: 2,
                     transition: 'width 300ms ease',
                     opacity: 0.7,
@@ -238,7 +240,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
             borderRadius: V3.radius.md,
             border: `1px solid ${V3.border.subtle}`,
           }}>
-            <Sparkline data={timeline} />
+            <Sparkline data={timeline} theme={V3} />
           </div>
         </div>
       )}

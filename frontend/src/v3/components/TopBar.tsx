@@ -1,9 +1,10 @@
 /**
- * TopBar — V3 top navigation bar with search, filters, mode tabs, scan controls.
+ * TopBar — V3 top navigation bar with search, filters, mode tabs, scan controls, theme toggle.
  */
 
 import { useState, useMemo } from 'react';
-import { V3, TYPE, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import type { ScanMode, Severity } from '../../types';
 import { relTime } from '../../utils/format';
 
@@ -56,13 +57,6 @@ function getFreshness(scanTime: Date | null): Freshness {
   return 'offline';
 }
 
-const FRESHNESS_COLORS: Record<Freshness, string> = {
-  fresh: V3.accent.green,
-  stale: V3.accent.amber,
-  degraded: V3.accent.red,
-  offline: V3.text.muted,
-};
-
 export function TopBar({
   mode,
   onModeChange,
@@ -78,9 +72,17 @@ export function TopBar({
   mapMode,
   onToggleMap,
 }: TopBarProps) {
+  const { theme: V3, mode: themeMode, toggleTheme } = useV3Theme();
   const [buOpen, setBuOpen] = useState(false);
   const freshness = useMemo(() => getFreshness(scanTime), [scanTime]);
   const activeBuLabel = BU_OPTIONS.find(b => b.key === buFilter)?.label || 'All BUs';
+
+  const FRESHNESS_COLORS: Record<Freshness, string> = {
+    fresh: V3.accent.green,
+    stale: V3.accent.amber,
+    degraded: V3.accent.red,
+    offline: V3.text.muted,
+  };
 
   return (
     <div style={{
@@ -147,7 +149,7 @@ export function TopBar({
       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
         {SEV_PILLS.map(pill => {
           const active = severityFilter === pill.key;
-          const pillColor = pill.key ? sevColor(pill.key) : V3.accent.blue;
+          const pillColor = pill.key ? sevColor(pill.key, V3) : V3.accent.blue;
           return (
             <button
               key={pill.label}
@@ -241,7 +243,7 @@ export function TopBar({
             padding: V3.spacing.xs,
             zIndex: 50,
             minWidth: 140,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: themeMode === 'dark' ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)',
           }}>
             {BU_OPTIONS.map(opt => (
               <button
@@ -287,6 +289,30 @@ export function TopBar({
         }}
       >
         {'\u{1F5FA}'}
+      </button>
+
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        title={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: V3.radius.full,
+          border: `1px solid ${V3.border.subtle}`,
+          background: V3.bg.input,
+          color: V3.text.muted,
+          fontSize: 14,
+          cursor: 'pointer',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 150ms',
+          padding: 0,
+        }}
+      >
+        {themeMode === 'dark' ? '\u2600' : '\u263E'}
       </button>
 
       {/* Scan status + button */}

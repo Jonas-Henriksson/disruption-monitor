@@ -10,41 +10,8 @@ import type { Severity } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
 import { updateEventStatus } from '../../services/api';
-import { V3 as V3Theme, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
-
-/* ─────────────────────────────────────────────
-   V3 Design Tokens — imported from v3/theme.ts
-   ───────────────────────────────────────────── */
-const V3 = {
-  bg:   { base: V3Theme.bg.base, card: V3Theme.bg.card, elevated: V3Theme.bg.expanded },
-  text: { primary: V3Theme.text.primary, secondary: V3Theme.text.secondary, muted: V3Theme.text.muted, dim: '#475569' },
-  border: { subtle: V3Theme.border.subtle, default: V3Theme.border.default },
-  severity: {
-    critical: V3Theme.severity.critical, high: V3Theme.severity.high, medium: V3Theme.severity.medium, low: V3Theme.severity.low,
-  } as Record<string, string>,
-  accent: V3Theme.accent,
-  font: V3_FONT,
-  mono: V3_FONT_MONO,
-} as const;
-
-const SEV_COLOR = (s: string): string => sevColor(s as any) || V3.text.muted;
-
-/* ─────────────────────────────────────────────
-   Shared style helpers
-   ───────────────────────────────────────────── */
-const sectionHeader: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-  letterSpacing: '0.08em', color: V3.text.muted,
-  fontFamily: V3.mono, margin: '12px 0 6px',
-};
-
-const badgeStyle = (bg: string, fg: string): React.CSSProperties => ({
-  display: 'inline-flex', alignItems: 'center', gap: 4,
-  background: bg + '18', color: fg,
-  padding: '2px 8px', borderRadius: 4,
-  fontSize: 10, fontWeight: 600, fontFamily: V3.mono,
-  border: `1px solid ${bg}33`, whiteSpace: 'nowrap',
-});
+import { V3_FONT, V3_FONT_MONO, sevColor, type V3Theme } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 
 const TAB_KEY = 'v3-expanded-tab';
 
@@ -70,9 +37,31 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 /* ─────────────────────────────────────────────
+   Style helpers (theme-aware)
+   ───────────────────────────────────────────── */
+function sectionHeaderStyle(theme: V3Theme): React.CSSProperties {
+  return {
+    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.08em', color: theme.text.muted,
+    fontFamily: V3_FONT_MONO, margin: '12px 0 6px',
+  };
+}
+
+function badgeStyle(bg: string, fg: string): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    background: bg + '18', color: fg,
+    padding: '2px 8px', borderRadius: 4,
+    fontSize: 10, fontWeight: 600, fontFamily: V3_FONT_MONO,
+    border: `1px solid ${bg}33`, whiteSpace: 'nowrap',
+  };
+}
+
+/* ─────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────── */
 export function ExpandedCard({ event, placement, onClose, onHoverSite }: ExpandedCardProps) {
+  const { theme: V3 } = useV3Theme();
   const [tab, setTab] = useState<Tab>(() => {
     try { return (sessionStorage.getItem(TAB_KEY) as Tab) || 'summary'; }
     catch { return 'summary'; }
@@ -86,7 +75,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
   const isMap = placement === 'map';
   const maxH = isMap ? '50vh' : '420px';
   const sev = (event.severity || 'Medium') as Severity;
-  const sevCol = SEV_COLOR(sev);
+  const sevCol = sevColor(sev, V3);
 
   const containerStyle: React.CSSProperties = {
     maxHeight: maxH,
@@ -95,7 +84,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
     background: isMap ? V3.bg.base + 'ee' : V3.bg.card,
     borderRadius: 8,
     border: `1px solid ${V3.border.subtle}`,
-    fontFamily: V3.font,
+    fontFamily: V3_FONT,
     padding: isMap ? '14px 16px' : '10px 12px',
     position: 'relative',
     transition: 'max-height 300ms ease',
@@ -118,9 +107,9 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
               style={{
                 flex: 1, padding: '6px 0 8px', border: 'none',
                 background: 'transparent', cursor: 'pointer',
-                color: active ? V3.text.primary : V3.text.dim,
+                color: active ? V3.text.primary : V3.text.muted,
                 fontSize: 11, fontWeight: active ? 700 : 500,
-                fontFamily: V3.font,
+                fontFamily: V3_FONT,
                 borderBottom: `2px solid ${active ? sevCol : 'transparent'}`,
                 transition: 'all 150ms ease',
               }}
@@ -134,7 +123,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: V3.text.dim, fontSize: 14, padding: '4px 6px',
+            color: V3.text.muted, fontSize: 14, padding: '4px 6px',
             lineHeight: 1, flexShrink: 0,
           }}
           aria-label="Close detail panel"
@@ -145,9 +134,9 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
-        {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} />}
-        {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} />}
-        {tab === 'act'      && <ActTab event={event} />}
+        {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} />}
+        {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
+        {tab === 'act'      && <ActTab event={event} theme={V3} />}
       </div>
     </div>
   );
@@ -156,7 +145,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
 /* ══════════════════════════════════════════════
    TAB 1: Summary
    ══════════════════════════════════════════════ */
-function SummaryTab({ event, sev, sevCol }: { event: DisruptionEvent; sev: Severity; sevCol: string }) {
+function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent; sev: Severity; sevCol: string; theme: V3Theme }) {
   const cs = event.computed_severity;
   const title = event.event || event.risk || '';
   const description = event.description
@@ -180,13 +169,15 @@ function SummaryTab({ event, sev, sevCol }: { event: DisruptionEvent; sev: Sever
   const probColor = (probability ?? 0) >= 0.7 ? V3.accent.red
     : (probability ?? 0) >= 0.4 ? V3.accent.amber : V3.accent.green;
 
+  const sectionHeader = sectionHeaderStyle(V3);
+
   return (
     <div>
       {/* Title + severity badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{
           fontSize: 14, fontWeight: 700, color: V3.text.primary,
-          fontFamily: V3.font, flex: 1, lineHeight: 1.3,
+          fontFamily: V3_FONT, flex: 1, lineHeight: 1.3,
         }}>
           {title}
         </span>
@@ -203,20 +194,20 @@ function SummaryTab({ event, sev, sevCol }: { event: DisruptionEvent; sev: Sever
       {/* Inline dimension badges */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={badgeStyle(velColor, velColor)}>
-          <span style={{ color: V3.text.dim, fontWeight: 500 }}>Velocity</span> {velLabel}
+          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Velocity</span> {velLabel}
         </span>
         <span style={badgeStyle(recColor, recColor)}>
-          <span style={{ color: V3.text.dim, fontWeight: 500 }}>Recovery</span> {recLabel}
+          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Recovery</span> {recLabel}
         </span>
         {probPct != null && (
           <span style={badgeStyle(probColor, probColor)}>
-            <span style={{ color: V3.text.dim, fontWeight: 500 }}>Prob</span> {probPct}%
+            <span style={{ color: V3.text.muted, fontWeight: 500 }}>Prob</span> {probPct}%
           </span>
         )}
       </div>
 
       {/* Sparkline */}
-      <SeveritySparkline event={event} sevCol={sevCol} />
+      <SeveritySparkline event={event} sevCol={sevCol} theme={V3} />
 
       {/* Score breakdown */}
       {cs?.components && (
@@ -231,12 +222,12 @@ function SummaryTab({ event, sev, sevCol }: { event: DisruptionEvent; sev: Sever
               const v = typeof val === 'number' ? val : 0;
               return (
                 <div key={key} style={{ flex: '1 0 80px', minWidth: 80 }}>
-                  <div style={{ fontSize: 9, color: V3.text.dim, fontFamily: V3.mono, marginBottom: 2 }}>{label}</div>
+                  <div style={{ fontSize: 9, color: V3.text.muted, fontFamily: V3_FONT_MONO, marginBottom: 2 }}>{label}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <div style={{ flex: 1, height: 4, background: V3.border.subtle, borderRadius: 2, overflow: 'hidden' }}>
                       <div style={{ width: `${Math.min(100, v)}%`, height: '100%', background: sevCol, borderRadius: 2 }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: V3.text.secondary, fontFamily: V3.mono }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: V3.text.secondary, fontFamily: V3_FONT_MONO }}>
                       {Math.round(v)}
                     </span>
                   </div>
@@ -251,7 +242,7 @@ function SummaryTab({ event, sev, sevCol }: { event: DisruptionEvent; sev: Sever
 }
 
 /* ── Sparkline sub-component ── */
-function SeveritySparkline({ event, sevCol }: { event: DisruptionEvent; sevCol: string }) {
+function SeveritySparkline({ event, sevCol, theme: V3 }: { event: DisruptionEvent; sevCol: string; theme: V3Theme }) {
   const score = event.computed_severity?.score;
   if (score == null) return null;
 
@@ -283,7 +274,7 @@ function SeveritySparkline({ event, sevCol }: { event: DisruptionEvent; sevCol: 
             fill={i === coords.length - 1 ? sevCol : sevCol + '88'} />
         ))}
       </svg>
-      <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3.mono }}>
+      <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
         {Math.round(score)}/100 over {count} scan{count > 1 ? 's' : ''}
       </span>
     </div>
@@ -293,20 +284,23 @@ function SeveritySparkline({ event, sevCol }: { event: DisruptionEvent; sevCol: 
 /* ══════════════════════════════════════════════
    TAB 2: Exposure
    ══════════════════════════════════════════════ */
-function ExposureTab({ event, onHoverSite }: {
+function ExposureTab({ event, onHoverSite, theme: V3 }: {
   event: DisruptionEvent;
   onHoverSite?: (id: string | null) => void;
+  theme: V3Theme;
 }) {
   const sites = event.affected_sites || [];
   const suppliersByTier = useSuppliersByTier(event);
   const routes: Array<string | { description?: string; route?: string }> =
     (event.routing_context || event.affected_routes || []) as Array<string | { description?: string; route?: string }>;
 
+  const sectionHeader = sectionHeaderStyle(V3);
+
   return (
     <div>
       {/* Affected Sites */}
       <div style={sectionHeader}>Affected Sites</div>
-      {sites.length === 0 && <EmptyRow label="No affected sites identified" />}
+      {sites.length === 0 && <EmptyRow label="No affected sites identified" theme={V3} />}
       {sites.map((s, i) => {
         const bu = BU_MAP[s.name] || '';
         const typeLabel = (s.type || '').toUpperCase();
@@ -328,7 +322,7 @@ function ExposureTab({ event, onHoverSite }: {
             onMouseLeave={() => onHoverSite?.(null)}
           >
             <span style={{
-              flex: 1, fontSize: 12, color: V3.text.secondary, fontFamily: V3.font,
+              flex: 1, fontSize: 12, color: V3.text.secondary, fontFamily: V3_FONT,
               minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {s.name}
@@ -336,7 +330,7 @@ function ExposureTab({ event, onHoverSite }: {
             <span style={badgeStyle(typeBg, typeBg)}>{typeLabel || 'OTHER'}</span>
             {buLabel && <span style={badgeStyle(V3.accent.purple, V3.accent.purple)}>{buLabel}</span>}
             <span style={{
-              fontSize: 10, color: V3.text.dim, fontFamily: V3.mono, whiteSpace: 'nowrap',
+              fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO, whiteSpace: 'nowrap',
             }}>
               {s.distance_km != null ? `${Math.round(s.distance_km)} km` : ''}
             </span>
@@ -346,18 +340,18 @@ function ExposureTab({ event, onHoverSite }: {
 
       {/* Supplier Impact */}
       <div style={sectionHeader}>Supplier Impact</div>
-      {suppliersByTier.length === 0 && <EmptyRow label="No supplier data available" />}
+      {suppliersByTier.length === 0 && <EmptyRow label="No supplier data available" theme={V3} />}
       {suppliersByTier.map(tierGroup => (
         <div key={tierGroup.tier} style={{ marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{
-              fontSize: 10, fontWeight: 700, fontFamily: V3.mono,
+              fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
               color: tierGroup.tier === 1 ? V3.accent.red
                 : tierGroup.tier === 2 ? V3.accent.amber : V3.accent.blue,
             }}>
               T{tierGroup.tier}
             </span>
-            <span style={{ fontSize: 10, color: V3.text.dim, fontFamily: V3.mono }}>
+            <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
               {tierGroup.items.length} supplier{tierGroup.items.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -367,7 +361,7 @@ function ExposureTab({ event, onHoverSite }: {
               padding: '3px 0 3px 16px',
               borderBottom: `1px solid ${V3.border.subtle}`,
             }}>
-              <span style={{ flex: 1, fontSize: 11, color: V3.text.secondary, fontFamily: V3.font }}>
+              <span style={{ flex: 1, fontSize: 11, color: V3.text.secondary, fontFamily: V3_FONT }}>
                 {sup.name}
               </span>
               {sup.sole_source && (
@@ -435,17 +429,42 @@ function useSuppliersByTier(event: DisruptionEvent): TierGroup[] {
 /* ══════════════════════════════════════════════
    TAB 3: Act
    ══════════════════════════════════════════════ */
-function ActTab({ event }: { event: DisruptionEvent }) {
+function parseActionsFromString(text: string): ActionItemShape[] {
+  if (!text) return [];
+  // Split on semicolons or numbered list patterns (1. 2. etc.)
+  const parts = text.split(/;\s*|\d+\.\s+/).map(s => s.trim()).filter(Boolean);
+  return parts.map((p, i) => ({
+    id: i,
+    text: p.replace(/^[-\u2013\u2022]\s*/, ''),
+    status: 'open' as const,
+    owner: p.toLowerCase().includes('supplier') || p.toLowerCase().includes('procurement')
+      ? 'Procurement'
+      : p.toLowerCase().includes('route') || p.toLowerCase().includes('ship')
+        ? 'Logistics'
+        : 'SC Operations',
+    due: '',
+    created: new Date().toISOString(),
+  }));
+}
+
+function ActTab({ event, theme: V3 }: { event: DisruptionEvent; theme: V3Theme }) {
   const [actions, setActions] = useState<ActionItemShape[]>(() => {
     const recs = event.recommendations?.actions;
-    if (Array.isArray(recs)) return recs;
+    if (Array.isArray(recs) && recs.length > 0) return recs;
     const payActions = event.payload?.actions;
-    if (Array.isArray(payActions)) return payActions as ActionItemShape[];
+    if (Array.isArray(payActions) && payActions.length > 0) return payActions as ActionItemShape[];
+    // Fall back to parsing recommended_action string
+    const actionStr = (event as any).recommended_action
+      || event.payload?.recommended_action
+      || '';
+    if (actionStr) return parseActionsFromString(actionStr);
     return [];
   });
   const [status, setStatus] = useState(event.status || 'active');
   const [assignInput, setAssignInput] = useState('');
   const [showAssignInput, setShowAssignInput] = useState(false);
+
+  const sectionHeader = sectionHeaderStyle(V3);
 
   useEffect(() => {
     setStatus(event.status || 'active');
@@ -481,7 +500,7 @@ function ActTab({ event }: { event: DisruptionEvent }) {
       {/* Recommended Actions */}
       <div style={sectionHeader}>Recommended Actions</div>
       {actions.length === 0 && (
-        <EmptyRow label="No actions available -- generate a briefing to populate" />
+        <EmptyRow label="No actions available -- generate a briefing to populate" theme={V3} />
       )}
       {actions.map((a, i) => (
         <ActionCheckbox key={a.id ?? i} action={a} onToggle={handleToggle} />
@@ -494,16 +513,19 @@ function ActTab({ event }: { event: DisruptionEvent }) {
           label="Watch" icon={'\uD83D\uDC41'}
           active={status === 'watching'}
           onClick={() => handleStatusChange(status === 'watching' ? 'active' : 'watching')}
+          theme={V3}
         />
         <LifecycleBtn
           label="Archive" icon={'\uD83D\uDCE6'}
           active={status === 'archived'}
           onClick={() => handleStatusChange(status === 'archived' ? 'active' : 'archived')}
+          theme={V3}
         />
         <LifecycleBtn
           label="Assign" icon={'\uD83D\uDC64'}
           active={showAssignInput}
           onClick={() => setShowAssignInput(!showAssignInput)}
+          theme={V3}
         />
       </div>
       {showAssignInput && (
@@ -519,7 +541,7 @@ function ActTab({ event }: { event: DisruptionEvent }) {
               flex: 1, padding: '5px 8px', fontSize: 11,
               background: V3.bg.base, color: V3.text.primary,
               border: `1px solid ${V3.border.default}`, borderRadius: 4,
-              fontFamily: V3.font, outline: 'none',
+              fontFamily: V3_FONT, outline: 'none',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = V3.accent.blue; }}
             onBlur={e => { e.currentTarget.style.borderColor = V3.border.default; }}
@@ -530,7 +552,7 @@ function ActTab({ event }: { event: DisruptionEvent }) {
               padding: '5px 10px', fontSize: 10, fontWeight: 600,
               background: V3.accent.blue + '22', color: V3.accent.blue,
               border: `1px solid ${V3.accent.blue}44`, borderRadius: 4,
-              cursor: 'pointer', fontFamily: V3.mono,
+              cursor: 'pointer', fontFamily: V3_FONT_MONO,
             }}
           >
             Save
@@ -544,14 +566,17 @@ function ActTab({ event }: { event: DisruptionEvent }) {
         <CommBtn
           label="Email" icon={'\u2709'}
           href={`mailto:?subject=${emailSubject}&body=${emailBody}`}
+          theme={V3}
         />
         <CommBtn
           label="Teams" icon={'\uD83D\uDCAC'}
           href={`https://teams.microsoft.com/l/chat/0/0?message=${teamsMsg}`}
+          theme={V3}
         />
         <CommBtn
           label="Meeting" icon={'\uD83D\uDCC5'}
           href={`https://outlook.office.com/calendar/0/deeplink/compose?subject=${emailSubject}&body=${emailBody}`}
+          theme={V3}
         />
       </div>
     </div>
@@ -559,8 +584,8 @@ function ActTab({ event }: { event: DisruptionEvent }) {
 }
 
 /* ── Lifecycle button ── */
-function LifecycleBtn({ label, icon, active, onClick }: {
-  label: string; icon: string; active: boolean; onClick: () => void;
+function LifecycleBtn({ label, icon, active, onClick, theme: V3 }: {
+  label: string; icon: string; active: boolean; onClick: () => void; theme: V3Theme;
 }) {
   return (
     <button
@@ -568,7 +593,7 @@ function LifecycleBtn({ label, icon, active, onClick }: {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-        fontSize: 11, fontWeight: 600, fontFamily: V3.font,
+        fontSize: 11, fontWeight: 600, fontFamily: V3_FONT,
         background: active ? V3.accent.blue + '22' : V3.bg.base,
         color: active ? V3.accent.blue : V3.text.muted,
         border: `1px solid ${active ? V3.accent.blue + '44' : V3.border.subtle}`,
@@ -582,7 +607,7 @@ function LifecycleBtn({ label, icon, active, onClick }: {
 }
 
 /* ── Communicate button ── */
-function CommBtn({ label, icon, href }: { label: string; icon: string; href: string }) {
+function CommBtn({ label, icon, href, theme: V3 }: { label: string; icon: string; href: string; theme: V3Theme }) {
   return (
     <a
       href={href}
@@ -592,7 +617,7 @@ function CommBtn({ label, icon, href }: { label: string; icon: string; href: str
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-        fontSize: 11, fontWeight: 600, fontFamily: V3.font,
+        fontSize: 11, fontWeight: 600, fontFamily: V3_FONT,
         background: V3.bg.base, color: V3.text.muted,
         border: `1px solid ${V3.border.subtle}`,
         textDecoration: 'none', transition: 'all 150ms ease',
@@ -605,11 +630,11 @@ function CommBtn({ label, icon, href }: { label: string; icon: string; href: str
 }
 
 /* ── Empty row placeholder ── */
-function EmptyRow({ label }: { label: string }) {
+function EmptyRow({ label, theme: V3 }: { label: string; theme: V3Theme }) {
   return (
     <div style={{
-      padding: '10px 0', fontSize: 11, color: V3.text.dim,
-      fontStyle: 'italic', fontFamily: V3.font,
+      padding: '10px 0', fontSize: 11, color: V3.text.muted,
+      fontStyle: 'italic', fontFamily: V3_FONT,
     }}>
       {label}
     </div>

@@ -3,7 +3,8 @@
  */
 
 import { useMemo, useState } from 'react';
-import { V3, TYPE, V3_FONT, V3_FONT_MONO } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import type { ScanItem, Severity } from '../../types';
 import { getSev } from '../../utils/scan';
 import { FeedCard } from './FeedCard';
@@ -31,6 +32,7 @@ export function FeedList({
   onSelectIndex,
   onHoverIndex,
 }: FeedListProps) {
+  const { theme: V3 } = useV3Theme();
   const [showMyItems, setShowMyItems] = useState(false);
 
   const filtered = useMemo(() => {

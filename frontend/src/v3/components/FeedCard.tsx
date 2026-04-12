@@ -3,7 +3,8 @@
  * Expands inline to show ExpandedCard when clicked.
  */
 
-import { V3, TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg, sevBorder } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg, sevBorder } from '../theme';
+import { useV3Theme } from '../ThemeContext';
 import type { ScanItem } from '../../types';
 import { getSev, getEvent, getRegion } from '../../utils/scan';
 import { relTime } from '../../utils/format';
@@ -18,10 +19,11 @@ export interface FeedCardProps {
 }
 
 export function FeedCard({ item, index, expanded, onSelect, onHover }: FeedCardProps) {
+  const { theme: V3 } = useV3Theme();
   const sev = getSev(item);
   const title = getEvent(item);
   const region = getRegion(item);
-  const color = sevColor(sev);
+  const color = sevColor(sev, V3);
   const score = item.computed_severity?.score;
   const lastSeen = item.last_seen ? new Date(item.last_seen) : null;
 
@@ -58,8 +60,8 @@ export function FeedCard({ item, index, expanded, onSelect, onHover }: FeedCardP
           flexShrink: 0,
           padding: `2px ${V3.spacing.sm}px`,
           borderRadius: V3.radius.full,
-          background: sevBg(sev),
-          border: `1px solid ${sevBorder(sev)}`,
+          background: sevBg(sev, V3),
+          border: `1px solid ${sevBorder(sev, V3)}`,
           color: color,
           fontSize: 10,
           fontWeight: 600,
@@ -114,11 +116,14 @@ export function FeedCard({ item, index, expanded, onSelect, onHover }: FeedCardP
 
       {/* Expanded content */}
       {expanded && (
-        <div style={{
-          maxHeight: 420,
-          overflow: 'auto',
-          borderTop: `1px solid ${V3.border.subtle}`,
-        }}>
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            maxHeight: 420,
+            overflow: 'auto',
+            borderTop: `1px solid ${V3.border.subtle}`,
+          }}
+        >
           <ExpandedCard
             event={item as unknown as import('./expandedcard_types').DisruptionEvent}
             placement="feed"

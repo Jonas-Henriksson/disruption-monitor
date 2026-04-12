@@ -7,7 +7,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { V3, V3_FONT } from './theme';
+import { V3_FONT } from './theme';
+import { V3ThemeProvider, useV3Theme } from './ThemeContext';
 import { GLOBAL_CSS } from '../styles';
 import { useDisruptionState } from '../hooks/useDisruptionState';
 import { useFilterState } from '../hooks/useFilterState';
@@ -44,7 +45,9 @@ export interface V3AppProps {
   onVersionChange: (v: 'v1' | 'v2' | 'v3') => void;
 }
 
-export function V3App({ version, onVersionChange }: V3AppProps) {
+function V3AppInner({ version, onVersionChange }: V3AppProps) {
+  const { theme: V3 } = useV3Theme();
+
   const dis = useDisruptionState();
   const fil = useFilterState();
   useMapState(); // initialized for future map integration
@@ -286,6 +289,14 @@ export function V3App({ version, onVersionChange }: V3AppProps) {
       {/* Version toggle */}
       <VersionToggle version={version} onVersionChange={onVersionChange} />
     </div>
+  );
+}
+
+export function V3App(props: V3AppProps) {
+  return (
+    <V3ThemeProvider>
+      <V3AppInner {...props} />
+    </V3ThemeProvider>
   );
 }
 
