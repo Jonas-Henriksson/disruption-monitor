@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { ScanItem, Severity, ImpactResult, SupplierAlternativesResponse } from '../types';
-import { fetchSupplierAlternatives, saveNarrativeEdit } from '../services/api';
+import type { ScanItem, Severity, ImpactResult, SupplierAlternativesResponse, EventRegistryEntry } from '../types';
+import { fetchSupplierAlternatives, saveNarrativeEdit, sendEventAlert, createEventTicket, fetchNarrative, type BackendRecommendation, type NarrativeResponse } from '../services/api';
 import { FM, F, SUPPLIERS } from '../data';
-import { TYP } from '../tokens';
+import { TYP, ACCENT } from '../tokens';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import { EventActions } from './EventActions';
 
@@ -15,7 +15,7 @@ export interface ExpandedCardProps {
   eid: string;
   sv: Severity;
   co: string;
-  reg: Record<string, unknown>;
+  reg: EventRegistryEntry;
   copiedId: string | null;
   setCopiedId: (id: string | null) => void;
 }
@@ -71,6 +71,9 @@ export function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
 
   return (
     <div style={{ marginTop: 10, fontSize: 11, lineHeight: 1.6 }}>
+      {/* Quick Actions — prominent pipeline buttons */}
+      <QuickActions eventId={recId} dis={dis} />
+
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
         {tabs.map(tab => {
@@ -124,6 +127,110 @@ export function ExpandedCard({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
   );
 }
 
+// ── Quick Actions ──
+
+type QuickActionStatus = { state: 'idle' | 'loading' | 'done' | 'error'; timestamp?: string };
+
+function QuickActions({ eventId, dis }: { eventId: string; dis: DisruptionState }) {
+  const [alertStatus, setAlertStatus] = useState<QuickActionStatus>({ state: 'idle' });
+  const [ticketStatus, setTicketStatus] = useState<QuickActionStatus>({ state: 'idle' });
+  const [briefStatus, setBriefStatus] = useState<QuickActionStatus>({ state: 'idle' });
+
+  const handleAlert = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAlertStatus({ state: 'loading' });
+    const res = await sendEventAlert(eventId);
+    if (res?.success) {
+      setAlertStatus({ state: 'done', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    } else {
+      setAlertStatus({ state: 'error' });
+      setTimeout(() => setAlertStatus({ state: 'idle' }), 3000);
+    }
+  };
+
+  const handleTicket = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTicketStatus({ state: 'loading' });
+    const res = await createEventTicket(eventId);
+    if (res) {
+      setTicketStatus({ state: 'done', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    } else {
+      setTicketStatus({ state: 'error' });
+      setTimeout(() => setTicketStatus({ state: 'idle' }), 3000);
+    }
+  };
+
+  const handleBrief = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBriefStatus({ state: 'loading' });
+    const res = await fetchNarrative(eventId);
+    if (res) {
+      dis.setNarratives((prev: Record<string, NarrativeResponse>) => ({ ...prev, [eventId]: res }));
+      setBriefStatus({ state: 'done', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    } else {
+      setBriefStatus({ state: 'error' });
+      setTimeout(() => setBriefStatus({ state: 'idle' }), 3000);
+    }
+  };
+
+  const actions: Array<{
+    key: string;
+    label: string;
+    icon: string;
+    status: QuickActionStatus;
+    handler: (e: React.MouseEvent) => void;
+    color: string;
+    doneLabel: string;
+  }> = [
+    { key: 'alert', label: 'Send Alert', icon: '\uD83D\uDD14', status: alertStatus, handler: handleAlert, color: ACCENT.red, doneLabel: 'Sent' },
+    { key: 'ticket', label: 'Create Ticket', icon: '\uD83C\uDFAB', status: ticketStatus, handler: handleTicket, color: ACCENT.amber, doneLabel: 'Created' },
+    { key: 'brief', label: 'Generate Brief', icon: '\u2728', status: briefStatus, handler: handleBrief, color: ACCENT.blueLight, doneLabel: 'Generated' },
+  ];
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      display: 'flex', gap: 6, marginBottom: 10, padding: '8px 10px',
+      background: '#060a12', borderRadius: 8, border: '1px solid #14243e',
+      flexWrap: 'wrap', alignItems: 'center',
+    }}>
+      <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM, marginRight: 2, fontSize: 7, letterSpacing: 1.5 }}>ACTIONS</span>
+      {actions.map(act => {
+        const isDone = act.status.state === 'done';
+        const isLoading = act.status.state === 'loading';
+        const isError = act.status.state === 'error';
+        return (
+          <div key={act.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              disabled={isLoading || isDone}
+              onClick={act.handler}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: isDone ? `${ACCENT.green}18` : isError ? `${ACCENT.red}18` : isLoading ? '#0d1525' : `${act.color}12`,
+                color: isDone ? ACCENT.green : isError ? ACCENT.red : isLoading ? '#475569' : act.color,
+                border: `1px solid ${isDone ? `${ACCENT.green}44` : isError ? `${ACCENT.red}44` : `${act.color}33`}`,
+                borderRadius: 6, padding: '4px 10px', fontSize: 9, fontWeight: 600,
+                cursor: isLoading || isDone ? 'default' : 'pointer',
+                fontFamily: FM, transition: 'all .15s',
+                opacity: isLoading ? 0.6 : 1,
+              }}
+            >
+              {isLoading ? (
+                <span className="sc-spin" style={{ width: 10, height: 10, border: `2px solid ${act.color}33`, borderTop: `2px solid ${act.color}`, borderRadius: '50%', display: 'inline-block' }} />
+              ) : (
+                <span style={{ fontSize: 10 }}>{act.icon}</span>
+              )}
+              {isDone ? act.doneLabel : isError ? 'Failed' : act.label}
+            </button>
+            {isDone && act.status.timestamp && (
+              <span style={{ fontSize: 7, color: '#4a6080', fontFamily: FM }}>{act.status.timestamp}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Overview Tab ──
 
 interface OverviewTabProps {
@@ -134,13 +241,12 @@ interface OverviewTabProps {
   co: string;
   ig: boolean;
   it: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rec: any;
+  rec: BackendRecommendation | undefined;
   priorityColors: string[];
   urgencyColors: Record<string, string>;
 }
 
-function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urgencyColors }: OverviewTabProps) {
+function OverviewTab({ d, dis: _dis, impact, sv, co, ig, it, rec, priorityColors, urgencyColors }: OverviewTabProps) {
   return <>
     {/* Computed severity score badge */}
     {('computed_severity' in d) && (d as unknown as Record<string, unknown>).computed_severity && (() => {
@@ -315,13 +421,12 @@ interface ImpactTabProps {
   d: ScanItem & { _i: number };
   impact: ImpactResult | null;
   co: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rec: any;
+  rec: BackendRecommendation | undefined;
   altLoading: boolean;
   altData: SupplierAlternativesResponse | null;
 }
 
-function ImpactTab({ d, impact, co, rec, altLoading, altData }: ImpactTabProps) {
+function ImpactTab({ d, impact, rec, altLoading, altData }: ImpactTabProps) {
   return <>
     {/* Impact Chain Visualization */}
     {(() => {

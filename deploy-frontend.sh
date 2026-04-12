@@ -25,6 +25,7 @@ aws s3 sync frontend/dist/ s3://$BUCKET/ \
   --exclude "data/*" \
   --exclude "knowledge-base/*" \
   --exclude "lambda/*" \
+  --exclude "git-backup/*" \
   $PROFILE_ARG
 
 echo "Invalidating CloudFront cache..."
@@ -33,5 +34,9 @@ aws cloudfront create-invalidation \
   --paths "/*" \
   --region $REGION \
   $PROFILE_ARG
+
+# Backup git repo to S3
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+bash "$SCRIPT_DIR/backup-git.sh" $PROFILE_ARG
 
 echo "Done! Live at: https://d2rbfnbkfx00z5.cloudfront.net"

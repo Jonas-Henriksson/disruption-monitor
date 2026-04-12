@@ -37,6 +37,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { useViewport } from "./hooks/useMediaQuery";
 import { TYP } from "./tokens";
+import { SectionErrorBoundary } from "./components/ui";
 
 export default function App() {
   const map = useMapState();
@@ -52,8 +53,7 @@ export default function App() {
   const isMobile = viewport === 'mobile';
   const isTablet = viewport === 'tablet';
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [land, setLand] = useState<any>(null);
+  const [land, setLand] = useState<{ type: string; features: Array<{ id: string; geometry: GeoPermissibleObjects; properties: Record<string, unknown> }> } | null>(null);
   // Inject CSS
   useEffect(() => {
     const id = 'sc-mon-css';
@@ -287,8 +287,6 @@ export default function App() {
   const ha = !!(dis.items && dis.items.length > 0);
   const cc = dis.items ? dis.items.filter(d => getSev(d) === 'Critical').length : 0;
 
-  void dis.impactView; // used in future phases
-
   return (
     <div style={{ fontFamily: F, background: '#060a12', color: '#c8d6e5', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* HEADER — hidden on mobile, replaced by bottom tab bar */}
@@ -309,14 +307,14 @@ export default function App() {
       {/* FILTERS — hidden on mobile */}
       {fil.fO && !isMobile && <div style={{ background: '#080e1c', borderBottom: '1px solid #14243e', padding: '8px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', flexShrink: 0, zIndex: 25, animation: 'sfu 200ms ease both' }}>
         <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>TYPE</span>
-        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{Object.entries(TYPE_CFG).map(([k, v]) => { const on = fil.tF[k]; return <button key={k} onClick={() => fil.setTF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{typeCounts[k] || 0}</span></button>; })}</div>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }} role="group" aria-label="Filter by site type">{Object.entries(TYPE_CFG).map(([k, v]) => { const on = fil.tF[k]; return <button key={k} aria-pressed={on} aria-label={`${v.label}: ${typeCounts[k] || 0} sites`} onClick={() => fil.setTF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{typeCounts[k] || 0}</span></button>; })}</div>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
         <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>REGION</span>
-        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{Object.entries(REGION_CFG).map(([k, v]) => { const on = fil.rF[k]; return <button key={k} onClick={() => fil.setRF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5, marginLeft: 4 }}>{regionCounts[k] || 0}</span></button>; })}</div>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }} role="group" aria-label="Filter by region">{Object.entries(REGION_CFG).map(([k, v]) => { const on = fil.rF[k]; return <button key={k} aria-pressed={on} aria-label={`${v.label}: ${regionCounts[k] || 0} sites`} onClick={() => fil.setRF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5, marginLeft: 4 }}>{regionCounts[k] || 0}</span></button>; })}</div>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
-        <button onClick={() => fil.setSR(!fil.sR)} style={{ padding: '3px 8px', border: `1px solid ${fil.sR ? '#1a5f8a44' : '#14243e'}`, borderRadius: 4, background: fil.sR ? '#1a5f8a18' : 'transparent', color: fil.sR ? '#38bdf8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Routes</button>
-        <button onClick={() => fil.setSC(!fil.sC)} style={{ padding: '3px 8px', border: `1px solid ${fil.sC ? '#64748b44' : '#14243e'}`, borderRadius: 4, background: fil.sC ? '#64748b18' : 'transparent', color: fil.sC ? '#94a3b8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Chokepoints</button>
-        <button onClick={() => fil.setSSup(!fil.sSup)} style={{ padding: '3px 8px', border: `1px solid ${fil.sSup ? '#a78bfa44' : '#14243e'}`, borderRadius: 4, background: fil.sSup ? '#a78bfa18' : 'transparent', color: fil.sSup ? '#a78bfa' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Suppliers <span style={{ fontFamily: FM, fontSize: 8, opacity: 0.5 }}>5,090</span></button>
+        <button aria-pressed={fil.sR} aria-label="Toggle shipping routes" onClick={() => fil.setSR(!fil.sR)} style={{ padding: '3px 8px', border: `1px solid ${fil.sR ? '#1a5f8a44' : '#14243e'}`, borderRadius: 4, background: fil.sR ? '#1a5f8a18' : 'transparent', color: fil.sR ? '#38bdf8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Routes</button>
+        <button aria-pressed={fil.sC} aria-label="Toggle chokepoints" onClick={() => fil.setSC(!fil.sC)} style={{ padding: '3px 8px', border: `1px solid ${fil.sC ? '#64748b44' : '#14243e'}`, borderRadius: 4, background: fil.sC ? '#64748b18' : 'transparent', color: fil.sC ? '#94a3b8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Chokepoints</button>
+        <button aria-pressed={fil.sSup} aria-label="Toggle suppliers overlay" onClick={() => fil.setSSup(!fil.sSup)} style={{ padding: '3px 8px', border: `1px solid ${fil.sSup ? '#a78bfa44' : '#14243e'}`, borderRadius: 4, background: fil.sSup ? '#a78bfa18' : 'transparent', color: fil.sSup ? '#a78bfa' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Suppliers <span style={{ fontFamily: FM, fontSize: 8, opacity: 0.5 }}>5,090</span></button>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
         <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>DIVISION</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -342,6 +340,7 @@ export default function App() {
         {!isMobile && !isTablet && <LeftPanel dis={dis} open={leftOpen} onToggle={() => setLeftOpen(o => !o)} />}
 
         {/* MAP */}
+        <SectionErrorBoundary label="Map">
         <div ref={map.cR} style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none', minWidth: 0, paddingBottom: isMobile ? 56 : 0 }} onClick={(e) => { if (!(e.target as HTMLElement).closest?.('[data-click]')) { map.setSelSite(null); map.setSelRt(null); map.setSelSupC(null); dis.setScView(null); } }}>
         <svg ref={map.svgRef} width={map.dm.w} height={map.dm.h} style={{ display: 'block', cursor: 'grab', touchAction: 'none' }}>
           <rect width={map.dm.w} height={map.dm.h} fill="#060a12" />
@@ -737,9 +736,10 @@ export default function App() {
         </div>}
 
       </div>
+        </SectionErrorBoundary>
 
         {/* RIGHT PANEL — Active Disruptions (tablet: includes left panel content; mobile: hidden, uses bottom sheet) */}
-        {!isMobile && <DrawerPanel dis={dis} fil={fil} open={rightOpen} onToggle={() => setRightOpen(o => !o)} viewport={viewport} />}
+        {!isMobile && <SectionErrorBoundary label="Disruption Panel"><DrawerPanel dis={dis} fil={fil} open={rightOpen} onToggle={() => setRightOpen(o => !o)} viewport={viewport} /></SectionErrorBoundary>}
 
         {/* MOBILE BOTTOM SHEET — replaces both panels on mobile */}
         {isMobile && (

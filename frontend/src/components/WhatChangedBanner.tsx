@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { ScanItem, Severity } from '../types';
-import { FM, SO, SEV } from '../data';
-import { S, T, B, ACCENT, TYP } from '../tokens';
+import type { ScanItem, EventRegistryEntry } from '../types';
+import { FM } from '../data';
+import { S, T, B, ACCENT } from '../tokens';
 import { SectionHeader, Badge } from './ui';
 import { eventId } from '../utils/format';
-import { getSev, getEvent, getTrend } from '../utils/scan';
+import { getSev } from '../utils/scan';
 
 const LS_KEY = 'sc-hub-last-seen-time';
 const LS_SEV_KEY = 'sc-hub-last-seen-sevs';
@@ -24,7 +24,7 @@ interface ChangeSet {
 
 interface WhatChangedBannerProps {
   items: ScanItem[] | null;
-  registry: Record<string, Record<string, unknown>>;
+  registry: Record<string, EventRegistryEntry>;
   sTime: Date | null;
   onScrollTo: (idx: number) => void;
 }
@@ -32,8 +32,8 @@ interface WhatChangedBannerProps {
 /** Compute what changed since the user last dismissed the banner */
 function computeChanges(
   items: ScanItem[],
-  registry: Record<string, Record<string, unknown>>,
-  lastSeenTime: string | null,
+  registry: Record<string, EventRegistryEntry>,
+  _lastSeenTime: string | null,
   lastSeenSevs: Record<string, string>,
 ): ChangeSet {
   const result: ChangeSet = {

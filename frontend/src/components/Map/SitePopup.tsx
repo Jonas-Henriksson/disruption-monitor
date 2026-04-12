@@ -13,9 +13,7 @@ interface SitePopupProps {
   site: typeof SITES[number];
   exposureScore: ExposureScore | null | undefined;
   onClose: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supExpand: Record<string, boolean>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setSupExpand: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   siteSuppliers?: SiteSuppliersResponse | null;
   siteSuppliersLoading?: boolean;

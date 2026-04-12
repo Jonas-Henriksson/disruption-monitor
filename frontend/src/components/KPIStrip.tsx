@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { SEV, FM, ROUTES, SUPPLY_GRAPH, SUPPLIERS } from '../data';
-import { S, T, B, ACCENT } from '../tokens';
+import { S, T, B, ACCENT, TYP, FS } from '../tokens';
 import { Badge } from './ui';
 import { computeImpactWithGraph } from '../utils/impact';
 import { getSev, getTrend } from '../utils/scan';
@@ -106,9 +106,20 @@ export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps
   const hasCritical = criticalCount > 0;
   const hasHigh = highCount > 0;
 
-  // Visual hierarchy: Critical dominates, High prominent, Medium/Low supporting
+  // Smart KPI: hero sizing when Critical > 0, emphasized when High > 0, calm otherwise
+  const allCalm = !hasCritical && !hasHigh;
+
   const sevStyle = (sev: Severity, count: number, active: boolean) => {
     const color = SEV[sev];
+    const isHero = sev === 'Critical' && hasCritical;
+    const isEmph = sev === 'High' && !hasCritical && hasHigh;
+    if (isHero) {
+      return {
+        fontSize: FS.hero * 1.15, fontWeight: TYP.hero.fontWeight, color,
+        textShadow: `0 0 18px ${color}88, 0 0 6px ${color}55`,
+        letterSpacing: '-0.5px',
+      };
+    }
     if (sev === 'Critical' && count > 0) {
       return {
         fontSize: 24, fontWeight: 800 as const, color,
@@ -116,17 +127,25 @@ export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps
         letterSpacing: '-0.5px',
       };
     }
+    if (isEmph) {
+      return {
+        fontSize: 18, fontWeight: 700 as const, color,
+        textShadow: `0 0 8px ${color}44`,
+        letterSpacing: '-0.3px',
+      };
+    }
     if (sev === 'High' && count > 0) {
       return {
         fontSize: 16, fontWeight: 700 as const, color,
-        textShadow: hasHigh ? `0 0 6px ${color}33` : 'none',
+        textShadow: hasCritical ? 'none' : `0 0 6px ${color}33`,
         letterSpacing: '0px',
       };
     }
-    // Medium/Low — much smaller, supporting context
+    // Medium/Low — muted when a higher severity is dominant
+    const mute = hasCritical || hasHigh;
     return {
       fontSize: 11, fontWeight: 600 as const,
-      color: active ? color : color + 'bb',
+      color: active ? color : color + (mute ? '88' : 'bb'),
       textShadow: 'none',
       letterSpacing: '0px',
     };
@@ -134,23 +153,36 @@ export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps
 
   const labelStyle = (sev: Severity, count: number, active: boolean) => {
     const color = SEV[sev];
+    const isHero = sev === 'Critical' && hasCritical;
+    const isEmph = sev === 'High' && !hasCritical && hasHigh;
+    if (isHero) {
+      return { fontSize: 11, color: active ? color : color + 'dd', fontWeight: 700 as const, textTransform: 'uppercase' as const, letterSpacing: '1.5px' };
+    }
     if (sev === 'Critical' && count > 0) {
       return { fontSize: 10, color: active ? color : color + 'cc', fontWeight: 700 as const, textTransform: 'uppercase' as const, letterSpacing: '1px' };
+    }
+    if (isEmph) {
+      return { fontSize: 10, color: active ? color : color + 'cc', fontWeight: 700 as const, textTransform: 'uppercase' as const, letterSpacing: '0.5px' };
     }
     if (sev === 'High' && count > 0) {
       return { fontSize: 9, color: active ? color : '#6b7fa0', fontWeight: 600 as const, textTransform: 'none' as const, letterSpacing: '0px' };
     }
-    return { fontSize: 8, color: active ? color : B.chokepoint, fontWeight: 500 as const, textTransform: 'none' as const, letterSpacing: '0px' };
+    const mute = hasCritical || hasHigh;
+    return { fontSize: 8, color: active ? color : (mute ? color + '77' : B.chokepoint), fontWeight: 500 as const, textTransform: 'none' as const, letterSpacing: '0px' };
   };
 
   const dotSize = (sev: Severity, count: number) => {
+    if (sev === 'Critical' && hasCritical) return 11;
     if (sev === 'Critical' && count > 0) return 9;
+    if (sev === 'High' && !hasCritical && hasHigh) return 9;
     if (sev === 'High' && count > 0) return 7;
     return 5;
   };
 
   const btnPadding = (sev: Severity, count: number) => {
+    if (sev === 'Critical' && hasCritical) return '8px 18px';
     if (sev === 'Critical' && count > 0) return '6px 14px';
+    if (sev === 'High' && !hasCritical && hasHigh) return '6px 14px';
     if (sev === 'High' && count > 0) return '5px 11px';
     return '3px 8px';
   };
@@ -164,7 +196,7 @@ export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps
   const isTablet = viewport === 'tablet';
 
   return (
-    <div style={{
+    <div role="region" aria-label="Key risk indicators" style={{
       background: stripBg,
       borderTop: stripBorder,
       borderBottom: `1px solid ${B.subtle}`,
@@ -185,52 +217,64 @@ export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps
       flexShrink: 0,
       zIndex: 26,
     }}>
-      {/* PRIMARY TIER: Severity counts — clickable filters, visual hierarchy */}
+      {/* PRIMARY TIER: Severity counts — smart visual hierarchy */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: 5,
         ...(isMobile ? { gridColumn: '1 / -1', overflowX: 'auto' as const, WebkitOverflowScrolling: 'touch' as const, paddingBottom: 2 } : {}),
       }}>
+        {/* All Clear state — green accent when no Critical or High */}
+        {allCalm && <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: isMobile ? '8px 12px' : '5px 12px',
+          background: `${ACCENT.green}0a`,
+          border: `1px solid ${ACCENT.green}22`,
+          borderRadius: 8, flexShrink: 0,
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: ACCENT.green, boxShadow: `0 0 6px ${ACCENT.green}66` }} />
+          <span style={{ fontFamily: FM, fontSize: 12, fontWeight: 700, color: ACCENT.green, letterSpacing: '-0.3px' }}>All Clear</span>
+          <span style={{ fontFamily: FM, fontSize: 9, color: `${ACCENT.green}88`, fontWeight: 500 }}>No critical or high severity events</span>
+        </div>}
         {(['Critical', 'High', 'Medium', 'Low'] as Severity[]).map(sev => {
           const count = kpi.sevCounts[sev];
           if (!count) return null;
           const active = fil.sevFilter === sev;
           const color = SEV[sev];
-          const isCritical = sev === 'Critical' && count > 0;
+          const isCritHero = sev === 'Critical' && hasCritical;
+          const isHighEmph = sev === 'High' && !hasCritical && hasHigh;
           const ss = sevStyle(sev, count, active);
           const ls = labelStyle(sev, count, active);
           const ds = dotSize(sev, count);
           const bp = btnPadding(sev, count);
-          return <button key={sev} onClick={() => fil.setSevFilter(active ? null : sev)} style={{
-            display: 'flex', alignItems: 'center', gap: isCritical ? 8 : 5,
+          return <button key={sev} aria-label={`${count} ${sev} severity event${count !== 1 ? 's' : ''}${active ? ' (active filter)' : ''}`} aria-pressed={active} onClick={() => fil.setSevFilter(active ? null : sev)} style={{
+            display: 'flex', alignItems: 'center', gap: isCritHero ? 10 : (isHighEmph ? 8 : 5),
             padding: isMobile ? '8px 12px' : bp,
             minHeight: isMobile ? 44 : undefined,
-            background: active ? color + '22' : (isCritical ? color + '0a' : 'transparent'),
-            border: `1px solid ${active ? color + '55' : (isCritical ? color + '30' : B.subtle)}`,
-            borderRadius: isCritical ? 8 : 6, cursor: 'pointer', transition: 'all .15s',
+            background: active ? color + '22' : (isCritHero ? color + '12' : (isHighEmph ? color + '08' : 'transparent')),
+            border: `1px solid ${active ? color + '55' : (isCritHero ? color + '40' : (isHighEmph ? color + '30' : B.subtle))}`,
+            borderRadius: isCritHero ? 10 : (isHighEmph ? 8 : 6), cursor: 'pointer', transition: 'all .15s',
             flexShrink: 0,
+            boxShadow: isCritHero ? `0 0 20px ${color}22, 0 0 8px ${color}11` : 'none',
           }}>
-            <div className={isCritical ? 'sc-live-dot' : undefined} style={{
+            <div aria-hidden="true" className={isCritHero ? 'sc-live-dot' : undefined} style={{
               width: ds, height: ds, borderRadius: '50%', background: color,
-              boxShadow: isCritical ? `0 0 10px ${color}99, 0 0 3px ${color}66` : (sev === 'High' && count > 0 ? `0 0 4px ${color}44` : 'none'),
+              boxShadow: isCritHero ? `0 0 14px ${color}aa, 0 0 4px ${color}77` : (isHighEmph ? `0 0 6px ${color}55` : (sev === 'High' && count > 0 ? `0 0 4px ${color}44` : 'none')),
             }} />
             <span style={{ fontFamily: FM, ...ss, position: 'relative' }}>
               {count}
               {deltas && deltas[sev] !== 0 && (() => {
                 const d = deltas[sev];
                 const isHighSev = sev === 'Critical' || sev === 'High';
-                // For Critical/High: increase is bad (red), decrease is good (green)
-                // For Medium/Low: changes are muted
                 const badgeColor = isHighSev
                   ? (d > 0 ? '#ef4444' : '#22c55e')
                   : '#6b7fa0';
                 return (
                   <span style={{
                     position: 'absolute',
-                    top: -6,
-                    right: -14,
-                    fontSize: 8,
+                    top: isCritHero ? -8 : -6,
+                    right: isCritHero ? -16 : -14,
+                    fontSize: isCritHero ? 9 : 8,
                     fontWeight: 700,
                     color: badgeColor,
                     fontFamily: FM,

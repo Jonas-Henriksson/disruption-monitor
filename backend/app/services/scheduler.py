@@ -16,8 +16,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
-from ..db.database import create_action, save_scan_record, upsert_event
+from ..db.database import create_action, get_active_events_all_modes, save_scan_record, update_event_related_events, upsert_event
 from .action_engine import generate_actions_for_event
+from .dedup import find_cross_mode_related
 from .scanner import ScanMode, run_scan
 from .telegram import send_scan_alerts
 from .webhooks import publish_scan_complete
@@ -106,8 +107,37 @@ async def _scan_loop(mode: ScanMode) -> None:
                                 due_date=action_def.get("due_date"),
                             )
                         actions_count += len(action_defs)
-                    except Exception:
-                        logger.exception("Failed to generate actions for event %s", event_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "Action generation failed for event %s: %s — event persisted without actions",
+                            event_id, exc,
+                        )
+                        # Flag the event so the UI/health can surface the gap
+                        try:
+                            from ..db.database import save_event_edit
+                            save_event_edit(
+                                event_id=event_id,
+                                field="actions_generation",
+                                original_value="pending",
+                                edited_value=f"failed: {exc}",
+                                edited_by="system",
+                            )
+                        except Exception:
+                            logger.debug("Could not record action-gen failure edit for %s", event_id)
+
+            # Cross-mode related event linkage
+            try:
+                all_active = get_active_events_all_modes()
+                related_map = find_cross_mode_related(items, mode, all_active)
+                for evt_id, links in related_map.items():
+                    update_event_related_events(evt_id, links)
+                if related_map:
+                    logger.info(
+                        "Scheduler: %s cross-mode linkage — %d events linked",
+                        mode, len(related_map),
+                    )
+            except Exception:
+                logger.exception("Scheduler: cross-mode dedup failed for %s (non-fatal)", mode)
 
             source = result.get("source", "unknown")
             logger.info(

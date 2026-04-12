@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { ScanItem, Severity, ImpactResult } from '../types';
+import type { ScanItem, Severity, ImpactResult, Ticket, EventRegistryEntry } from '../types';
 import { assignTicket, updateTicketStatus, graphSendEventEmail, graphSendEventTeams, graphCreateEventMeeting } from '../services/api';
 import { FM, STATUS_CFG, TEAM, TEAM_MAP, SUPPLIERS } from '../data';
 import { TYP } from '../tokens';
-import { getEvent, getRegion, getSev, getTrend } from '../utils/scan';
+import { getEvent, getRegion, getTrend } from '../utils/scan';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 
 type DisruptionState = ReturnType<typeof useDisruptionState>;
@@ -15,12 +15,12 @@ export interface EventActionsProps {
   eid: string;
   sv: Severity;
   co: string;
-  reg: Record<string, unknown>;
+  reg: EventRegistryEntry;
   copiedId: string | null;
   setCopiedId: (id: string | null) => void;
 }
 
-export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCopiedId }: EventActionsProps) {
+export function EventActions({ d, dis, impact, eid, sv, reg, copiedId, setCopiedId }: EventActionsProps) {
   // MS Graph action button feedback
   const [graphAction, setGraphAction] = useState<Record<string, 'sending' | 'sent' | 'error'>>({});
 
@@ -175,7 +175,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
               const slaHours = selectedSla ? ({ '24h': 24, '48h': 48, '1w': 168 }[selectedSla] || null) : null;
               const dueDate = slaHours ? new Date(Date.now() + slaHours * 3600000).toISOString() : undefined;
               assignTicket(bId, t.id, dueDate ? { due_date: dueDate } : undefined);
-              dis.setTickets((prev: Record<string, Record<string, unknown>>) => ({
+              dis.setTickets((prev: Record<string, Ticket>) => ({
                 ...prev,
                 [eid]: {
                   ...prev[eid],
@@ -211,7 +211,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
             e.stopPropagation();
             const bId = backendId || eid;
             assignTicket(bId, '');
-            dis.setTickets((prev: Record<string, Record<string, unknown>>) => {
+            dis.setTickets((prev: Record<string, Ticket>) => {
               const updated = { ...prev };
               if (updated[eid]) {
                 updated[eid] = { ...updated[eid], owner: null, ticketStatus: 'open', due_date: null, is_overdue: false };
@@ -241,7 +241,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
             e.stopPropagation();
             const bId = backendId || eid;
             updateTicketStatus(bId, st);
-            dis.setTickets((prev: Record<string, Record<string, unknown>>) => ({ ...prev, [eid]: { ...prev[eid], ticketStatus: st } }));
+            dis.setTickets((prev: Record<string, Ticket>) => ({ ...prev, [eid]: { ...prev[eid], ticketStatus: st } }));
           }} style={{
             display: 'inline-flex', alignItems: 'center', gap: 3,
             background: isCurrent ? cfg.color + '22' : 'transparent',

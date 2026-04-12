@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_trade
-from ..db.database import get_event, get_event_edits, get_event_feedback, get_events, get_feedback_stats, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
+from ..db.database import get_event, get_event_edits, get_event_feedback, get_event_severity_history, get_events, get_feedback_stats, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
 from ..models.schemas import EventFeedbackCreate, EventRecommendationsResponse, FeedbackStats
 from ..services.narrative import (
     TalkingPoints,
@@ -95,10 +95,12 @@ async def weekly_summary(days: int = 7, user: dict[str, Any] = Depends(get_curre
 
 @router.get("/{event_id}")
 async def get_event_detail(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
-    """Return full event detail."""
+    """Return full event detail with severity history for sparkline rendering."""
     event = _find_event(event_id)
     if event is None:
         raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+    # Attach severity history from snapshots (powers frontend sparkline)
+    event["severity_history"] = get_event_severity_history(event_id)
     return event
 
 

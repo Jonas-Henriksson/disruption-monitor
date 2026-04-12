@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { ScanMode, ScanItem, Severity } from "../types";
+import type { ScanMode, ScanItem, Severity, EventRegistryEntry, EditEntry, Ticket } from "../types";
 import { SO, SAMPLE } from "../data";
 import { eventId } from "../utils/format";
 import { fetchLatestScan, triggerScan, extractItems, fetchRecommendations, updateEventStatus, fetchNarrative, fetchTimeline, type BackendRecommendation, type NarrativeResponse, type TimelineDataPoint } from "../services/api";
@@ -17,18 +17,12 @@ export function useDisruptionState() {
   const [dOpen, setDOpen] = useState(false);
   const [dClosing, setDClosing] = useState(false);
   const [scanPct, setScanPct] = useState(0);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [registry, setRegistry] = useState<Record<string, any>>({});
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [edits, setEdits] = useState<Record<string, any>>({});
-  const [editing, setEditing] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tickets, setTickets] = useState<Record<string, any>>({});
-  const [showArchived, setShowArchived] = useState(false);
+  const [registry, setRegistry] = useState<Record<string, EventRegistryEntry>>({});
+  const [edits, setEdits] = useState<Record<string, EditEntry>>({});
+  const [tickets, setTickets] = useState<Record<string, Ticket>>({});
   const [showAssign, setShowAssign] = useState<string | null>(null);
   const [supExpand, setSupExpand] = useState<Record<string, boolean>>({});
   const [scView, setScView] = useState<string | null>(null);
-  const [impactView, setImpactView] = useState<number | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("sample");
   const [recs, setRecs] = useState<Record<string, BackendRecommendation>>({});
   const [narratives, setNarratives] = useState<Record<string, NarrativeResponse>>({});
@@ -103,8 +97,7 @@ export function useDisruptionState() {
   /** Merge results into the event registry */
   const mergeRegistry = (all: ScanItem[]) => {
     const now = new Date().toISOString();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newReg: Record<string, any> = {};
+    const newReg: Record<string, EventRegistryEntry> = {};
     setRegistry(prevRegistry => {
       Object.assign(newReg, prevRegistry);
       const detectedIds = new Set(all.map(d => eventId(d as { event?: string; risk?: string; region?: string })));
@@ -117,14 +110,14 @@ export function useDisruptionState() {
         } else {
           const wasArchived = prev.status === 'archived';
           const sevRank: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
-          const escalated = wasArchived && (sevRank[sev] || 0) > (sevRank[prev.archivedSev] || 0);
+          const escalated = wasArchived && (sevRank[sev] || 0) > (sevRank[prev.archivedSev || ''] || 0);
           if (wasArchived && !escalated) { /* stay archived */ }
           else {
             newReg[id] = {
               ...prev, status: escalated ? 'active' : prev.status === 'watching' ? 'watching' : 'active',
               lastSeen: now, scanCount: (prev.scanCount || 0) + 1, lastSev: sev,
               _new: !prev.firstSeen, _returning: !!prev.firstSeen && prev.status !== 'watching',
-              _reEmerged: escalated, _reEmergedFrom: escalated ? prev.archivedSev : null,
+              _reEmerged: escalated, _reEmergedFrom: escalated ? prev.archivedSev || null : null,
             };
           }
         }
@@ -244,9 +237,9 @@ export function useDisruptionState() {
     mode, setMode, loading, items, setItems, error, setError,
     sel, setSel, sTime, setSTime,
     dOpen, setDOpen, dClosing, setDClosing, closeD,
-    scanPct, registry, setRegistry, edits, setEdits, editing, setEditing,
-    tickets, setTickets, showArchived, setShowArchived, showAssign, setShowAssign,
-    supExpand, setSupExpand, scView, setScView, impactView, setImpactView,
+    scanPct, registry, setRegistry, edits, setEdits,
+    tickets, setTickets, showAssign, setShowAssign,
+    supExpand, setSupExpand, scView, setScView,
     scan, loadLatest, dataSource, recs, loadRecs, syncStatus,
     narratives, setNarratives, narrativeLoading, loadNarrative,
     timelineOpen, setTimelineOpen,

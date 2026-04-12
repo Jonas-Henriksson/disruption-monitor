@@ -65,8 +65,8 @@ export const T = {
   tertiary: '#64748b',
   /** #4a6080 — muted: legend labels, filter counts, metadata */
   muted: '#4a6080',
-  /** #2a3d5c — ghost: section headers (TYPE, REGION, GROUP BY), timestamps */
-  ghost: '#2a3d5c',
+  /** #3d5a80 — ghost: section headers (TYPE, REGION, GROUP BY), timestamps */
+  ghost: '#3d5a80',
   /** #2a4060 — map country labels */
   mapLabel: '#2a4060',
   /** #1e3050 — dim: dot separators, collapsed labels, muted badges */
@@ -226,7 +226,7 @@ export const TYP = {
   /** Smaller body — card content, popup details */
   bodySm: { fontSize: FS.md, fontWeight: 400 as const, lineHeight: 1.5, color: '#94a3b8' },
   /** Caption — timestamps, metadata */
-  caption: { fontSize: FS.sm, fontWeight: 400 as const, lineHeight: 1.4, color: '#2a3d5c' },
+  caption: { fontSize: FS.sm, fontWeight: 400 as const, lineHeight: 1.4, color: '#3d5a80' },
   /** Label — section headers (TYPE, REGION), uppercase micro labels */
   label: { fontSize: FS.xs, fontWeight: 700 as const, lineHeight: 1.2, textTransform: 'uppercase' as const, letterSpacing: 1.5 },
   /** Mono body — metric values, IDs, code-like text */

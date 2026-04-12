@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS scan_records (
     item_count  INTEGER NOT NULL DEFAULT 0,
     started_at  TEXT NOT NULL,
     completed_at TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -132,8 +132,8 @@ CREATE TABLE IF NOT EXISTS events (
     last_seen       TEXT NOT NULL,
     scan_count      INTEGER NOT NULL DEFAULT 1,
     payload         TEXT NOT NULL,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS event_snapshots (
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS event_snapshots (
     event_id    TEXT NOT NULL REFERENCES events(id),
     scan_id     TEXT NOT NULL,
     payload     TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS tickets (
@@ -152,8 +152,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     notes       TEXT,
     due_date    TEXT,
     priority    TEXT CHECK (priority IS NULL OR priority IN ('critical', 'high', 'normal', 'low')),
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS event_edits (
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS event_edits (
     original_value  TEXT NOT NULL,
     edited_value    TEXT NOT NULL,
     edited_by       TEXT NOT NULL DEFAULT 'jh',
-    edited_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    edited_at       TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS supplier_relationships (
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS site_code_map (
 
 CREATE TABLE IF NOT EXISTS alerted_events (
     event_id    TEXT PRIMARY KEY,
-    alerted_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    alerted_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE TABLE IF NOT EXISTS event_feedback (
@@ -220,8 +220,8 @@ CREATE TABLE IF NOT EXISTS actions (
     priority    TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('critical', 'high', 'normal', 'low')),
     status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'dismissed')),
     due_date    TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_actions_event ON actions(event_id);
@@ -230,6 +230,20 @@ CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status);
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_site ON supplier_relationships(site_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_country ON supplier_relationships(supplier_country);
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_supplier ON supplier_relationships(supplier_name);
+
+CREATE TABLE IF NOT EXISTS itsm_sync_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id    TEXT NOT NULL,
+    action      TEXT NOT NULL CHECK (action IN ('create_ticket', 'update_ticket', 'sync_status', 'list_tickets')),
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    status      TEXT NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'error', 'stub')),
+    provider    TEXT NOT NULL DEFAULT 'stub',
+    external_id TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_itsm_sync_log_event ON itsm_sync_log(event_id);
+CREATE INDEX IF NOT EXISTS idx_itsm_sync_log_action ON itsm_sync_log(action);
 """
 
 
@@ -447,6 +461,41 @@ def get_events_for_mode(mode: str) -> list[dict]:
     return get_events(mode=mode, status=None)
 
 
+def get_active_events_all_modes() -> list[dict]:
+    """Get all active/watching events across every mode with _mode tag.
+
+    Used by cross-mode dedup to find related events.
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, mode, payload FROM events WHERE status IN ('active', 'watching')"
+        ).fetchall()
+        results = []
+        for row in rows:
+            event = json.loads(row["payload"])
+            event["_mode"] = row["mode"]
+            results.append(event)
+        return results
+
+
+def update_event_related_events(event_id: str, related_events: list[dict]) -> bool:
+    """Patch the payload of an event to include a related_events field.
+
+    Returns True if the event was found and updated.
+    """
+    with get_db() as conn:
+        row = conn.execute("SELECT payload FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not row:
+            return False
+        payload = json.loads(row["payload"])
+        payload["related_events"] = related_events
+        conn.execute(
+            "UPDATE events SET payload = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(payload, default=str), datetime.now(timezone.utc).isoformat(), event_id),
+        )
+        return True
+
+
 # ── Tickets ────────────────────────────────────────────────────
 
 
@@ -519,7 +568,7 @@ def get_overdue_tickets() -> list[dict]:
         rows = conn.execute(
             """SELECT * FROM tickets
                WHERE due_date IS NOT NULL
-                 AND due_date < datetime('now')
+                 AND due_date < datetime('now', 'utc')
                  AND status != 'done'
                ORDER BY due_date ASC""",
         ).fetchall()
@@ -562,7 +611,7 @@ def get_timeline_data(days: int = 30) -> list[dict]:
                 es.event_id,
                 es.payload
             FROM event_snapshots es
-            WHERE es.created_at >= datetime('now', ?)
+            WHERE es.created_at >= datetime('now', 'utc', ?)
             ORDER BY date ASC
             """,
             (f"-{days} days",),
@@ -620,6 +669,46 @@ def get_timeline_data(days: int = 30) -> list[dict]:
         })
 
     return result
+
+
+# ── Event retention / cleanup ─────────────────────────────────
+
+
+def cleanup_old_events(days: int = 90) -> int:
+    """Delete archived events older than *days* and all their related records.
+
+    Only removes events with status='archived' whose updated_at is older than
+    the cutoff. Active and watching events are never deleted.
+
+    Returns the number of events deleted.
+    """
+    cutoff = f"-{days} days"
+    with get_db() as conn:
+        # Find archived events older than cutoff
+        rows = conn.execute(
+            "SELECT id FROM events WHERE status = 'archived' AND updated_at < datetime('now', 'utc', ?)",
+            (cutoff,),
+        ).fetchall()
+        event_ids = [r["id"] for r in rows]
+
+        if not event_ids:
+            return 0
+
+        placeholders = ",".join("?" * len(event_ids))
+
+        # Delete related records first (foreign-key safe order)
+        conn.execute(f"DELETE FROM event_snapshots WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM tickets WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM actions WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM event_edits WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM alerted_events WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM itsm_sync_log WHERE event_id IN ({placeholders})", event_ids)
+
+        # Delete the events themselves
+        conn.execute(f"DELETE FROM events WHERE id IN ({placeholders})", event_ids)
+
+        logger.info("Cleaned up %d archived events older than %d days", len(event_ids), days)
+        return len(event_ids)
 
 
 # ── Stats ──────────────────────────────────────────────────────
@@ -1020,13 +1109,13 @@ def get_weekly_summary(days: int = 7) -> dict:
 
         # ── New events: first_seen within the window ──
         new_rows = conn.execute(
-            "SELECT * FROM events WHERE first_seen >= datetime('now', ?) ORDER BY first_seen DESC",
+            "SELECT * FROM events WHERE first_seen >= datetime('now', 'utc', ?) ORDER BY first_seen DESC",
             (cutoff,),
         ).fetchall()
 
         # ── Resolved (archived) events: updated_at within the window & status=archived ──
         resolved_rows = conn.execute(
-            "SELECT * FROM events WHERE status = 'archived' AND updated_at >= datetime('now', ?) ORDER BY updated_at DESC",
+            "SELECT * FROM events WHERE status = 'archived' AND updated_at >= datetime('now', 'utc', ?) ORDER BY updated_at DESC",
             (cutoff,),
         ).fetchall()
 
@@ -1038,7 +1127,7 @@ def get_weekly_summary(days: int = 7) -> dict:
         candidate_events = conn.execute(
             """SELECT DISTINCT es.event_id
                FROM event_snapshots es
-               WHERE es.created_at >= datetime('now', ?)""",
+               WHERE es.created_at >= datetime('now', 'utc', ?)""",
             (cutoff,),
         ).fetchall()
         for row in candidate_events:
@@ -1074,7 +1163,7 @@ def get_weekly_summary(days: int = 7) -> dict:
             """SELECT t.*, e.event_title FROM tickets t
                LEFT JOIN events e ON t.event_id = e.id
                WHERE t.due_date IS NOT NULL
-                 AND t.due_date < datetime('now')
+                 AND t.due_date < datetime('now', 'utc')
                  AND t.status != 'done'
                ORDER BY t.due_date ASC""",
         ).fetchall()
@@ -1088,17 +1177,17 @@ def get_weekly_summary(days: int = 7) -> dict:
         # ── Week-over-week delta ──
         prev_cutoff = f"-{days * 2} days"
         prev_new = conn.execute(
-            "SELECT COUNT(*) FROM events WHERE first_seen >= datetime('now', ?) AND first_seen < datetime('now', ?)",
+            "SELECT COUNT(*) FROM events WHERE first_seen >= datetime('now', 'utc', ?) AND first_seen < datetime('now', 'utc', ?)",
             (prev_cutoff, cutoff),
         ).fetchone()[0]
         prev_resolved = conn.execute(
-            "SELECT COUNT(*) FROM events WHERE status = 'archived' AND updated_at >= datetime('now', ?) AND updated_at < datetime('now', ?)",
+            "SELECT COUNT(*) FROM events WHERE status = 'archived' AND updated_at >= datetime('now', 'utc', ?) AND updated_at < datetime('now', 'utc', ?)",
             (prev_cutoff, cutoff),
         ).fetchone()[0]
         prev_active = conn.execute(
             """SELECT COUNT(*) FROM events
-               WHERE first_seen < datetime('now', ?)
-                 AND (status IN ('active', 'watching') OR (status = 'archived' AND updated_at >= datetime('now', ?)))""",
+               WHERE first_seen < datetime('now', 'utc', ?)
+                 AND (status IN ('active', 'watching') OR (status = 'archived' AND updated_at >= datetime('now', 'utc', ?)))""",
             (cutoff, cutoff),
         ).fetchone()[0]
 
@@ -1148,6 +1237,118 @@ def get_weekly_summary(days: int = 7) -> dict:
                 "resolved": _delta(cur_resolved, prev_resolved),
                 "active_total": _delta(cur_active, prev_active),
             },
+        }
+
+
+def get_event_severity_history(event_id: str) -> list[dict]:
+    """Return severity history for an event from its snapshots.
+
+    Each entry: {scan_id, severity, score, timestamp}
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT scan_id, payload, created_at
+               FROM event_snapshots
+               WHERE event_id = ?
+               ORDER BY created_at ASC""",
+            (event_id,),
+        ).fetchall()
+
+    result = []
+    for row in rows:
+        payload = json.loads(row["payload"])
+        severity = payload.get("severity") or payload.get("risk_level", "Medium")
+        score = payload.get("severity_score") or payload.get("score", None)
+        result.append({
+            "scan_id": row["scan_id"],
+            "severity": severity,
+            "score": score,
+            "timestamp": row["created_at"],
+        })
+    return result
+
+
+def get_scan_metrics() -> dict:
+    """Return structured scan metrics for the COO dashboard.
+
+    Includes per-mode totals (24h, 7d), average duration, events per scan,
+    false positive rate, and last successful scan per mode.
+    """
+    with get_db() as conn:
+        modes = ("disruptions", "geopolitical", "trade")
+        by_mode: dict[str, dict] = {}
+
+        for mode in modes:
+            # Counts: last 24h and last 7d
+            count_24h = conn.execute(
+                "SELECT COUNT(*) FROM scan_records WHERE mode = ? AND created_at >= datetime('now', 'utc', '-1 day')",
+                (mode,),
+            ).fetchone()[0]
+            count_7d = conn.execute(
+                "SELECT COUNT(*) FROM scan_records WHERE mode = ? AND created_at >= datetime('now', 'utc', '-7 days')",
+                (mode,),
+            ).fetchone()[0]
+
+            # Average duration (started_at to completed_at)
+            duration_rows = conn.execute(
+                """SELECT started_at, completed_at FROM scan_records
+                   WHERE mode = ? AND started_at IS NOT NULL AND completed_at IS NOT NULL
+                   ORDER BY id DESC LIMIT 50""",
+                (mode,),
+            ).fetchall()
+            durations = []
+            for dr in duration_rows:
+                try:
+                    from datetime import datetime as _dt
+                    start = _dt.fromisoformat(dr["started_at"].replace("Z", "+00:00"))
+                    end = _dt.fromisoformat(dr["completed_at"].replace("Z", "+00:00"))
+                    durations.append((end - start).total_seconds())
+                except (ValueError, TypeError):
+                    pass
+            avg_duration_seconds = round(sum(durations) / len(durations), 1) if durations else None
+
+            # Average events per scan (last 50 scans)
+            avg_row = conn.execute(
+                "SELECT AVG(item_count) FROM (SELECT item_count FROM scan_records WHERE mode = ? ORDER BY id DESC LIMIT 50)",
+                (mode,),
+            ).fetchone()
+            avg_events_per_scan = round(avg_row[0], 1) if avg_row[0] is not None else 0.0
+
+            # Last successful scan
+            last_scan = conn.execute(
+                "SELECT scan_id, completed_at, source, item_count FROM scan_records WHERE mode = ? AND status = 'completed' ORDER BY id DESC LIMIT 1",
+                (mode,),
+            ).fetchone()
+            last_successful = None
+            if last_scan:
+                last_successful = {
+                    "scan_id": last_scan["scan_id"],
+                    "completed_at": last_scan["completed_at"],
+                    "source": last_scan["source"],
+                    "item_count": last_scan["item_count"],
+                }
+
+            by_mode[mode] = {
+                "scans_24h": count_24h,
+                "scans_7d": count_7d,
+                "avg_duration_seconds": avg_duration_seconds,
+                "avg_events_per_scan": avg_events_per_scan,
+                "last_successful_scan": last_successful,
+            }
+
+        # False positive rate from feedback
+        feedback_stats = get_feedback_stats()
+
+        return {
+            "by_mode": by_mode,
+            "total_scans_24h": sum(m["scans_24h"] for m in by_mode.values()),
+            "total_scans_7d": sum(m["scans_7d"] for m in by_mode.values()),
+            "false_positive_rate_pct": (
+                round(feedback_stats["false_positive_count"] / (feedback_stats["true_positive_count"] + feedback_stats["false_positive_count"]) * 100, 1)
+                if (feedback_stats["true_positive_count"] + feedback_stats["false_positive_count"]) > 0
+                else None
+            ),
+            "feedback_stats": feedback_stats,
         }
 
 
@@ -1281,3 +1482,55 @@ def delete_actions_for_event(event_id: str) -> int:
     with get_db() as conn:
         cursor = conn.execute("DELETE FROM actions WHERE event_id = ?", (event_id,))
         return cursor.rowcount
+
+
+# ── ITSM Sync Log ────────────────────────────────────────────────
+
+
+def create_itsm_sync_log(
+    event_id: str,
+    action: str,
+    payload_json: str = "{}",
+    status: str = "stub",
+    provider: str = "stub",
+    external_id: str | None = None,
+) -> int:
+    """Log an ITSM sync attempt. Returns the new log entry ID."""
+    with get_db() as conn:
+        cursor = conn.execute(
+            """INSERT INTO itsm_sync_log (event_id, action, payload_json, status, provider, external_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (event_id, action, payload_json, status, provider, external_id),
+        )
+        return cursor.lastrowid
+
+
+def get_itsm_sync_log(
+    event_id: str | None = None,
+    action: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Query ITSM sync log entries with optional filters."""
+    conditions: list[str] = []
+    params: list[Any] = []
+    if event_id:
+        conditions.append("event_id = ?")
+        params.append(event_id)
+    if action:
+        conditions.append("action = ?")
+        params.append(action)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    params.append(limit)
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM itsm_sync_log {where} ORDER BY created_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_itsm_sync_log_entry(log_id: int) -> dict | None:
+    """Get a single ITSM sync log entry by ID."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM itsm_sync_log WHERE id = ?", (log_id,)).fetchone()
+        return dict(row) if row else None

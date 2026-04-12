@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { FM, F } from '../../data/config';
-import { B, FS, TYP } from '../../tokens';
+import { TYP } from '../../tokens';
 
 interface MetricCardProps {
   value: string | number;

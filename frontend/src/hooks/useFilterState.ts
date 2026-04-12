@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { TYPE_CFG, REGION_CFG, BU_CFG } from "../data";
 import type { Severity } from "../types";
 
@@ -15,6 +15,7 @@ interface PersistedFilters {
   sevFilter?: Severity | null;
   groupBy?: 'severity' | 'region';
   assignFilter?: string | null;
+  showArchived?: boolean;
 }
 
 function loadFilters(): PersistedFilters | null {
@@ -62,16 +63,18 @@ export function useFilterState() {
   const [sevFilter, setSevFilter] = useState<Severity | null>(saved?.sevFilter ?? null);
   const [groupBy, setGroupBy] = useState<'severity' | 'region'>(saved?.groupBy ?? 'severity');
   const [assignFilter, setAssignFilter] = useState<string | null>(saved?.assignFilter ?? null);
+  const [showArchived, setShowArchived] = useState(saved?.showArchived ?? false);
 
   // Persist to localStorage on any change
   useEffect(() => {
-    saveFilters({ tF, buF, rF, sR, sC, fO, sSup, sevFilter, groupBy, assignFilter });
-  }, [tF, buF, rF, sR, sC, fO, sSup, sevFilter, groupBy, assignFilter]);
+    saveFilters({ tF, buF, rF, sR, sC, fO, sSup, sevFilter, groupBy, assignFilter, showArchived });
+  }, [tF, buF, rF, sR, sC, fO, sSup, sevFilter, groupBy, assignFilter, showArchived]);
 
   return {
     tF, setTF, buF, setBuF, rF, setRF,
     sR, setSR, sC, setSC, fO, setFO, sSup, setSSup,
     sevFilter, setSevFilter, groupBy, setGroupBy,
     assignFilter, setAssignFilter,
+    showArchived, setShowArchived,
   };
 }

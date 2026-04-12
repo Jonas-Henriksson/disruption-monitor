@@ -116,6 +116,45 @@ export async function fetchRecommendations(eventId: string): Promise<BackendReco
 }
 
 /**
+ * Send a Telegram alert for a specific event.
+ * Returns { success, message } or null on failure.
+ */
+export async function sendEventAlert(eventId: string): Promise<{ success: boolean; message?: string } | null> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/alert`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create a ticket for a specific event with sensible defaults.
+ * Returns the created Ticket or null on failure.
+ */
+export async function createEventTicket(eventId: string): Promise<Ticket | null> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ owner: "", notes: "Auto-created from Quick Actions" }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as Ticket;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Update event lifecycle status on the backend.
  */
 export async function updateEventStatus(eventId: string, status: string): Promise<boolean> {
@@ -425,8 +464,15 @@ async function graphHeaders(extra?: Record<string, string>): Promise<Record<stri
   return headers;
 }
 
+/** Graph API response — generic JSON from MS Graph endpoints */
+export interface GraphResponse {
+  status?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 /** Fetch the authenticated user's MS Graph profile. */
-export async function graphGetProfile(): Promise<any> {
+export async function graphGetProfile(): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/profile`, {
@@ -441,7 +487,7 @@ export async function graphGetProfile(): Promise<any> {
 }
 
 /** Send a test email via MS Graph. */
-export async function graphTestEmail(): Promise<any> {
+export async function graphTestEmail(): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/test-email`, {
@@ -457,7 +503,7 @@ export async function graphTestEmail(): Promise<any> {
 }
 
 /** Send a test Teams message via MS Graph. */
-export async function graphTestTeams(): Promise<any> {
+export async function graphTestTeams(): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/test-teams`, {
@@ -473,7 +519,7 @@ export async function graphTestTeams(): Promise<any> {
 }
 
 /** Send an email alert for a specific event via MS Graph. */
-export async function graphSendEventEmail(eventId: string): Promise<any> {
+export async function graphSendEventEmail(eventId: string): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/email`, {
@@ -489,7 +535,7 @@ export async function graphSendEventEmail(eventId: string): Promise<any> {
 }
 
 /** Send a Teams message for a specific event via MS Graph. */
-export async function graphSendEventTeams(eventId: string): Promise<any> {
+export async function graphSendEventTeams(eventId: string): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/teams`, {
@@ -505,7 +551,7 @@ export async function graphSendEventTeams(eventId: string): Promise<any> {
 }
 
 /** Create a calendar meeting for a specific event via MS Graph. */
-export async function graphCreateEventMeeting(eventId: string): Promise<any> {
+export async function graphCreateEventMeeting(eventId: string): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders({ "Content-Type": "application/json" });
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/meeting`, {
@@ -521,7 +567,7 @@ export async function graphCreateEventMeeting(eventId: string): Promise<any> {
 }
 
 /** Get the status of Graph API integration (permissions, connectivity). */
-export async function graphGetStatus(): Promise<any> {
+export async function graphGetStatus(): Promise<GraphResponse | null> {
   try {
     const headers = await graphHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/status`, {

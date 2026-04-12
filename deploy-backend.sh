@@ -90,7 +90,7 @@ aws lambda update-function-configuration \
   --runtime "python3.12" \
   --timeout 300 \
   --memory-size 512 \
-  --environment "Variables={USE_BEDROCK=true,TARS_CLAUDE_MODEL=eu.anthropic.claude-sonnet-4-6,AUTH_ENABLED=true,AZURE_CLIENT_ID=6b72bb18-c3ae-4fc1-a2ed-ae335e43c2a0,AZURE_TENANT_ID=41875f2b-33e8-4670-92a8-f643afbb243a}" \
+  --environment "Variables={USE_BEDROCK=true,TARS_CLAUDE_MODEL=eu.anthropic.claude-sonnet-4-6,AUTH_ENABLED=false,AZURE_CLIENT_ID=6b72bb18-c3ae-4fc1-a2ed-ae335e43c2a0,AZURE_TENANT_ID=41875f2b-33e8-4670-92a8-f643afbb243a,DB_S3_BUCKET=sc-monitor-frontend-317683112105,DB_S3_KEY=data/disruption_monitor.db,ALLOWED_ORIGIN=*}" \
   --region "$REGION" $PROFILE_ARG \
   2>&1 | grep -E "FunctionName|Handler|Runtime|Timeout|MemorySize"
 
@@ -102,6 +102,10 @@ echo "Function URL: https://z4o3tejpdx3ouhqli24b4cv22m0visyh.lambda-url.$REGION.
 echo ""
 echo "Test with:"
 echo "  curl https://z4o3tejpdx3ouhqli24b4cv22m0visyh.lambda-url.$REGION.on.aws/api/v1/health"
+
+# Backup git repo to S3
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+bash "$SCRIPT_DIR/backup-git.sh" $PROFILE_ARG
 
 # Cleanup
 rm -rf "$PACKAGE_DIR"

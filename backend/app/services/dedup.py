@@ -155,6 +155,77 @@ def find_duplicates(
     return matches
 
 
+def find_cross_mode_related(
+    new_events: list[dict],
+    new_mode: str,
+    all_active_events: list[dict],
+    title_threshold: float = 0.35,
+) -> dict[str, list[dict]]:
+    """Find cross-mode related events for newly scanned items.
+
+    Compares each event in *new_events* (from *new_mode*) against
+    *all_active_events* from ALL modes.  Only returns linkages where
+    the existing event comes from a **different** mode.
+
+    Returns:
+        Mapping of new_event_id -> list of related-event dicts:
+        [{event_id, mode, similarity, similarity_reason}]
+    """
+    related_map: dict[str, list[dict]] = {}
+
+    for new_evt in new_events:
+        new_id = new_evt.get("id", "")
+        new_title = new_evt.get("event") or new_evt.get("risk", "")
+        if not new_title:
+            continue
+
+        links: list[dict] = []
+        for existing in all_active_events:
+            existing_id = existing.get("id", "")
+            existing_mode = existing.get("_mode", "")
+
+            # Only cross-mode linkages
+            if existing_mode == new_mode:
+                continue
+            # Skip self
+            if existing_id == new_id:
+                continue
+
+            existing_title = existing.get("event") or existing.get("risk", "")
+            if not existing_title:
+                continue
+
+            sim = _title_similarity(new_title, existing_title)
+            if sim < title_threshold:
+                continue
+
+            # Region compatibility check
+            new_region = new_evt.get("region", "Global")
+            existing_region = existing.get("region", "Global")
+            if not _regions_compatible(new_region, existing_region):
+                continue
+
+            # Build reason
+            reasons = [f"title similarity {sim:.0%}"]
+            if new_region == existing_region:
+                reasons.append(f"same region ({new_region})")
+            else:
+                reasons.append(f"adjacent regions ({new_region}/{existing_region})")
+
+            links.append({
+                "event_id": existing_id,
+                "mode": existing_mode,
+                "similarity": round(sim, 3),
+                "similarity_reason": "; ".join(reasons),
+            })
+
+        if links:
+            links.sort(key=lambda x: x["similarity"], reverse=True)
+            related_map[new_id] = links
+
+    return related_map
+
+
 def tag_duplicates(
     events: list[dict],
     title_threshold: float = 0.4,

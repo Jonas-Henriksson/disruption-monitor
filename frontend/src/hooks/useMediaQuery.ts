@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { BP } from '../tokens';
 
 export type Viewport = 'mobile' | 'tablet' | 'desktop';

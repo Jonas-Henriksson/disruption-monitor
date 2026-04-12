@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -24,6 +25,29 @@ from ..services.telegram import send_scan_alerts
 from ..services.webhooks import publish_scan_complete
 
 router = APIRouter(prefix="/scans", tags=["scans"])
+
+# ── Scan rate limiting ────────────────────────────────────────
+SCAN_COOLDOWN_SECONDS = 60
+# mode -> timestamp (monotonic) of last completed scan
+_last_scan_completed: dict[str, float] = {}
+
+
+def get_scan_cooldowns() -> dict[str, dict]:
+    """Return cooldown status per mode for the health endpoint."""
+    now = time.monotonic()
+    result: dict[str, dict] = {}
+    for mode in ("disruptions", "geopolitical", "trade"):
+        last = _last_scan_completed.get(mode)
+        if last is None:
+            result[mode] = {"ready": True, "retry_after_seconds": 0}
+        else:
+            elapsed = now - last
+            remaining = max(0, SCAN_COOLDOWN_SECONDS - elapsed)
+            result[mode] = {
+                "ready": remaining == 0,
+                "retry_after_seconds": round(remaining),
+            }
+    return result
 
 
 def _get_event_id(item: dict, mode: str) -> str:
@@ -77,7 +101,20 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
 
     Uses Claude API with web search when API key is configured,
     otherwise returns sample data instantly. Results are persisted to SQLite.
+    Enforces a 60-second cooldown between manual scans of the same mode.
     """
+    # Enforce scan cooldown
+    now = time.monotonic()
+    last = _last_scan_completed.get(request.mode)
+    if last is not None:
+        elapsed = now - last
+        remaining = SCAN_COOLDOWN_SECONDS - elapsed
+        if remaining > 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Scan cooldown: try again in {int(remaining)} seconds",
+            )
+
     result = await run_scan(request.mode)
 
     # Persist scan record
@@ -115,7 +152,22 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
     except Exception:
         pass  # Fire-and-forget; errors logged inside publish_scan_complete
 
+    # Record scan completion time for cooldown enforcement
+    _last_scan_completed[request.mode] = time.monotonic()
+
     return result
+
+
+@router.get("/metrics")
+async def get_scan_metrics_endpoint():
+    """Return structured scan metrics for operational dashboards.
+
+    Includes per-mode totals (24h, 7d), average duration, events per scan,
+    false positive rate, and last successful scan per mode.
+    """
+    from ..db.database import get_scan_metrics
+
+    return get_scan_metrics()
 
 
 @router.get("/history")
@@ -131,6 +183,8 @@ def _generate_actions_for_item(event_id: str, item: dict) -> int:
 
     Returns the number of actions created.
     """
+    import logging
+    _logger = logging.getLogger(__name__)
     try:
         action_defs = generate_actions_for_event(item)
         for action_def in action_defs:
@@ -144,7 +198,21 @@ def _generate_actions_for_item(event_id: str, item: dict) -> int:
                 due_date=action_def.get("due_date"),
             )
         return len(action_defs)
-    except Exception:
-        import logging
-        logging.getLogger(__name__).exception("Failed to generate actions for event %s", event_id)
+    except Exception as exc:
+        _logger.warning(
+            "Action generation failed for event %s: %s — event persisted without actions",
+            event_id, exc,
+        )
+        # Flag the event so the UI/health can surface the gap
+        try:
+            from ..db.database import save_event_edit
+            save_event_edit(
+                event_id=event_id,
+                field="actions_generation",
+                original_value="pending",
+                edited_value=f"failed: {exc}",
+                edited_by="system",
+            )
+        except Exception:
+            _logger.debug("Could not record action-gen failure edit for %s", event_id)
         return 0
