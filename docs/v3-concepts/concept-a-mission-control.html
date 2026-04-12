@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept A — Mission Control | SC Hub Disruption Monitor V3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: #050d1a;
+  font-family: 'DM Sans', sans-serif;
+  color: #c8d6e5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Star Field (CSS particles) ───────────────────────────── */
+.starfield {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+}
+.star {
+  position: absolute;
+  width: 1px; height: 1px;
+  background: #ffffff;
+  border-radius: 50%;
+  animation: twinkle 4s ease-in-out infinite alternate;
+}
+@keyframes twinkle {
+  0% { opacity: 0.1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.15; }
+}
+
+/* ── Scan Line ────────────────────────────────────────────── */
+.scanline {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  overflow: hidden;
+}
+.scanline::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.06), rgba(0, 255, 136, 0.12), rgba(0, 255, 136, 0.06), transparent);
+  animation: scanmove 8s linear infinite;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.04);
+}
+@keyframes scanmove {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+/* ── Grid Overlay ─────────────────────────────────────────── */
+.grid-overlay {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(26, 45, 74, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 45, 74, 0.15) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* ── Map Container ────────────────────────────────────────── */
+.map-container {
+  position: fixed; inset: 0; z-index: 2;
+}
+.map-container svg {
+  width: 100%; height: 100%;
+}
+
+/* ── Radar Sweep ──────────────────────────────────────────── */
+.radar-sweep {
+  position: fixed; z-index: 3; pointer-events: none;
+  width: 600px; height: 600px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.radar-sweep::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 340deg,
+    rgba(0, 255, 136, 0.03) 350deg,
+    rgba(0, 255, 136, 0.08) 358deg,
+    rgba(0, 255, 136, 0.02) 360deg
+  );
+  animation: radarspin 6s linear infinite;
+}
+@keyframes radarspin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Disruption Dots ──────────────────────────────────────── */
+.disruption-dot {
+  position: absolute; z-index: 5;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.disruption-dot:hover { transform: scale(1.4); }
+.disruption-dot::before {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.3;
+  animation: dotpulse 2s ease-out infinite;
+}
+.disruption-dot::after {
+  content: '';
+  position: absolute; inset: -14px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.1;
+  animation: dotpulse 2s ease-out infinite 0.5s;
+}
+@keyframes dotpulse {
+  0% { transform: scale(0.8); opacity: 0.4; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+.dot-critical { background: #ff2d55; }
+.dot-high { background: #ff9f0a; }
+.dot-medium { background: #ffd60a; }
+.dot-low { background: #30d158; }
+
+/* ── Connection Lines ─────────────────────────────────────── */
+.connection-line {
+  position: fixed; z-index: 4; pointer-events: none;
+  top: 0; left: 0; width: 100%; height: 100%;
+}
+.conn-path {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 6, 4;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.conn-path.visible { opacity: 0.6; }
+.conn-path.critical { stroke: #ff2d55; }
+.conn-path.high { stroke: #ff9f0a; }
+.conn-path.medium { stroke: #ffd60a; }
+.conn-path.low { stroke: #30d158; }
+@keyframes dashmove {
+  to { stroke-dashoffset: -20; }
+}
+.conn-path.visible {
+  animation: dashmove 1.5s linear infinite;
+}
+
+/* ── Glassmorphism Cards ──────────────────────────────────── */
+.disruption-card {
+  position: absolute; z-index: 10;
+  width: 300px;
+  background: rgba(10, 22, 40, 0.75);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 18px 18px 14px 18px;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.disruption-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 12px 0 0 12px;
+}
+.disruption-card.sev-critical::before { background: #ff2d55; }
+.disruption-card.sev-high::before { background: #ff9f0a; }
+.disruption-card.sev-medium::before { background: #ffd60a; }
+.disruption-card.sev-low::before { background: #30d158; }
+
+.disruption-card:hover {
+  background: rgba(10, 22, 40, 0.88);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+.disruption-card.expanded {
+  width: 340px;
+  background: rgba(10, 22, 40, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.card-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #e8edf3;
+  line-height: 1.3;
+}
+.severity-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-critical { background: rgba(255, 45, 85, 0.15); color: #ff2d55; border: 1px solid rgba(255, 45, 85, 0.3); }
+.badge-high { background: rgba(255, 159, 10, 0.15); color: #ff9f0a; border: 1px solid rgba(255, 159, 10, 0.3); }
+.badge-medium { background: rgba(255, 214, 10, 0.15); color: #ffd60a; border: 1px solid rgba(255, 214, 10, 0.3); }
+.badge-low { background: rgba(48, 209, 88, 0.15); color: #30d158; border: 1px solid rgba(48, 209, 88, 0.3); }
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #6b7f99;
+  margin-bottom: 12px;
+}
+.card-meta svg { flex-shrink: 0; }
+
+.severity-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.severity-bar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.severity-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+.fill-critical { background: linear-gradient(90deg, #ff2d55, #ff6b8a); }
+.fill-high { background: linear-gradient(90deg, #ff9f0a, #ffbf4d); }
+.fill-medium { background: linear-gradient(90deg, #ffd60a, #ffe34d); }
+.fill-low { background: linear-gradient(90deg, #30d158, #5de87b); }
+.severity-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0b0c4;
+  min-width: 28px;
+  text-align: right;
+}
+
+.card-stats {
+  display: flex;
+  gap: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #6b7f99;
+}
+.stat-value {
+  color: #a0b0c4;
+  font-weight: 500;
+}
+
+/* Expanded Card Detail */
+.card-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  opacity: 0;
+}
+.expanded .card-detail {
+  max-height: 300px;
+  opacity: 1;
+}
+.detail-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 14px 0;
+}
+.detail-section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #4a6080;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.site-list {
+  list-style: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #8899aa;
+  line-height: 1.8;
+}
+.site-list li::before {
+  content: '';
+  display: inline-block;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #2a4060;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.action-list {
+  list-style: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #8899aa;
+  line-height: 1.9;
+}
+.action-list li::before {
+  content: '\203A';
+  color: #30d158;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+/* ── KPI Cluster (Top-Left) ───────────────────────────────── */
+.kpi-cluster {
+  position: fixed;
+  top: 28px; left: 28px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kpi-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 22, 40, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-width: 180px;
+}
+.kpi-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.kpi-icon svg { width: 16px; height: 16px; }
+.kpi-icon.events { background: rgba(99, 140, 255, 0.12); }
+.kpi-icon.critical { background: rgba(255, 45, 85, 0.12); }
+.kpi-icon.sites { background: rgba(255, 159, 10, 0.12); }
+.kpi-icon.suppliers { background: rgba(48, 209, 88, 0.12); }
+.kpi-text {
+  display: flex;
+  flex-direction: column;
+}
+.kpi-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  color: #4a6080;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8edf3;
+  line-height: 1.2;
+}
+
+/* ── Branding (Top-Right) ─────────────────────────────────── */
+.branding {
+  position: fixed;
+  top: 28px; right: 28px;
+  z-index: 20;
+  text-align: right;
+}
+.brand-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: #4a6080;
+  text-transform: uppercase;
+}
+.brand-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 300;
+  color: #2c4060;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+.brand-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #30d158;
+  letter-spacing: 0.06em;
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #30d158;
+  animation: statusblink 2s ease-in-out infinite;
+}
+@keyframes statusblink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Bottom Dock ──────────────────────────────────────────── */
+.bottom-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%; transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(10, 22, 40, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+  padding: 6px 8px;
+}
+.dock-modes {
+  display: flex;
+  gap: 2px;
+}
+.dock-mode {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 18px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: #6b7f99;
+}
+.dock-mode:hover { color: #a0b0c4; background: rgba(255, 255, 255, 0.04); }
+.dock-mode.active {
+  background: rgba(99, 140, 255, 0.12);
+  color: #638cff;
+}
+.dock-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 10px;
+}
+.dock-scan-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #4a6080;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.scan-now-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 8px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 140, 255, 0.3);
+  background: rgba(99, 140, 255, 0.1);
+  color: #638cff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.scan-now-btn:hover {
+  background: rgba(99, 140, 255, 0.2);
+  border-color: rgba(99, 140, 255, 0.5);
+}
+.scan-now-btn::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  border: 2px solid rgba(99, 140, 255, 0.3);
+  animation: scanpulse 2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes scanpulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* ── Card Positions ───────────────────────────────────────── */
+#card-baltic    { top: 18%; left: 50%; }
+#card-semi      { top: 38%; right: 4%; }
+#card-redsea    { top: 52%; left: 56%; }
+#card-brazil    { bottom: 16%; left: 24%; }
+
+/* ── Dot Positions (approximate map locations) ────────────── */
+#dot-baltic     { top: 25%; left: 52%; }
+#dot-eastasia   { top: 37%; left: 78%; }
+#dot-redsea     { top: 45%; left: 58%; }
+#dot-brazil     { top: 68%; left: 30%; }
+</style>
+</head>
+<body>
+
+<!-- Star Field -->
+<div class="starfield" id="starfield"></div>
+
+<!-- Scan Line -->
+<div class="scanline"></div>
+
+<!-- Grid Overlay -->
+<div class="grid-overlay"></div>
+
+<!-- World Map SVG -->
+<div class="map-container">
+<svg viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="mapglow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#0d1f38" />
+      <stop offset="100%" stop-color="#050d1a" />
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="800" fill="url(#mapglow)" />
+
+  <!-- Simplified Continent Paths -->
+  <g fill="#0e1e33" stroke="#1a2d4a" stroke-width="0.8" stroke-linejoin="round">
+    <!-- North America -->
+    <path d="M180,120 L220,90 L280,80 L340,95 L380,130 L400,100 L430,90 L450,110 L440,150
+             L420,180 L390,210 L370,260 L340,300 L310,330 L280,340 L260,320 L240,330
+             L230,310 L200,280 L190,240 L180,200 L160,170 Z" />
+    <!-- Greenland -->
+    <path d="M380,50 L420,40 L460,50 L470,75 L450,90 L410,85 L390,70 Z" />
+    <!-- Central America -->
+    <path d="M260,320 L280,340 L290,360 L300,370 L310,380 L305,395 L295,390 L280,385 L270,370 L255,340 Z" />
+    <!-- South America -->
+    <path d="M310,395 L340,390 L370,400 L400,430 L420,470 L430,510 L425,550
+             L400,580 L370,610 L340,630 L320,640 L310,620 L300,580 L290,540
+             L280,500 L275,460 L280,430 L290,410 Z" />
+    <!-- Europe -->
+    <path d="M680,110 L720,95 L760,100 L800,110 L830,130 L840,160 L830,190
+             L800,200 L780,210 L760,230 L730,220 L710,200 L690,190
+             L670,180 L660,160 L665,130 Z" />
+    <!-- Scandinavia -->
+    <path d="M720,60 L740,50 L760,55 L770,75 L760,100 L740,95 L720,80 Z" />
+    <!-- UK/Ireland -->
+    <path d="M640,130 L660,120 L665,140 L655,155 L640,150 Z" />
+    <!-- Africa -->
+    <path d="M680,280 L720,260 L770,270 L810,290 L840,320 L860,370
+             L850,420 L830,470 L800,510 L770,540 L740,550 L710,530
+             L690,490 L680,440 L670,390 L660,340 L665,300 Z" />
+    <!-- Middle East -->
+    <path d="M840,200 L880,190 L920,200 L940,230 L930,260 L900,280 L870,280
+             L840,260 L830,230 Z" />
+    <!-- Russia / Northern Asia -->
+    <path d="M830,130 L880,100 L950,80 L1050,70 L1150,75 L1220,90 L1270,100
+             L1300,120 L1280,150 L1240,170 L1180,180 L1100,175 L1020,170
+             L960,160 L900,150 L850,150 Z" />
+    <!-- India -->
+    <path d="M960,260 L1000,240 L1040,260 L1050,300 L1040,340 L1020,370
+             L990,380 L970,360 L960,320 L955,290 Z" />
+    <!-- Southeast Asia -->
+    <path d="M1080,280 L1120,260 L1150,280 L1160,320 L1140,350 L1110,360
+             L1090,340 L1080,310 Z" />
+    <!-- China / East Asia -->
+    <path d="M1100,150 L1160,140 L1220,160 L1260,180 L1280,210 L1270,250
+             L1240,270 L1200,280 L1150,270 L1110,250 L1090,220 L1090,190 Z" />
+    <!-- Japan -->
+    <path d="M1300,170 L1310,160 L1320,175 L1315,200 L1305,210 L1295,195 Z" />
+    <!-- Korea -->
+    <path d="M1270,190 L1280,180 L1290,195 L1285,210 L1275,205 Z" />
+    <!-- Indonesia / Malay Archipelago -->
+    <path d="M1100,380 L1130,370 L1160,380 L1190,385 L1200,400 L1180,410 L1140,405 L1110,400 Z" />
+    <path d="M1210,395 L1240,390 L1260,400 L1250,415 L1220,410 Z" />
+    <!-- Australia -->
+    <path d="M1180,470 L1240,450 L1300,460 L1340,490 L1350,530 L1330,570
+             L1290,590 L1240,580 L1200,560 L1180,530 L1175,500 Z" />
+    <!-- New Zealand -->
+    <path d="M1380,560 L1390,550 L1400,565 L1395,585 L1385,580 Z" />
+    <!-- Tasmania -->
+    <path d="M1310,595 L1325,590 L1330,605 L1318,608 Z" />
+    <!-- Madagascar -->
+    <path d="M840,480 L855,470 L860,500 L850,515 L840,505 Z" />
+    <!-- Sri Lanka -->
+    <path d="M1010,370 L1020,365 L1025,380 L1015,388 Z" />
+  </g>
+
+  <!-- Latitude / Longitude Reference Lines -->
+  <g stroke="#111d30" stroke-width="0.4" fill="none" stroke-dasharray="4,8">
+    <line x1="0" y1="200" x2="1600" y2="200" />
+    <line x1="0" y1="400" x2="1600" y2="400" />
+    <line x1="0" y1="600" x2="1600" y2="600" />
+    <line x1="400" y1="0" x2="400" y2="800" />
+    <line x1="800" y1="0" x2="800" y2="800" />
+    <line x1="1200" y1="0" x2="1200" y2="800" />
+  </g>
+</svg>
+</div>
+
+<!-- Radar Sweep -->
+<div class="radar-sweep"></div>
+
+<!-- Disruption Dots -->
+<div class="disruption-dot dot-critical" id="dot-baltic" title="Baltic Port Shutdown"></div>
+<div class="disruption-dot dot-high" id="dot-eastasia" title="Semiconductor Shortage"></div>
+<div class="disruption-dot dot-medium" id="dot-redsea" title="Red Sea Rerouting"></div>
+<div class="disruption-dot dot-low" id="dot-brazil" title="Brazil Port Strike"></div>
+
+<!-- Connection Lines SVG -->
+<svg class="connection-line" id="conn-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <path class="conn-path critical" id="conn-baltic" d="" />
+  <path class="conn-path high" id="conn-semi" d="" />
+  <path class="conn-path medium" id="conn-redsea" d="" />
+  <path class="conn-path low" id="conn-brazil" d="" />
+</svg>
+
+<!-- KPI Cluster -->
+<div class="kpi-cluster">
+  <div class="kpi-badge">
+    <div class="kpi-icon events">
+      <svg viewBox="0 0 16 16" fill="none" stroke="#638cff" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="8" cy="8" r="6" /><path d="M8 5v3l2 2" />
+      </svg>
+    </div>
+    <div class="kpi-text">
+      <span class="kpi-label">Active Events</span>
+      <span class="kpi-value">12</span>
+    </div>
+  </div>
+  <div class="kpi-badge">
+    <div class="kpi-icon critical">
+      <svg viewBox="0 0 16 16" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round">
+        <path d="M8 2L14 13H2Z" /><path d="M8 7v3" /><circle cx="8" cy="12" r="0.5" fill="#ff2d55" />
+      </svg>
+    </div>
+    <div class="kpi-text">
+      <span class="kpi-label">Critical</span>
+      <span class="kpi-value">3</span>
+    </div>
+  </div>
+  <div class="kpi-badge">
+    <div class="kpi-icon sites">
+      <svg viewBox="0 0 16 16" fill="none" stroke="#ff9f0a" stroke-width="1.5" stroke-linecap="round">
+        <rect x="3" y="3" width="10" height="10" rx="2" /><path d="M3 7h10M7 3v10" />
+      </svg>
+    </div>
+    <div class="kpi-text">
+      <span class="kpi-label">Sites at Risk</span>
+      <span class="kpi-value">47</span>
+    </div>
+  </div>
+  <div class="kpi-badge">
+    <div class="kpi-icon suppliers">
+      <svg viewBox="0 0 16 16" fill="none" stroke="#30d158" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="8" cy="5" r="3" /><path d="M3 14c0-3 2-5 5-5s5 2 5 5" />
+      </svg>
+    </div>
+    <div class="kpi-text">
+      <span class="kpi-label">Suppliers Exposed</span>
+      <span class="kpi-value">231</span>
+    </div>
+  </div>
+</div>
+
+<!-- Branding -->
+<div class="branding">
+  <div class="brand-name">SC Hub Disruption Monitor</div>
+  <div class="brand-sub">Global Intelligence Platform v3.0</div>
+  <div class="brand-status">
+    <span class="status-dot"></span>
+    SYSTEMS OPERATIONAL
+  </div>
+</div>
+
+<!-- Disruption Cards -->
+<div class="disruption-card sev-critical" id="card-baltic" onclick="toggleCard(this, 'baltic')">
+  <div class="card-header">
+    <div class="card-title">Baltic Port Shutdown</div>
+    <span class="severity-badge badge-critical">CRITICAL</span>
+  </div>
+  <div class="card-meta">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="6" cy="5" r="3"/><path d="M6 8v2"/><path d="M3 12h6"/></svg>
+    Northern Europe
+    <span style="color:#3a5070">|</span>
+    2h ago
+  </div>
+  <div class="severity-bar-container">
+    <div class="severity-bar-track">
+      <div class="severity-bar-fill fill-critical" style="width:92%"></div>
+    </div>
+    <span class="severity-score">92</span>
+  </div>
+  <div class="card-stats">
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><rect x="1" y="1" width="8" height="8" rx="1.5"/></svg>
+      <span class="stat-value">14</span> sites
+    </div>
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="5" cy="4" r="2"/><path d="M2 9c0-2 1-3 3-3s3 1 3 3"/></svg>
+      <span class="stat-value">89</span> suppliers
+    </div>
+  </div>
+  <div class="card-detail">
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Affected Sites</div>
+    <ul class="site-list">
+      <li>Gothenburg MFG (Sweden)</li>
+      <li>Schweinfurt MFG (Germany)</li>
+      <li>Steyr MFG (Austria)</li>
+      <li>Luton Aerospace (UK)</li>
+      <li>Gdansk Logistics (Poland)</li>
+    </ul>
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Recommended Actions</div>
+    <ul class="action-list">
+      <li>Activate alternate routing via Rotterdam</li>
+      <li>Pre-position buffer stock at Hamburg hub</li>
+      <li>Notify T1 suppliers of 5-day lead extension</li>
+    </ul>
+  </div>
+</div>
+
+<div class="disruption-card sev-high" id="card-semi" onclick="toggleCard(this, 'semi')">
+  <div class="card-header">
+    <div class="card-title">Semiconductor Shortage</div>
+    <span class="severity-badge badge-high">HIGH</span>
+  </div>
+  <div class="card-meta">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="6" cy="5" r="3"/><path d="M6 8v2"/><path d="M3 12h6"/></svg>
+    East Asia
+    <span style="color:#3a5070">|</span>
+    6h ago
+  </div>
+  <div class="severity-bar-container">
+    <div class="severity-bar-track">
+      <div class="severity-bar-fill fill-high" style="width:78%"></div>
+    </div>
+    <span class="severity-score">78</span>
+  </div>
+  <div class="card-stats">
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><rect x="1" y="1" width="8" height="8" rx="1.5"/></svg>
+      <span class="stat-value">8</span> sites
+    </div>
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="5" cy="4" r="2"/><path d="M2 9c0-2 1-3 3-3s3 1 3 3"/></svg>
+      <span class="stat-value">42</span> suppliers
+    </div>
+  </div>
+  <div class="card-detail">
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Affected Sites</div>
+    <ul class="site-list">
+      <li>Dalian MFG (China)</li>
+      <li>Pune MFG (India)</li>
+      <li>Taipei Logistics (Taiwan)</li>
+      <li>Seoul Sales (South Korea)</li>
+    </ul>
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Recommended Actions</div>
+    <ul class="action-list">
+      <li>Engage secondary silicon wafer suppliers</li>
+      <li>Defer non-critical IoT sensor orders 30 days</li>
+      <li>Escalate to VP Supply Chain for allocation</li>
+    </ul>
+  </div>
+</div>
+
+<div class="disruption-card sev-medium" id="card-redsea" onclick="toggleCard(this, 'redsea')">
+  <div class="card-header">
+    <div class="card-title">Red Sea Rerouting</div>
+    <span class="severity-badge badge-medium">MEDIUM</span>
+  </div>
+  <div class="card-meta">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="6" cy="5" r="3"/><path d="M6 8v2"/><path d="M3 12h6"/></svg>
+    Middle East
+    <span style="color:#3a5070">|</span>
+    1d ago
+  </div>
+  <div class="severity-bar-container">
+    <div class="severity-bar-track">
+      <div class="severity-bar-fill fill-medium" style="width:61%"></div>
+    </div>
+    <span class="severity-score">61</span>
+  </div>
+  <div class="card-stats">
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><rect x="1" y="1" width="8" height="8" rx="1.5"/></svg>
+      <span class="stat-value">5</span> sites
+    </div>
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="5" cy="4" r="2"/><path d="M2 9c0-2 1-3 3-3s3 1 3 3"/></svg>
+      <span class="stat-value">67</span> suppliers
+    </div>
+  </div>
+  <div class="card-detail">
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Affected Sites</div>
+    <ul class="site-list">
+      <li>Chennai MFG (India)</li>
+      <li>Jeddah Logistics (Saudi Arabia)</li>
+      <li>Cairo Sales (Egypt)</li>
+    </ul>
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Recommended Actions</div>
+    <ul class="action-list">
+      <li>Monitor Cape of Good Hope rerouting costs</li>
+      <li>Adjust ETAs for Indian Ocean lanes +8 days</li>
+      <li>Review marine cargo insurance coverage</li>
+    </ul>
+  </div>
+</div>
+
+<div class="disruption-card sev-low" id="card-brazil" onclick="toggleCard(this, 'brazil')">
+  <div class="card-header">
+    <div class="card-title">Brazil Port Strike</div>
+    <span class="severity-badge badge-low">LOW</span>
+  </div>
+  <div class="card-meta">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="6" cy="5" r="3"/><path d="M6 8v2"/><path d="M3 12h6"/></svg>
+    South America
+    <span style="color:#3a5070">|</span>
+    3d ago
+  </div>
+  <div class="severity-bar-container">
+    <div class="severity-bar-track">
+      <div class="severity-bar-fill fill-low" style="width:34%"></div>
+    </div>
+    <span class="severity-score">34</span>
+  </div>
+  <div class="card-stats">
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><rect x="1" y="1" width="8" height="8" rx="1.5"/></svg>
+      <span class="stat-value">2</span> sites
+    </div>
+    <div class="stat-item">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#4a6080" stroke-width="1.2"><circle cx="5" cy="4" r="2"/><path d="M2 9c0-2 1-3 3-3s3 1 3 3"/></svg>
+      <span class="stat-value">33</span> suppliers
+    </div>
+  </div>
+  <div class="card-detail">
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Affected Sites</div>
+    <ul class="site-list">
+      <li>Cajamar MFG (Brazil)</li>
+      <li>Buenos Aires Sales (Argentina)</li>
+    </ul>
+    <div class="detail-divider"></div>
+    <div class="detail-section-title">Recommended Actions</div>
+    <ul class="action-list">
+      <li>Monitor Santos port union negotiations</li>
+      <li>Pre-clear customs for air freight contingency</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Bottom Dock -->
+<div class="bottom-dock">
+  <div class="dock-modes">
+    <button class="dock-mode active">Disruptions</button>
+    <button class="dock-mode" onclick="this.parentElement.querySelector('.active').classList.remove('active');this.classList.add('active')">Geopolitical</button>
+    <button class="dock-mode" onclick="this.parentElement.querySelector('.active').classList.remove('active');this.classList.add('active')">Trade</button>
+  </div>
+  <div class="dock-divider"></div>
+  <div class="dock-scan-time">Last scan: 2 min ago</div>
+  <div class="dock-divider"></div>
+  <button class="scan-now-btn">SCAN NOW</button>
+</div>
+
+<script>
+// Generate star field
+(function() {
+  const sf = document.getElementById('starfield');
+  const count = 200;
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.left = Math.random() * 100 + '%';
+    star.style.top = Math.random() * 100 + '%';
+    star.style.width = star.style.height = (Math.random() * 1.5 + 0.5) + 'px';
+    star.style.animationDelay = (Math.random() * 4) + 's';
+    star.style.animationDuration = (3 + Math.random() * 4) + 's';
+    sf.appendChild(star);
+  }
+})();
+
+// Card expand/collapse with connection lines
+let expandedCard = null;
+
+function toggleCard(el, id) {
+  // Collapse previous
+  if (expandedCard && expandedCard !== el) {
+    expandedCard.classList.remove('expanded');
+    hideConnection(expandedCard.dataset.connId);
+  }
+
+  if (el.classList.contains('expanded')) {
+    el.classList.remove('expanded');
+    hideConnection(id);
+    expandedCard = null;
+  } else {
+    el.classList.add('expanded');
+    el.dataset.connId = id;
+    showConnection(id);
+    expandedCard = el;
+  }
+}
+
+function showConnection(id) {
+  const path = document.getElementById('conn-' + id);
+  if (path) path.classList.add('visible');
+  updateConnectionLines();
+}
+
+function hideConnection(id) {
+  if (!id) return;
+  const path = document.getElementById('conn-' + id);
+  if (path) path.classList.remove('visible');
+}
+
+// Map card edge to dot center with a gentle curve
+function updateConnectionLines() {
+  const pairs = [
+    { card: 'card-baltic', dot: 'dot-baltic', conn: 'conn-baltic' },
+    { card: 'card-semi', dot: 'dot-eastasia', conn: 'conn-semi' },
+    { card: 'card-redsea', dot: 'dot-redsea', conn: 'conn-redsea' },
+    { card: 'card-brazil', dot: 'dot-brazil', conn: 'conn-brazil' },
+  ];
+
+  const svg = document.getElementById('conn-svg');
+  const sw = window.innerWidth;
+  const sh = window.innerHeight;
+
+  pairs.forEach(p => {
+    const card = document.getElementById(p.card);
+    const dot = document.getElementById(p.dot);
+    const path = document.getElementById(p.conn);
+    if (!card || !dot || !path) return;
+
+    const cr = card.getBoundingClientRect();
+    const dr = dot.getBoundingClientRect();
+
+    // Card center-left edge
+    const cx = ((cr.left) / sw) * 100;
+    const cy = ((cr.top + cr.height / 2) / sh) * 100;
+    // Dot center
+    const dx = ((dr.left + dr.width / 2) / sw) * 100;
+    const dy = ((dr.top + dr.height / 2) / sh) * 100;
+
+    const midX = (cx + dx) / 2;
+    const midY = Math.min(cy, dy) - 5;
+
+    path.setAttribute('d', `M${cx},${cy} Q${midX},${midY} ${dx},${dy}`);
+  });
+}
+
+window.addEventListener('resize', updateConnectionLines);
+setTimeout(updateConnectionLines, 100);
+
+// Dock mode switching
+document.querySelectorAll('.dock-mode').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.dock-mode').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

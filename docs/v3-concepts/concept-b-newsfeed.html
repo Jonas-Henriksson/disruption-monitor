@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept B — News Feed First | SC Hub V3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0d0d0d;
+    --bg-card: #141414;
+    --bg-card-hover: #1a1a1a;
+    --bg-card-expanded: #181816;
+    --paper: #f0ece4;
+    --paper-muted: #8a8578;
+    --paper-dim: #5a5750;
+    --gold: #c9a84c;
+    --gold-dim: #6b5a2e;
+    --critical: #ff3b3b;
+    --high: #ff9500;
+    --medium: #ffd60a;
+    --low: #30d158;
+    --mono: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
+    --serif: 'Playfair Display', 'Georgia', serif;
+  }
+
+  html { font-size: 13px; }
+  body {
+    background: var(--bg);
+    color: var(--paper);
+    font-family: var(--mono);
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+  .left-panel {
+    width: 63%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 24px 28px 12px 28px;
+  }
+  .divider {
+    width: 1px;
+    background: var(--gold-dim);
+    flex-shrink: 0;
+  }
+  .right-panel {
+    width: 37%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 24px 24px 12px 24px;
+  }
+
+  /* ── LEFT HEADER ── */
+  .briefing-header {
+    margin-bottom: 18px;
+    flex-shrink: 0;
+  }
+  .briefing-title {
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--paper);
+    line-height: 1.15;
+  }
+  .briefing-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--paper-muted);
+  }
+  .scan-badge {
+    background: var(--gold-dim);
+    color: var(--gold);
+    padding: 2px 10px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── SEARCH ── */
+  .search-row {
+    flex-shrink: 0;
+    margin-bottom: 12px;
+  }
+  .search-input {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    padding: 9px 14px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-input:focus {
+    border-color: var(--gold-dim);
+  }
+  .search-input::placeholder {
+    color: var(--paper-dim);
+  }
+
+  /* ── FILTER CHIPS ── */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    color: var(--paper-muted);
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .chip.active {
+    background: #252520;
+    border-color: var(--gold-dim);
+    color: var(--paper);
+  }
+  .chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── EVENT FEED ── */
+  .feed {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .feed::-webkit-scrollbar { width: 4px; }
+  .feed::-webkit-scrollbar-track { background: transparent; }
+  .feed::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+  .event-card {
+    position: relative;
+    background: var(--bg-card);
+    border-bottom: 1px solid #1e1e1e;
+    padding: 14px 16px 14px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .event-card:hover { background: var(--bg-card-hover); }
+  .event-card.expanded {
+    background: var(--bg-card-expanded);
+    border-bottom: 1px solid var(--gold-dim);
+  }
+
+  .severity-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+  }
+
+  .card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+  .severity-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 2px;
+    color: #0d0d0d;
+    flex-shrink: 0;
+  }
+  .event-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--paper);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .time-ago {
+    font-size: 0.7rem;
+    color: var(--paper-dim);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .card-row2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+  }
+  .tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 2px;
+    background: #222;
+    color: var(--paper-muted);
+    border: 1px solid #2e2e2e;
+  }
+  .impact-score {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--paper-muted);
+    margin-left: auto;
+  }
+  .impact-bar-bg {
+    width: 48px;
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .impact-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  .card-row3 {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--paper-muted);
+    margin-bottom: 6px;
+    line-height: 1.45;
+  }
+
+  .card-row4 {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.7rem;
+    color: var(--paper-dim);
+  }
+  .card-row4 span { display: flex; align-items: center; gap: 4px; }
+  .trend-arrow { font-size: 0.85rem; }
+
+  /* ── SPARKLINE ── */
+  .sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 18px;
+    margin-left: auto;
+  }
+  .spark-bar {
+    width: 4px;
+    border-radius: 1px;
+    min-height: 2px;
+    opacity: 0.7;
+  }
+
+  /* ── EXPANDED STATE ── */
+  .expanded-detail {
+    display: none;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2a2a;
+  }
+  .event-card.expanded .expanded-detail { display: block; }
+
+  .detail-section-title {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .detail-text {
+    font-size: 0.8rem;
+    color: var(--paper-muted);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border: 1px solid #333;
+    border-radius: 3px;
+    background: #1a1a1a;
+    color: var(--paper-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-btn:hover {
+    border-color: var(--gold-dim);
+    color: var(--paper);
+  }
+  .action-btn.primary {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(201, 168, 76, 0.08);
+  }
+  .affected-list {
+    font-size: 0.75rem;
+    color: var(--paper-dim);
+    margin-bottom: 14px;
+    line-height: 1.7;
+  }
+  .affected-list strong { color: var(--paper-muted); font-weight: 500; }
+
+  /* ── RIGHT PANEL — MAP ── */
+  .mini-map-container {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+  }
+  .mini-map-container svg { width: 100%; height: auto; display: block; }
+
+  .section-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--gold);
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #1e1e1e;
+  }
+
+  /* ── SEVERITY DISTRIBUTION ── */
+  .severity-dist {
+    margin-bottom: 22px;
+  }
+  .dist-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .dist-bar div { height: 100%; }
+  .dist-legend {
+    display: flex;
+    gap: 14px;
+    font-size: 0.7rem;
+    color: var(--paper-dim);
+    flex-wrap: wrap;
+  }
+  .dist-legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── BY REGION BAR CHART ── */
+  .region-chart {
+    margin-bottom: 22px;
+  }
+  .region-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 7px;
+    font-size: 0.75rem;
+  }
+  .region-label {
+    width: 90px;
+    text-align: right;
+    color: var(--paper-muted);
+    flex-shrink: 0;
+    font-size: 0.7rem;
+  }
+  .region-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .region-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--gold);
+    opacity: 0.7;
+  }
+  .region-val {
+    width: 24px;
+    text-align: right;
+    color: var(--paper-dim);
+    font-size: 0.7rem;
+  }
+
+  /* ── TOP EXPOSED SITES ── */
+  .sites-list {
+    margin-bottom: 22px;
+  }
+  .site-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.75rem;
+    border-bottom: 1px solid #151515;
+  }
+  .site-rank {
+    width: 18px;
+    text-align: right;
+    color: var(--paper-dim);
+    font-size: 0.65rem;
+  }
+  .site-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .site-name {
+    flex: 1;
+    color: var(--paper-muted);
+  }
+  .site-score {
+    color: var(--paper-dim);
+    font-size: 0.7rem;
+  }
+
+  /* ── SCAN ACTIVITY ── */
+  .scan-activity { margin-bottom: 10px; }
+  .scan-timeline {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 28px;
+  }
+  .scan-tick {
+    flex: 1;
+    min-width: 3px;
+    border-radius: 1px;
+    cursor: default;
+    position: relative;
+  }
+  .scan-tick:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #222;
+    color: var(--paper-muted);
+    font-size: 0.6rem;
+    padding: 2px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .scan-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: var(--paper-dim);
+    margin-top: 4px;
+  }
+
+  /* ── BOTTOM TICKER ── */
+  .ticker-bar {
+    flex-shrink: 0;
+    background: #111;
+    border-top: 1px solid #1e1e1e;
+    overflow: hidden;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+  .ticker-label {
+    flex-shrink: 0;
+    background: var(--gold-dim);
+    color: #0d0d0d;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 0 12px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    z-index: 1;
+  }
+  .ticker-track {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+  }
+  .ticker-content {
+    display: inline-block;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: var(--gold);
+    animation: ticker-scroll 45s linear infinite;
+    padding-left: 100%;
+  }
+  .ticker-content .sep {
+    color: var(--paper-dim);
+    margin: 0 18px;
+  }
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+
+  /* ── SCROLLBAR RIGHT PANEL ── */
+  .right-panel::-webkit-scrollbar { width: 4px; }
+  .right-panel::-webkit-scrollbar-track { background: transparent; }
+  .right-panel::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+  /* ── MAP EVENT DOTS ── */
+  .map-dot {
+    cursor: pointer;
+    transition: r 0.2s;
+  }
+  .map-dot:hover { r: 6; }
+
+  /* ── PULSE ANIMATION FOR CRITICAL ── */
+  @keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .pulse { animation: pulse-critical 2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ MAIN LAYOUT ════════════════════ -->
+<div class="main-container">
+
+  <!-- ──────── LEFT PANEL: THE FEED ──────── -->
+  <div class="left-panel">
+    <div class="briefing-header">
+      <div class="briefing-title">DISRUPTION BRIEFING</div>
+      <div class="briefing-meta">
+        <span>12 April 2026</span>
+        <span style="color: var(--paper-dim);">|</span>
+        <span>07:42 UTC</span>
+        <span class="scan-badge">47 SCANS / 24H</span>
+        <span style="color: var(--paper-dim); font-size: 0.72rem;">2 Critical &middot; 2 High &middot; 2 Medium &middot; 1 Low</span>
+      </div>
+    </div>
+
+    <div class="search-row">
+      <input class="search-input" type="text" placeholder="Filter events...  (region, mode, severity, keyword)">
+    </div>
+
+    <div class="filter-row">
+      <div class="chip active">All <span style="color:var(--paper-dim);">7</span></div>
+      <div class="chip"><div class="chip-dot" style="background:var(--critical);"></div>Critical <span style="color:var(--paper-dim);">1</span></div>
+      <div class="chip"><div class="chip-dot" style="background:var(--high);"></div>High <span style="color:var(--paper-dim);">2</span></div>
+      <div class="chip"><div class="chip-dot" style="background:var(--medium);"></div>Medium <span style="color:var(--paper-dim);">2</span></div>
+      <div class="chip"><div class="chip-dot" style="background:var(--low);"></div>Low <span style="color:var(--paper-dim);">2</span></div>
+      <div class="chip" style="margin-left:8px;">Active</div>
+      <div class="chip">Watching</div>
+    </div>
+
+    <!-- ── EVENT FEED ── -->
+    <div class="feed">
+
+      <!-- EVENT 1 — CRITICAL (expanded) -->
+      <div class="event-card expanded" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--critical);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--critical);">CRITICAL</span>
+          <span class="event-title">Baltic Port Shutdown — Gdansk & Klaipeda</span>
+          <span class="time-ago">23m ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Europe</span>
+          <span class="tag">Disruption</span>
+          <span class="impact-score">
+            Impact 92
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:92%;background:var(--critical);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">Major labor action halts all container operations at two key Baltic ports, affecting 340+ weekly vessel rotations.</div>
+        <div class="card-row4">
+          <span>18 sites affected</span>
+          <span>47 suppliers</span>
+          <span class="trend-arrow" style="color:var(--critical);">&#8593;</span>
+          <span style="color:var(--critical);">Escalating</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:30%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:40%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:55%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:65%;background:var(--critical);"></div>
+            <div class="spark-bar" style="height:75%;background:var(--critical);"></div>
+            <div class="spark-bar" style="height:88%;background:var(--critical);"></div>
+            <div class="spark-bar pulse" style="height:100%;background:var(--critical);"></div>
+          </div>
+        </div>
+
+        <!-- EXPANDED CONTENT -->
+        <div class="expanded-detail">
+          <div class="detail-section-title">Executive Summary</div>
+          <div class="detail-text">
+            Solidarity-led strike at Port of Gdansk entered day 3 with no resolution in sight. Klaipeda dockworkers joined in sympathy action at 04:00 UTC. Combined throughput of 1.2M TEU/year now offline. Baltic feeder network severely degraded. SKF bearing shipments to Gothenburg, Schweinfurt, and Steyr plants face 5-12 day delays. Alternative routing via Hamburg adds 2.1 days and ~18% cost premium.
+          </div>
+          <div class="detail-section-title">Affected Sites</div>
+          <div class="affected-list">
+            <strong>Manufacturing:</strong> Gothenburg (SE), Schweinfurt (DE), Steyr (AT), Poznan (PL)<br>
+            <strong>Logistics:</strong> Rotterdam Hub, Hamburg Gateway, Gdynia DC<br>
+            <strong>Suppliers:</strong> 47 Tier-1 across PL, LT, LV, FI — 12 sole-source
+          </div>
+          <div class="detail-section-title">Recommended Actions</div>
+          <div class="detail-actions">
+            <button class="action-btn primary">Generate Briefing</button>
+            <button class="action-btn">Reroute Analysis</button>
+            <button class="action-btn">Alert Stakeholders</button>
+            <button class="action-btn">Archive</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 2 — HIGH -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--high);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--high);">HIGH</span>
+          <span class="event-title">Taiwan Strait Military Exercises</span>
+          <span class="time-ago">1h ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Asia-Pacific</span>
+          <span class="tag">Geopolitical</span>
+          <span class="impact-score">
+            Impact 78
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:78%;background:var(--high);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">PLA announces 72-hour live-fire exercises in three zones adjacent to major shipping lanes.</div>
+        <div class="card-row4">
+          <span>14 sites affected</span>
+          <span>89 suppliers</span>
+          <span class="trend-arrow" style="color:var(--high);">&#8599;</span>
+          <span style="color:var(--high);">Rising</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:20%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:25%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:35%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:45%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:55%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:70%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:85%;background:var(--high);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">PLA Eastern Theater Command announced snap exercises following diplomatic tensions. Three exclusion zones overlap with routes carrying ~22% of global semiconductor shipments. Major carriers rerouting south of Philippines, adding 2-4 days. SKF electronic component suppliers in Kaohsiung and Hsinchu flagged for potential disruption. Insurance premiums for Taiwan Strait transits up 340% in 48h.</div>
+          <div class="detail-actions">
+            <button class="action-btn primary">Generate Briefing</button>
+            <button class="action-btn">Supplier Exposure</button>
+            <button class="action-btn">Watch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 3 — HIGH -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--high);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--high);">HIGH</span>
+          <span class="event-title">Red Sea Rerouting — Suez Alternative Delays</span>
+          <span class="time-ago">3h ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Middle East</span>
+          <span class="tag">Disruption</span>
+          <span class="impact-score">
+            Impact 71
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:71%;background:var(--high);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">Continued Houthi attacks force Cape of Good Hope rerouting; transit times up 12-18 days for Asia-Europe lanes.</div>
+        <div class="card-row4">
+          <span>22 sites affected</span>
+          <span>63 suppliers</span>
+          <span class="trend-arrow" style="color:var(--paper-dim);">&#8594;</span>
+          <span>Stable</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:80%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:75%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:70%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:72%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:70%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:73%;background:var(--high);"></div>
+            <div class="spark-bar" style="height:71%;background:var(--high);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">Ongoing Red Sea security situation remains unchanged. All major carriers maintain Cape routing. Congestion building at Tangier Med and Algeciras transshipment hubs. Container availability tightening on Asia-Europe lanes. Freight rates +34% vs. pre-disruption baseline.</div>
+          <div class="detail-actions">
+            <button class="action-btn primary">Generate Briefing</button>
+            <button class="action-btn">Cost Impact</button>
+            <button class="action-btn">Watch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 4 — MEDIUM -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--medium);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--medium);color:#0d0d0d;">MEDIUM</span>
+          <span class="event-title">EU Carbon Border Adjustment Mechanism Phase 2</span>
+          <span class="time-ago">6h ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Europe</span>
+          <span class="tag">Trade</span>
+          <span class="impact-score">
+            Impact 61
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:61%;background:var(--medium);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">New CBAM reporting requirements for steel and aluminum imports take effect, affecting 200+ SKF supplier relationships.</div>
+        <div class="card-row4">
+          <span>31 sites affected</span>
+          <span>204 suppliers</span>
+          <span class="trend-arrow" style="color:var(--medium);">&#8599;</span>
+          <span>Rising</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:30%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:35%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:40%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:48%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:52%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:58%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:64%;background:var(--medium);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">Phase 2 of EU CBAM now requires full emissions declarations for imported steel, aluminum, and cement. SKF's India, Turkey, and China-sourced materials face 6-14% cost uplift. Compliance deadline: Q3 2026.</div>
+          <div class="detail-actions">
+            <button class="action-btn primary">Generate Briefing</button>
+            <button class="action-btn">Supplier Impact</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 5 — MEDIUM -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--medium);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--medium);color:#0d0d0d;">MEDIUM</span>
+          <span class="event-title">India Rare Earth Export Controls</span>
+          <span class="time-ago">11h ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Asia</span>
+          <span class="tag">Trade</span>
+          <span class="impact-score">
+            Impact 55
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:55%;background:var(--medium);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">Delhi announces licensing requirements for rare earth exports, targeting magnetics and specialty alloys.</div>
+        <div class="card-row4">
+          <span>8 sites affected</span>
+          <span>23 suppliers</span>
+          <span class="trend-arrow" style="color:var(--medium);">&#8599;</span>
+          <span>Rising</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:15%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:20%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:28%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:35%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:42%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:50%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:58%;background:var(--medium);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">India's Ministry of Commerce issued surprise export licensing requirements for 18 rare earth elements. Directly impacts SKF Magnetics BU sourcing from Vishakhapatnam and Chennai suppliers. Lead time for license approval estimated at 45-60 days.</div>
+          <div class="detail-actions">
+            <button class="action-btn primary">Generate Briefing</button>
+            <button class="action-btn">Alt Sources</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 6 — LOW -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--low);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--low);color:#0d0d0d;">LOW</span>
+          <span class="event-title">Brazil Santos Dock Worker Slowdown</span>
+          <span class="time-ago">18h ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Americas</span>
+          <span class="tag">Disruption</span>
+          <span class="impact-score">
+            Impact 34
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:34%;background:var(--low);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">Work-to-rule action at Port of Santos reduces throughput by ~25%, manageable with buffer stock.</div>
+        <div class="card-row4">
+          <span>4 sites affected</span>
+          <span>11 suppliers</span>
+          <span class="trend-arrow" style="color:var(--paper-dim);">&#8600;</span>
+          <span>Easing</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:55%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:50%;background:var(--medium);"></div>
+            <div class="spark-bar" style="height:45%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:40%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:38%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:35%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:34%;background:var(--low);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">Work-to-rule action at Santos entering day 5 but union negotiations progressing. Throughput impact now 25%, down from 40% peak. SKF Cajamar plant has 18 days buffer stock. Resolution expected within 72h.</div>
+          <div class="detail-actions">
+            <button class="action-btn">Watch</button>
+            <button class="action-btn">Archive</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVENT 7 — LOW -->
+      <div class="event-card" onclick="this.classList.toggle('expanded')">
+        <div class="severity-bar" style="background:var(--low);"></div>
+        <div class="card-row1">
+          <span class="severity-pill" style="background:var(--low);color:#0d0d0d;">LOW</span>
+          <span class="event-title">Arctic Northern Sea Route Opening</span>
+          <span class="time-ago">1d ago</span>
+        </div>
+        <div class="card-row2">
+          <span class="tag">Arctic</span>
+          <span class="tag">Geopolitical</span>
+          <span class="impact-score">
+            Impact 28
+            <span class="impact-bar-bg"><span class="impact-bar-fill" style="width:28%;background:var(--low);"></span></span>
+          </span>
+        </div>
+        <div class="card-row3">Early ice melt opens NSR two weeks ahead of schedule; Russia signals expanded transit permits for commercial carriers.</div>
+        <div class="card-row4">
+          <span>6 sites affected</span>
+          <span>8 suppliers</span>
+          <span class="trend-arrow" style="color:var(--paper-dim);">&#8594;</span>
+          <span>Monitoring</span>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:25%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:28%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:28%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:27%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:30%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:28%;background:var(--low);"></div>
+            <div class="spark-bar" style="height:28%;background:var(--low);"></div>
+          </div>
+        </div>
+        <div class="expanded-detail">
+          <div class="detail-section-title">Analysis</div>
+          <div class="detail-text">Northern Sea Route navigable as of April 10, two weeks early. Could provide alternative Asia-Europe routing (35% shorter than Suez). Geopolitical risk remains — sanctions compliance unclear for Russian-administered waterway. Monitoring for potential Red Sea alternative.</div>
+          <div class="detail-actions">
+            <button class="action-btn">Watch</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /feed -->
+  </div><!-- /left-panel -->
+
+  <!-- ──────── DIVIDER ──────── -->
+  <div class="divider"></div>
+
+  <!-- ──────── RIGHT PANEL: CONTEXT ──────── -->
+  <div class="right-panel">
+
+    <!-- MINI MAP -->
+    <div class="mini-map-container">
+      <svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+        <!-- Simplified world map paths -->
+        <defs>
+          <style>
+            .land { fill: #1e1e1e; stroke: #2a2a2a; stroke-width: 0.5; }
+          </style>
+        </defs>
+        <!-- North America -->
+        <path class="land" d="M80,80 L180,60 L220,80 L240,120 L220,160 L200,180 L160,200 L140,180 L100,170 L80,140 L60,120 Z"/>
+        <!-- Central America -->
+        <path class="land" d="M160,200 L180,210 L190,230 L170,240 L160,230 Z"/>
+        <!-- South America -->
+        <path class="land" d="M180,240 L220,230 L250,260 L260,300 L240,350 L210,370 L180,350 L170,310 L175,270 Z"/>
+        <!-- Europe -->
+        <path class="land" d="M360,60 L420,50 L440,70 L450,90 L440,120 L420,130 L390,130 L370,120 L360,100 Z"/>
+        <!-- Africa -->
+        <path class="land" d="M370,140 L420,130 L450,150 L460,200 L440,260 L420,290 L390,300 L370,280 L360,240 L355,190 Z"/>
+        <!-- Middle East -->
+        <path class="land" d="M450,100 L500,90 L520,110 L510,140 L480,150 L450,140 Z"/>
+        <!-- Russia/Central Asia -->
+        <path class="land" d="M440,40 L600,30 L700,50 L720,70 L680,90 L600,80 L520,80 L460,70 Z"/>
+        <!-- India -->
+        <path class="land" d="M520,140 L560,120 L580,150 L560,200 L530,210 L510,190 L510,160 Z"/>
+        <!-- Southeast Asia -->
+        <path class="land" d="M590,160 L630,140 L660,160 L650,190 L620,200 L600,190 Z"/>
+        <!-- China/East Asia -->
+        <path class="land" d="M580,70 L660,60 L700,80 L700,120 L670,140 L630,140 L590,120 L570,100 Z"/>
+        <!-- Japan -->
+        <path class="land" d="M710,80 L720,70 L730,85 L720,110 L710,100 Z"/>
+        <!-- Australia -->
+        <path class="land" d="M620,280 L700,270 L740,290 L730,330 L690,350 L640,340 L620,310 Z"/>
+
+        <!-- Event dots -->
+        <!-- Baltic Port Shutdown — Gdansk -->
+        <circle class="map-dot pulse" cx="410" cy="72" r="5" fill="var(--critical)" opacity="0.9"/>
+        <!-- Taiwan Strait -->
+        <circle class="map-dot" cx="670" cy="125" r="5" fill="var(--high)" opacity="0.9"/>
+        <!-- Red Sea -->
+        <circle class="map-dot" cx="460" cy="155" r="5" fill="var(--high)" opacity="0.9"/>
+        <!-- EU CBAM — Brussels area -->
+        <circle class="map-dot" cx="390" cy="85" r="4" fill="var(--medium)" opacity="0.9"/>
+        <!-- India Export Controls -->
+        <circle class="map-dot" cx="540" cy="170" r="4" fill="var(--medium)" opacity="0.9"/>
+        <!-- Brazil Santos -->
+        <circle class="map-dot" cx="220" cy="310" r="4" fill="var(--low)" opacity="0.9"/>
+        <!-- Arctic Route -->
+        <circle class="map-dot" cx="550" cy="35" r="4" fill="var(--low)" opacity="0.9"/>
+
+        <!-- Labels for key dots -->
+        <text x="410" y="64" fill="var(--paper-dim)" font-family="IBM Plex Mono" font-size="7" text-anchor="middle">BALTIC</text>
+        <text x="670" y="117" fill="var(--paper-dim)" font-family="IBM Plex Mono" font-size="7" text-anchor="middle">TAIWAN</text>
+        <text x="478" y="150" fill="var(--paper-dim)" font-family="IBM Plex Mono" font-size="7" text-anchor="start">RED SEA</text>
+      </svg>
+    </div>
+
+    <!-- RISK SUMMARY -->
+    <div class="section-label">Risk Summary</div>
+    <div class="severity-dist">
+      <div class="dist-bar">
+        <div style="width:14%;background:var(--critical);"></div>
+        <div style="width:29%;background:var(--high);"></div>
+        <div style="width:29%;background:var(--medium);"></div>
+        <div style="width:28%;background:var(--low);"></div>
+      </div>
+      <div class="dist-legend">
+        <span><span class="legend-dot" style="background:var(--critical);"></span>Critical 14%</span>
+        <span><span class="legend-dot" style="background:var(--high);"></span>High 29%</span>
+        <span><span class="legend-dot" style="background:var(--medium);"></span>Medium 29%</span>
+        <span><span class="legend-dot" style="background:var(--low);"></span>Low 28%</span>
+      </div>
+    </div>
+
+    <!-- BY REGION -->
+    <div class="section-label">By Region</div>
+    <div class="region-chart">
+      <div class="region-row">
+        <span class="region-label">Europe</span>
+        <div class="region-bar-bg"><div class="region-bar-fill" style="width:85%;"></div></div>
+        <span class="region-val">3</span>
+      </div>
+      <div class="region-row">
+        <span class="region-label">Asia-Pacific</span>
+        <div class="region-bar-bg"><div class="region-bar-fill" style="width:57%;"></div></div>
+        <span class="region-val">2</span>
+      </div>
+      <div class="region-row">
+        <span class="region-label">Middle East</span>
+        <div class="region-bar-bg"><div class="region-bar-fill" style="width:28%;"></div></div>
+        <span class="region-val">1</span>
+      </div>
+      <div class="region-row">
+        <span class="region-label">Americas</span>
+        <div class="region-bar-bg"><div class="region-bar-fill" style="width:28%;"></div></div>
+        <span class="region-val">1</span>
+      </div>
+      <div class="region-row">
+        <span class="region-label">Arctic</span>
+        <div class="region-bar-bg"><div class="region-bar-fill" style="width:14%;opacity:0.5;"></div></div>
+        <span class="region-val">1</span>
+      </div>
+    </div>
+
+    <!-- TOP EXPOSED SITES -->
+    <div class="section-label">Top Exposed Sites</div>
+    <div class="sites-list">
+      <div class="site-row">
+        <span class="site-rank">1</span>
+        <span class="site-dot" style="background:var(--critical);"></span>
+        <span class="site-name">Gothenburg, SE</span>
+        <span class="site-score" style="color:var(--critical);">92</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">2</span>
+        <span class="site-dot" style="background:var(--critical);"></span>
+        <span class="site-name">Schweinfurt, DE</span>
+        <span class="site-score" style="color:var(--critical);">88</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">3</span>
+        <span class="site-dot" style="background:var(--high);"></span>
+        <span class="site-name">Steyr, AT</span>
+        <span class="site-score" style="color:var(--high);">76</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">4</span>
+        <span class="site-dot" style="background:var(--high);"></span>
+        <span class="site-name">Kaohsiung, TW</span>
+        <span class="site-score" style="color:var(--high);">71</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">5</span>
+        <span class="site-dot" style="background:var(--medium);"></span>
+        <span class="site-name">Rotterdam, NL</span>
+        <span class="site-score" style="color:var(--medium);">64</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">6</span>
+        <span class="site-dot" style="background:var(--medium);"></span>
+        <span class="site-name">Poznan, PL</span>
+        <span class="site-score" style="color:var(--medium);">59</span>
+      </div>
+      <div class="site-row">
+        <span class="site-rank">7</span>
+        <span class="site-dot" style="background:var(--low);"></span>
+        <span class="site-name">Bangalore, IN</span>
+        <span class="site-score" style="color:var(--low);">42</span>
+      </div>
+    </div>
+
+    <!-- SCAN ACTIVITY -->
+    <div class="section-label">Scan Activity <span style="font-weight:400;color:var(--paper-dim);">last 24h</span></div>
+    <div class="scan-activity">
+      <div class="scan-timeline">
+        <!-- 24 ticks for 24 hours -->
+        <div class="scan-tick" style="height:40%;background:var(--high);" data-tip="00:00 Disruption"></div>
+        <div class="scan-tick" style="height:20%;background:var(--paper-dim);" data-tip="01:00 —"></div>
+        <div class="scan-tick" style="height:60%;background:var(--medium);" data-tip="02:00 Trade"></div>
+        <div class="scan-tick" style="height:20%;background:var(--paper-dim);" data-tip="03:00 —"></div>
+        <div class="scan-tick" style="height:45%;background:var(--high);" data-tip="04:00 Geopolitical"></div>
+        <div class="scan-tick" style="height:20%;background:var(--paper-dim);" data-tip="05:00 —"></div>
+        <div class="scan-tick" style="height:80%;background:var(--critical);" data-tip="06:00 Disruption"></div>
+        <div class="scan-tick" style="height:55%;background:var(--high);" data-tip="07:00 Disruption"></div>
+        <div class="scan-tick" style="height:30%;background:var(--medium);" data-tip="08:00 Trade"></div>
+        <div class="scan-tick" style="height:50%;background:var(--high);" data-tip="09:00 Geopolitical"></div>
+        <div class="scan-tick" style="height:35%;background:var(--medium);" data-tip="10:00 Disruption"></div>
+        <div class="scan-tick" style="height:20%;background:var(--paper-dim);" data-tip="11:00 —"></div>
+        <div class="scan-tick" style="height:65%;background:var(--high);" data-tip="12:00 Disruption"></div>
+        <div class="scan-tick" style="height:40%;background:var(--medium);" data-tip="13:00 Trade"></div>
+        <div class="scan-tick" style="height:20%;background:var(--paper-dim);" data-tip="14:00 —"></div>
+        <div class="scan-tick" style="height:55%;background:var(--high);" data-tip="15:00 Geopolitical"></div>
+        <div class="scan-tick" style="height:30%;background:var(--medium);" data-tip="16:00 Trade"></div>
+        <div class="scan-tick" style="height:70%;background:var(--critical);" data-tip="17:00 Disruption"></div>
+        <div class="scan-tick" style="height:45%;background:var(--high);" data-tip="18:00 Disruption"></div>
+        <div class="scan-tick" style="height:25%;background:var(--low);" data-tip="19:00 Trade"></div>
+        <div class="scan-tick" style="height:50%;background:var(--high);" data-tip="20:00 Geopolitical"></div>
+        <div class="scan-tick" style="height:60%;background:var(--high);" data-tip="21:00 Disruption"></div>
+        <div class="scan-tick" style="height:35%;background:var(--medium);" data-tip="22:00 Trade"></div>
+        <div class="scan-tick" style="height:90%;background:var(--critical);" data-tip="23:00 Disruption"></div>
+      </div>
+      <div class="scan-labels">
+        <span>00:00</span>
+        <span>06:00</span>
+        <span>12:00</span>
+        <span>18:00</span>
+        <span>NOW</span>
+      </div>
+    </div>
+
+  </div><!-- /right-panel -->
+
+</div><!-- /main-container -->
+
+<!-- ════════════════════ BOTTOM TICKER ════════════════════ -->
+<div class="ticker-bar">
+  <div class="ticker-label">Live Feed</div>
+  <div class="ticker-track">
+    <div class="ticker-content">
+      <span>07:42 UTC</span> DISRUPTION SCAN: Baltic Port Shutdown severity escalated to 92 (was 85) &mdash; Klaipeda joins Gdansk stoppage
+      <span class="sep">///</span>
+      <span>07:15 UTC</span> GEOPOLITICAL SCAN: PLA announces 72h exercise zones &mdash; 3 shipping exclusion areas active
+      <span class="sep">///</span>
+      <span>06:30 UTC</span> DISRUPTION SCAN: Red Sea rerouting stable &mdash; Cape routing +14 days avg, freight +34%
+      <span class="sep">///</span>
+      <span>05:00 UTC</span> TRADE SCAN: EU CBAM Phase 2 compliance deadline confirmed Q3 2026 &mdash; 204 suppliers flagged
+      <span class="sep">///</span>
+      <span>04:15 UTC</span> TRADE SCAN: India rare earth export licenses required for 18 elements &mdash; Magnetics BU exposure HIGH
+      <span class="sep">///</span>
+      <span>03:00 UTC</span> DISRUPTION SCAN: Santos slowdown easing &mdash; throughput recovering, union talks positive
+      <span class="sep">///</span>
+      <span>01:30 UTC</span> GEOPOLITICAL SCAN: Arctic NSR open 2 weeks early &mdash; monitoring for Red Sea alternative potential
+      <span class="sep">///</span>
+      <span>00:00 UTC</span> SYSTEM: Daily scan cycle complete &mdash; 47 scans executed, 7 active events, 2 escalations
+      <span class="sep">///</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept C — Radial Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Source+Code+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #050510;
+  --primary: #00d4ff;
+  --primary-dim: rgba(0, 212, 255, 0.15);
+  --primary-glow: rgba(0, 212, 255, 0.4);
+  --threat-red: #ff2d55;
+  --threat-amber: #ffb800;
+  --threat-yellow: #e0c200;
+  --safe-green: #00ff88;
+  --grid-blue: #0a1a2e;
+  --panel-bg: rgba(5, 5, 16, 0.92);
+  --card-bg: rgba(10, 26, 46, 0.6);
+  --text: #c8d8e8;
+  --text-dim: #5a7a9a;
+  --border: rgba(0, 212, 255, 0.12);
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Source Code Pro', monospace;
+}
+
+/* ── Star / Particle Background ── */
+#stars-canvas {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Scan Line Effect ── */
+.scanline-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 212, 255, 0.015) 2px,
+    rgba(0, 212, 255, 0.015) 4px
+  );
+}
+.scanline-overlay::after {
+  content: '';
+  position: absolute; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.08), transparent);
+  animation: scanMove 4s linear infinite;
+}
+@keyframes scanMove {
+  0% { top: -3px; }
+  100% { top: 100%; }
+}
+
+/* ── Layout ── */
+.app {
+  display: flex; flex-direction: column;
+  width: 100%; height: 100vh;
+  position: relative; z-index: 1;
+}
+
+/* ── Top Bar ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 48px; padding: 0 24px;
+  background: rgba(5, 5, 16, 0.85);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  backdrop-filter: blur(12px);
+}
+.breadcrumb {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 12px; color: var(--text-dim);
+  display: flex; align-items: center; gap: 6px;
+}
+.breadcrumb .sep { color: rgba(0,212,255,0.3); }
+.breadcrumb .active { color: var(--primary); }
+
+.mode-toggles {
+  display: flex; gap: 2px;
+}
+.mode-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 500;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-btn:first-child { border-radius: 4px 0 0 4px; }
+.mode-btn:last-child { border-radius: 0 4px 4px 0; }
+.mode-btn.active {
+  background: var(--primary-dim);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 12px rgba(0,212,255,0.15);
+}
+.mode-btn:hover:not(.active) { border-color: rgba(0,212,255,0.3); color: var(--text); }
+
+.status-indicator {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 500;
+  letter-spacing: 2px; color: var(--safe-green);
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--safe-green);
+  box-shadow: 0 0 8px var(--safe-green);
+  animation: statusPulse 2s ease-in-out infinite;
+}
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Main Content ── */
+.main {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* ── Radial Viewport ── */
+.radial-viewport {
+  flex: 1; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.radar-svg {
+  width: 100%; height: 100%;
+}
+
+/* Radar sweep */
+.radar-sweep {
+  transform-origin: center;
+  animation: radarSpin 6s linear infinite;
+}
+@keyframes radarSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Node hover */
+.node-group { cursor: pointer; }
+.node-group:hover .node-circle {
+  filter: brightness(1.4) drop-shadow(0 0 12px var(--primary));
+}
+
+/* Dash animation for threat lines */
+.threat-line {
+  animation: dashFlow 1.5s linear infinite;
+}
+@keyframes dashFlow {
+  0% { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Pulse animations */
+@keyframes corePulse {
+  0%, 100% { r: 38; opacity: 0.25; }
+  50% { r: 50; opacity: 0.08; }
+}
+@keyframes nodePulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.5; }
+}
+@keyframes threatPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Right Panel ── */
+.right-panel {
+  width: 340px; flex-shrink: 0;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  backdrop-filter: blur(12px);
+  overflow-y: auto;
+}
+.right-panel::-webkit-scrollbar { width: 4px; }
+.right-panel::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.2); border-radius: 2px; }
+
+.panel-header {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-header h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 3px; color: var(--primary);
+  text-transform: uppercase;
+}
+.panel-header .panel-sub {
+  font-size: 10px; color: var(--text-dim);
+  margin-top: 4px; letter-spacing: 0.5px;
+}
+
+/* Severity Gauge */
+.gauge-container {
+  padding: 20px; display: flex; justify-content: center;
+}
+.gauge-svg { width: 180px; height: 100px; }
+.gauge-track { fill: none; stroke: var(--grid-blue); stroke-width: 10; stroke-linecap: round; }
+.gauge-fill { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+.gauge-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 28px; font-weight: 800;
+  fill: var(--threat-red);
+}
+.gauge-sublabel {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; fill: var(--text-dim);
+}
+
+/* Impact metrics */
+.metrics-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px; margin: 0 20px;
+  background: var(--border); border-radius: 6px; overflow: hidden;
+}
+.metric-cell {
+  background: var(--card-bg); padding: 12px 8px; text-align: center;
+}
+.metric-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px; font-weight: 700; color: #fff;
+}
+.metric-label {
+  font-size: 9px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+/* Affected list */
+.section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 2px; color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 16px 20px 8px;
+}
+.affected-list {
+  padding: 0 20px; display: flex; flex-direction: column; gap: 4px;
+}
+.affected-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--card-bg);
+  border-radius: 4px; border-left: 2px solid transparent;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.affected-item:hover { background: rgba(0,212,255,0.06); }
+.affected-item .dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.affected-item .dot.critical { background: var(--threat-red); box-shadow: 0 0 6px var(--threat-red); }
+.affected-item .dot.high { background: var(--threat-amber); box-shadow: 0 0 6px var(--threat-amber); }
+.affected-item .dot.medium { background: var(--threat-yellow); }
+.affected-item .site-name { color: #fff; flex: 1; }
+.affected-item .site-bu { color: var(--text-dim); font-size: 10px; }
+
+/* Actions */
+.actions-list {
+  padding: 0 20px; display: flex; flex-direction: column; gap: 6px;
+}
+.action-item {
+  display: flex; gap: 10px; padding: 8px 10px;
+  background: var(--card-bg); border-radius: 4px;
+  font-size: 11px; line-height: 1.5;
+}
+.action-num {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 700;
+  color: var(--primary); flex-shrink: 0;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--primary);
+  border-radius: 3px; margin-top: 1px;
+}
+
+/* Buttons */
+.btn-group {
+  padding: 16px 20px; display: flex; gap: 8px;
+}
+.btn {
+  flex: 1; padding: 10px 12px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  border: none; border-radius: 4px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #0088cc);
+  color: #000; box-shadow: 0 0 20px rgba(0,212,255,0.25);
+}
+.btn-primary:hover {
+  box-shadow: 0 0 30px rgba(0,212,255,0.45);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--threat-red);
+  color: var(--threat-red);
+  box-shadow: 0 0 12px rgba(255,45,85,0.1);
+}
+.btn-secondary:hover {
+  background: rgba(255,45,85,0.1);
+  box-shadow: 0 0 20px rgba(255,45,85,0.25);
+}
+
+/* ── Bottom Log ── */
+.bottom-log {
+  height: 80px; flex-shrink: 0;
+  background: rgba(5,5,16,0.9);
+  border-top: 1px solid var(--border);
+  overflow: hidden; position: relative;
+  padding: 8px 0;
+}
+.bottom-log::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 20px;
+  background: linear-gradient(var(--bg), transparent);
+  z-index: 2;
+}
+.log-scroll {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0 24px;
+  animation: logScroll 30s linear infinite;
+}
+@keyframes logScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+.log-entry {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 11px; white-space: nowrap; line-height: 1.6;
+  color: var(--text-dim);
+}
+.log-entry .ts { color: rgba(0,212,255,0.4); }
+.log-entry .level-crit { color: var(--threat-red); }
+.log-entry .level-high { color: var(--threat-amber); }
+.log-entry .level-med { color: var(--threat-yellow); }
+.log-entry .level-info { color: var(--primary); }
+.log-entry .msg { color: var(--text); }
+
+/* ── Tooltip ── */
+.tooltip {
+  position: fixed;
+  padding: 8px 12px;
+  background: rgba(5,5,16,0.95);
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text);
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.15s;
+  box-shadow: 0 0 16px rgba(0,212,255,0.2);
+  max-width: 200px;
+}
+.tooltip.visible { opacity: 1; }
+.tooltip .tt-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 600;
+  color: var(--primary); margin-bottom: 4px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+<div class="scanline-overlay"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<div class="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span>All Sites</span>
+      <span class="sep">&#9656;</span>
+      <span>Industrial</span>
+      <span class="sep">&#9656;</span>
+      <span class="active">Gothenburg</span>
+    </div>
+    <div class="mode-toggles">
+      <button class="mode-btn active">Disruptions</button>
+      <button class="mode-btn">Geopolitical</button>
+      <button class="mode-btn">Trade</button>
+    </div>
+    <div class="status-indicator">
+      <div class="status-dot"></div>
+      <span>LIVE</span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Radial SVG -->
+    <div class="radial-viewport">
+      <svg class="radar-svg" id="radar-svg"></svg>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+      <div class="panel-header">
+        <h2>Threat Analysis</h2>
+        <div class="panel-sub">Selected: Baltic Port Shutdown</div>
+      </div>
+
+      <!-- Severity Gauge -->
+      <div class="gauge-container">
+        <svg class="gauge-svg" viewBox="0 0 180 100">
+          <path class="gauge-track" d="M 20 90 A 70 70 0 0 1 160 90" />
+          <path class="gauge-fill" id="gauge-fill" d="M 20 90 A 70 70 0 0 1 160 90"
+            stroke="var(--threat-red)"
+            stroke-dasharray="220"
+            stroke-dashoffset="17.6" />
+          <text class="gauge-label" x="90" y="78" text-anchor="middle">92</text>
+          <text class="gauge-sublabel" x="90" y="94" text-anchor="middle">SEVERITY SCORE</text>
+        </svg>
+      </div>
+
+      <!-- Impact Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-cell">
+          <div class="metric-value">14</div>
+          <div class="metric-label">Sites</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-value">89</div>
+          <div class="metric-label">Suppliers</div>
+        </div>
+        <div class="metric-cell">
+          <div class="metric-value">12.4%</div>
+          <div class="metric-label">Rev. at Risk</div>
+        </div>
+      </div>
+
+      <!-- Affected Sites -->
+      <div class="section-title">Affected Sites</div>
+      <div class="affected-list">
+        <div class="affected-item" style="border-left-color: var(--threat-red);">
+          <div class="dot critical"></div>
+          <span class="site-name">Gothenburg</span>
+          <span class="site-bu">Industrial</span>
+        </div>
+        <div class="affected-item" style="border-left-color: var(--threat-red);">
+          <div class="dot critical"></div>
+          <span class="site-name">Schweinfurt</span>
+          <span class="site-bu">Industrial</span>
+        </div>
+        <div class="affected-item" style="border-left-color: var(--threat-amber);">
+          <div class="dot high"></div>
+          <span class="site-name">Luton</span>
+          <span class="site-bu">Aerospace</span>
+        </div>
+        <div class="affected-item" style="border-left-color: var(--threat-amber);">
+          <div class="dot high"></div>
+          <span class="site-name">Steyr</span>
+          <span class="site-bu">Seals</span>
+        </div>
+        <div class="affected-item" style="border-left-color: var(--threat-yellow);">
+          <div class="dot medium"></div>
+          <span class="site-name">Airasca</span>
+          <span class="site-bu">Lubrication</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="section-title">Recommended Actions</div>
+      <div class="actions-list">
+        <div class="action-item">
+          <div class="action-num">1</div>
+          <div>Activate secondary Baltic routing via Hamburg/Rotterdam corridor</div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">2</div>
+          <div>Escalate bearing stock pre-positioning at Gothenburg and Schweinfurt</div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">3</div>
+          <div>Engage rail freight alternatives for Nordic-origin shipments</div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">4</div>
+          <div>Brief aerospace customers on potential 5-7 day delay window</div>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="btn-group">
+        <button class="btn btn-primary">Generate Briefing</button>
+        <button class="btn btn-secondary">Send Alert</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Log -->
+  <div class="bottom-log">
+    <div class="log-scroll" id="log-scroll"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// Star field background
+// ═══════════════════════════════════════
+(function initStars() {
+  const c = document.getElementById('stars-canvas');
+  const ctx = c.getContext('2d');
+  let stars = [];
+  function resize() {
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    stars = Array.from({ length: 160 }, () => ({
+      x: Math.random() * c.width,
+      y: Math.random() * c.height,
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random() * 0.5 + 0.1,
+      speed: Math.random() * 0.15 + 0.02,
+      phase: Math.random() * Math.PI * 2
+    }));
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    t += 0.01;
+    stars.forEach(s => {
+      const flicker = Math.sin(t * s.speed * 20 + s.phase) * 0.3 + 0.7;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0, 212, 255, ${s.a * flicker})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ═══════════════════════════════════════
+// Radial Network SVG
+// ═══════════════════════════════════════
+(function initRadar() {
+  const svg = document.getElementById('radar-svg');
+  const ns = 'http://www.w3.org/2000/svg';
+  let W, H, cx, cy, R;
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+    return e;
+  }
+
+  function rebuild() {
+    svg.innerHTML = '';
+    const rect = svg.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    cx = W / 2; cy = H / 2;
+    R = Math.min(W, H) * 0.44;
+
+    const defs = el('defs');
+    // Radar sweep gradient
+    const sweepGrad = el('linearGradient', { id: 'sweepGrad', gradientUnits: 'userSpaceOnUse' });
+    // Radial glow
+    const glowFilter = el('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' });
+    const feGauss = el('feGaussianBlur', { stdDeviation: '4', result: 'blur' });
+    const feMerge = el('feMerge');
+    const fm1 = el('feMergeNode', { in: 'blur' });
+    const fm2 = el('feMergeNode', { in: 'SourceGraphic' });
+    feMerge.append(fm1, fm2);
+    glowFilter.append(feGauss, feMerge);
+
+    const bigGlow = el('filter', { id: 'bigGlow', x: '-100%', y: '-100%', width: '300%', height: '300%' });
+    const feG2 = el('feGaussianBlur', { stdDeviation: '8', result: 'blur' });
+    const feM2 = el('feMerge');
+    const fmA = el('feMergeNode', { in: 'blur' });
+    const fmB = el('feMergeNode', { in: 'SourceGraphic' });
+    feM2.append(fmA, fmB);
+    bigGlow.append(feG2, feM2);
+
+    defs.append(sweepGrad, glowFilter, bigGlow);
+    svg.appendChild(defs);
+
+    // Grid rings
+    const gridGroup = el('g', { opacity: '0.25' });
+    [0.25, 0.5, 0.75, 1.0].forEach(frac => {
+      gridGroup.appendChild(el('circle', {
+        cx, cy, r: R * frac,
+        fill: 'none', stroke: '#0a1a2e', 'stroke-width': '1'
+      }));
+    });
+    // Radial lines
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      gridGroup.appendChild(el('line', {
+        x1: cx, y1: cy,
+        x2: cx + Math.cos(a) * R,
+        y2: cy + Math.sin(a) * R,
+        stroke: '#0a1a2e', 'stroke-width': '0.5'
+      }));
+    }
+    svg.appendChild(gridGroup);
+
+    // Radar sweep wedge
+    const sweepGroup = el('g', { class: 'radar-sweep', style: `transform-origin: ${cx}px ${cy}px` });
+    const sweepPath = el('path', {
+      d: `M ${cx} ${cy} L ${cx} ${cy - R} A ${R} ${R} 0 0 1 ${cx + R * Math.sin(Math.PI / 6)} ${cy - R * Math.cos(Math.PI / 6)} Z`,
+      fill: 'url(#radarSweepGrad)', opacity: '0.12'
+    });
+    // Create radial gradient for sweep
+    const radGrad = el('radialGradient', { id: 'radarSweepGrad', cx: cx, cy: cy, r: R, gradientUnits: 'userSpaceOnUse' });
+    radGrad.appendChild(el('stop', { offset: '0%', 'stop-color': '#00d4ff', 'stop-opacity': '0.3' }));
+    radGrad.appendChild(el('stop', { offset: '100%', 'stop-color': '#00d4ff', 'stop-opacity': '0' }));
+    defs.appendChild(radGrad);
+    sweepGroup.appendChild(sweepPath);
+    svg.appendChild(sweepGroup);
+
+    // ── Data ──
+    const bus = [
+      { name: 'Industrial', count: 32, angle: -Math.PI / 2, sites: ['Gothenburg', 'Schweinfurt', 'Dalian', 'Puebla'] },
+      { name: 'Aerospace',  count: 7,  angle: 0,            sites: ['Luton', 'Valence', 'Falconer'] },
+      { name: 'Seals',      count: 14, angle: Math.PI / 2,  sites: ['Steyr', 'Judenburg', 'Chicago', 'Wuxi'] },
+      { name: 'Lubrication',count: 10, angle: Math.PI,      sites: ['Airasca', 'Pune', 'Shanghai'] },
+    ];
+
+    const threats = [
+      { name: 'Baltic Shutdown', severity: 'critical', color: '#ff2d55', angle: -0.6, affects: [0, 1] },
+      { name: 'Taiwan Tensions', severity: 'high', color: '#ffb800', angle: 0.3, affects: [0, 2] },
+      { name: 'Suez Congestion', severity: 'high', color: '#ffb800', angle: 1.2, affects: [1, 3] },
+      { name: 'Carbon Tax', severity: 'medium', color: '#e0c200', angle: 2.3, affects: [0] },
+      { name: 'India Export', severity: 'medium', color: '#e0c200', angle: 3.5, affects: [3] },
+    ];
+
+    const ring1R = R * 0.35;
+    const ring2R = R * 0.62;
+    const outerR = R * 0.92;
+
+    // ── Connection lines: Center → BU ──
+    const linesGroup = el('g');
+    bus.forEach(bu => {
+      const bx = cx + Math.cos(bu.angle) * ring1R;
+      const by = cy + Math.sin(bu.angle) * ring1R;
+      linesGroup.appendChild(el('line', {
+        x1: cx, y1: cy, x2: bx, y2: by,
+        stroke: '#00d4ff', 'stroke-width': '1.5', opacity: '0.3',
+        filter: 'url(#glow)'
+      }));
+    });
+    svg.appendChild(linesGroup);
+
+    // ── Connection lines: BU → Sites ──
+    const siteLinesGroup = el('g');
+    const sitePositions = [];
+    bus.forEach((bu, bi) => {
+      const bx = cx + Math.cos(bu.angle) * ring1R;
+      const by = cy + Math.sin(bu.angle) * ring1R;
+      const spread = 0.45;
+      bu.sites.forEach((site, si) => {
+        const sAngle = bu.angle + (si - (bu.sites.length - 1) / 2) * (spread / Math.max(bu.sites.length - 1, 1));
+        const sx = cx + Math.cos(sAngle) * ring2R;
+        const sy = cy + Math.sin(sAngle) * ring2R;
+        sitePositions.push({ name: site, x: sx, y: sy, bu: bu.name, buIdx: bi });
+        siteLinesGroup.appendChild(el('line', {
+          x1: bx, y1: by, x2: sx, y2: sy,
+          stroke: '#00d4ff', 'stroke-width': '0.8', opacity: '0.15'
+        }));
+      });
+    });
+    svg.appendChild(siteLinesGroup);
+
+    // ── Threat lines (animated dashes) ──
+    const threatLinesGroup = el('g');
+    threats.forEach(threat => {
+      const tx = cx + Math.cos(threat.angle) * outerR;
+      const ty = cy + Math.sin(threat.angle) * outerR;
+      threat.affects.forEach(bi => {
+        const bu = bus[bi];
+        const bx = cx + Math.cos(bu.angle) * ring1R;
+        const by = cy + Math.sin(bu.angle) * ring1R;
+        threatLinesGroup.appendChild(el('line', {
+          x1: tx, y1: ty, x2: bx, y2: by,
+          stroke: threat.color, 'stroke-width': '1.2', opacity: '0.5',
+          'stroke-dasharray': '8 4',
+          class: 'threat-line'
+        }));
+      });
+    });
+    svg.appendChild(threatLinesGroup);
+
+    // ── Center node ──
+    const centerGroup = el('g', { class: 'node-group' });
+    // Outer glow
+    centerGroup.appendChild(el('circle', {
+      cx, cy, r: 38, fill: 'none', stroke: '#00d4ff', 'stroke-width': '1', opacity: '0.25',
+      style: 'animation: corePulse 3s ease-in-out infinite'
+    }));
+    centerGroup.appendChild(el('circle', {
+      cx, cy, r: 28, fill: 'rgba(0,212,255,0.08)', stroke: '#00d4ff', 'stroke-width': '2',
+      filter: 'url(#bigGlow)', class: 'node-circle'
+    }));
+    const skfText = el('text', {
+      x: cx, y: cy + 1, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+      'font-family': 'Orbitron, sans-serif', 'font-size': '14', 'font-weight': '800',
+      fill: '#00d4ff', 'letter-spacing': '3'
+    });
+    skfText.textContent = 'SKF';
+    centerGroup.appendChild(skfText);
+    centerGroup.dataset.tt = 'SKF Global HQ|245 Sites · 69 Countries';
+    svg.appendChild(centerGroup);
+
+    // ── BU nodes ──
+    bus.forEach((bu, i) => {
+      const bx = cx + Math.cos(bu.angle) * ring1R;
+      const by = cy + Math.sin(bu.angle) * ring1R;
+      const g = el('g', { class: 'node-group' });
+      g.appendChild(el('circle', {
+        cx: bx, cy: by, r: 18, fill: 'rgba(0,212,255,0.06)', stroke: '#00d4ff',
+        'stroke-width': '1.5', filter: 'url(#glow)', class: 'node-circle'
+      }));
+      const label = el('text', {
+        x: bx, y: by - 2, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-family': 'Orbitron, sans-serif', 'font-size': '7', 'font-weight': '600',
+        fill: '#00d4ff', 'letter-spacing': '0.5'
+      });
+      label.textContent = bu.name.substring(0, 5).toUpperCase();
+      g.appendChild(label);
+      const countLabel = el('text', {
+        x: bx, y: by + 8, 'text-anchor': 'middle',
+        'font-family': 'Source Code Pro, monospace', 'font-size': '7',
+        fill: 'rgba(200,216,232,0.6)'
+      });
+      countLabel.textContent = bu.count + ' sites';
+      g.appendChild(countLabel);
+      g.dataset.tt = `${bu.name} BU|${bu.count} manufacturing & support sites`;
+      svg.appendChild(g);
+    });
+
+    // ── Site nodes ──
+    sitePositions.forEach(site => {
+      const g = el('g', { class: 'node-group' });
+      g.appendChild(el('circle', {
+        cx: site.x, cy: site.y, r: 6, fill: 'rgba(0,212,255,0.1)', stroke: '#00d4ff',
+        'stroke-width': '1', opacity: '0.7', class: 'node-circle'
+      }));
+      const lbl = el('text', {
+        x: site.x, y: site.y + 14, 'text-anchor': 'middle',
+        'font-family': 'Source Code Pro, monospace', 'font-size': '8',
+        fill: 'rgba(200,216,232,0.55)'
+      });
+      lbl.textContent = site.name;
+      g.appendChild(lbl);
+      g.dataset.tt = `${site.name}|${site.bu} Division`;
+      svg.appendChild(g);
+    });
+
+    // ── Threat nodes (hexagons/diamonds) ──
+    threats.forEach(threat => {
+      const tx = cx + Math.cos(threat.angle) * outerR;
+      const ty = cy + Math.sin(threat.angle) * outerR;
+      const g = el('g', { class: 'node-group' });
+      // Diamond shape
+      const s = 14;
+      const diamond = el('polygon', {
+        points: `${tx},${ty - s} ${tx + s},${ty} ${tx},${ty + s} ${tx - s},${ty}`,
+        fill: threat.color + '15', stroke: threat.color, 'stroke-width': '1.5',
+        filter: 'url(#glow)', class: 'node-circle',
+        style: threat.severity === 'critical' ? 'animation: threatPulse 1.5s ease-in-out infinite' : ''
+      });
+      g.appendChild(diamond);
+      // Label
+      const lbl = el('text', {
+        x: tx, y: ty + s + 14, 'text-anchor': 'middle',
+        'font-family': 'Orbitron, sans-serif', 'font-size': '7', 'font-weight': '600',
+        fill: threat.color, 'letter-spacing': '0.5'
+      });
+      lbl.textContent = threat.name.toUpperCase();
+      g.appendChild(lbl);
+      // Severity tag
+      const tag = el('text', {
+        x: tx, y: ty + s + 24, 'text-anchor': 'middle',
+        'font-family': 'Source Code Pro, monospace', 'font-size': '7',
+        fill: threat.color, opacity: '0.7'
+      });
+      tag.textContent = threat.severity.toUpperCase();
+      g.appendChild(tag);
+      g.dataset.tt = `${threat.name}|${threat.severity.charAt(0).toUpperCase() + threat.severity.slice(1)} severity threat`;
+      svg.appendChild(g);
+    });
+  }
+
+  rebuild();
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(rebuild, 200); });
+
+  // ── Tooltip ──
+  const tooltip = document.getElementById('tooltip');
+  document.addEventListener('mousemove', e => {
+    const g = e.target.closest('.node-group');
+    if (g && g.dataset.tt) {
+      const [title, sub] = g.dataset.tt.split('|');
+      tooltip.innerHTML = `<div class="tt-title">${title}</div>${sub || ''}`;
+      tooltip.classList.add('visible');
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+    } else {
+      tooltip.classList.remove('visible');
+    }
+  });
+})();
+
+// ═══════════════════════════════════════
+// Bottom Log
+// ═══════════════════════════════════════
+(function initLog() {
+  const entries = [
+    { ts: '2026-04-12 08:41:22', level: 'crit', msg: 'Baltic port operations suspended — Gdansk, Klaipeda terminals closed' },
+    { ts: '2026-04-12 08:39:15', level: 'high', msg: 'Taiwan Strait naval exercises extended through April 18' },
+    { ts: '2026-04-12 08:35:07', level: 'info', msg: 'Scan complete: disruptions mode — 5 events, 3 new' },
+    { ts: '2026-04-12 08:32:44', level: 'high', msg: 'Suez Canal congestion reaching 72-hour average wait time' },
+    { ts: '2026-04-12 08:28:11', level: 'med',  msg: 'EU Carbon Border Tax Phase 2 implementation confirmed for Q3' },
+    { ts: '2026-04-12 08:25:03', level: 'info', msg: 'Severity recalculated: Baltic Shutdown → 92 (+4 from previous scan)' },
+    { ts: '2026-04-12 08:22:58', level: 'med',  msg: 'India bearing export restrictions updated — Section 12B amended' },
+    { ts: '2026-04-12 08:18:30', level: 'info', msg: 'Telegram alert dispatched: Baltic Shutdown (Critical) → 3 recipients' },
+    { ts: '2026-04-12 08:15:12', level: 'crit', msg: 'Gothenburg inbound logistics rerouted via Hamburg — ETA +3 days' },
+    { ts: '2026-04-12 08:11:47', level: 'info', msg: 'Supplier dedup: merged 4 duplicate Taiwan tension reports' },
+    { ts: '2026-04-12 08:08:22', level: 'high', msg: 'Schweinfurt buffer stock triggered — 14-day runway remaining' },
+    { ts: '2026-04-12 08:05:01', level: 'info', msg: 'Scheduler tick: next disruption scan in 11m 42s' },
+    { ts: '2026-04-12 08:01:33', level: 'med',  msg: 'New supplier risk flag: 7 suppliers in Taiwan semiconductor corridor' },
+    { ts: '2026-04-12 07:58:19', level: 'info', msg: 'Health check OK: DB 245 sites, 5090 suppliers, 23 active events' },
+    { ts: '2026-04-12 07:55:00', level: 'high', msg: 'Luton aerospace facility flagged for Baltic supply chain exposure' },
+  ];
+
+  const container = document.getElementById('log-scroll');
+  const levelMap = { crit: 'level-crit', high: 'level-high', med: 'level-med', info: 'level-info' };
+  const levelLabel = { crit: 'CRIT', high: 'HIGH', med: ' MED', info: 'INFO' };
+
+  // Double entries for seamless scroll loop
+  const allEntries = [...entries, ...entries];
+  allEntries.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="ts">${e.ts}</span> <span class="${levelMap[e.level]}">[${levelLabel[e.level]}]</span> <span class="msg">${e.msg}</span>`;
+    container.appendChild(div);
+  });
+})();
+
+// ═══════════════════════════════════════
+// Mode toggle interaction
+// ═══════════════════════════════════════
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
