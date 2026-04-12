@@ -359,17 +359,19 @@ export function RoutingOverlay({
 
       {/* Dependency lines — stub: will render event-to-factory arcs when site coordinates are available */}
 
-      {/* Tooltip overlay — rendered in SVG foreignObject for HTML content */}
+      {/* Tooltip overlay — rendered in SVG foreignObject with inverse zoom scale */}
       {tooltip && (
         <foreignObject
-          x={Math.max(8, Math.min(tooltip.x - 100, 9999))}
-          y={Math.max(8, tooltip.y)}
-          width={220}
-          height={60}
+          x={tooltip.x * inv}
+          y={tooltip.y * inv}
+          width={240 * inv}
+          height={70 * inv}
           style={{ pointerEvents: 'none', overflow: 'visible' }}
         >
           <div
             style={{
+              transformOrigin: 'top left',
+              transform: `scale(${inv})`,
               background: MAP.tooltipBg,
               border: `1px solid ${MAP.tooltipBorder}`,
               borderRadius: 6,
@@ -377,6 +379,8 @@ export function RoutingOverlay({
               fontFamily: MAP.font,
               boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
               whiteSpace: 'nowrap',
+              width: 'max-content',
+              maxWidth: 280,
             }}
           >
             <div style={{ fontSize: 11, fontWeight: 600, color: MAP.tooltipText }}>{tooltip.content}</div>
