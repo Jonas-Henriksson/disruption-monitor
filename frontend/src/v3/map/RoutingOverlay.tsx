@@ -138,8 +138,14 @@ export function RoutingOverlay({
     });
   }, [routes, projection]);
 
+  // Routes always visible: ghost at zoom < 2, full at zoom >= 2
+  const showGhostRoutes = zoomLevel < 2;
   const showRoutes = zoomLevel >= 2;
   const showChokepoints = zoomLevel >= 2;
+
+  // Smooth opacity interpolation for ghost-to-full transition
+  // At zoom 1.0: ghostOp = 0.08, at zoom 1.5: ghostOp ~0.15, at zoom 2.0: fully transitioned to normal
+  const ghostOpacity = Math.min(0.10, 0.06 + 0.04 * (zoomLevel - 1));
   // showDependencyLines will be used when dependency line rendering is implemented
 
   const handleRouteHover = (e: React.MouseEvent, route: Route, isAffected: boolean) => {
@@ -171,6 +177,24 @@ export function RoutingOverlay({
 
   return (
     <g className="routing-overlay">
+      {/* Ghost shipping lanes at default zoom — faint hints of the network */}
+      {showGhostRoutes && routePaths.map((d, i) => {
+        if (!d) return null;
+        const route = routes[i];
+        if (route.type !== 'sea') return null; // only sea routes as ghost
+        return (
+          <path
+            key={'ghost-' + i}
+            d={d}
+            fill="none"
+            stroke="#64748b"
+            strokeWidth={0.5}
+            strokeOpacity={ghostOpacity}
+            pointerEvents="none"
+          />
+        );
+      })}
+
       {/* Sea / Air routes */}
       {showRoutes && routePaths.map((d, i) => {
         if (!d) return null;

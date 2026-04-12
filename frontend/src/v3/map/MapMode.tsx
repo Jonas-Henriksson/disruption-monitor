@@ -16,6 +16,7 @@ import type { DisruptionEvent } from '../components/expandedcard_types';
 import { getSev } from '../../utils/scan';
 import { topoToGeo, COUNTRY_NAMES, CENTROID_OVERRIDES } from '../../utils/geo';
 import { CHOKEPOINTS, ROUTES } from '../../data/logistics';
+import { SUPPLIERS } from '../../data/suppliers';
 import { RoutingOverlay } from './RoutingOverlay';
 import { ExpandedCard } from '../components/ExpandedCard';
 
@@ -46,6 +47,9 @@ const SEV_COLORS: Record<string, string> = {
   Medium: '#eab308',
   Low: '#22c55e',
 };
+
+const SUPPLIER_COLOR = '#06b6d4'; // cyan/teal for supplier bubbles
+const MIN_SUPPLIER_BUBBLE = 20; // only show countries with >= 20 suppliers
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 const CONFLICT_ZONES = new Set([
@@ -114,6 +118,7 @@ export function MapMode({
     features: Array<{ id: string; geometry: GeoPermissibleObjects; properties: Record<string, unknown> }>
   } | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
+  const [hoveredSupplier, setHoveredSupplier] = useState<{ x: number; y: number; country: string; n: number; cats: string[] } | null>(null);
   const [panelClosing, setPanelClosing] = useState(false);
 
   // Inject CSS
@@ -207,6 +212,21 @@ export function MapMode({
     }
     return sites;
   }, [sites, zoomLevel]);
+
+  // Supplier bubbles — filtered to countries with enough suppliers
+  const supplierBubbles = useMemo(() => {
+    return SUPPLIERS
+      .filter(s => s.n >= MIN_SUPPLIER_BUBBLE && s.country !== 'Undefined/Undefined')
+      .sort((a, b) => b.n - a.n);
+  }, []);
+
+  // Sqrt scale for supplier bubble radius
+  const maxSupN = useMemo(() => Math.max(...supplierBubbles.map(s => s.n)), [supplierBubbles]);
+  const supRadius = useCallback((n: number) => {
+    const minR = 8;
+    const maxR = 30;
+    return minR + (maxR - minR) * Math.sqrt(n / maxSupN);
+  }, [maxSupN]);
 
   return (
     <div
@@ -313,6 +333,74 @@ export function MapMode({
             routes={ROUTES}
             chokepoints={CHOKEPOINTS}
           />
+
+          {/* Supplier country bubbles — render behind sites and events */}
+          {supplierBubbles.map((sup, i) => {
+            const p = pt(sup.lat, sup.lng);
+            if (!p) return null;
+            // Scale radius by zoom: shrink as user zooms in
+            const baseR = supRadius(sup.n);
+            const zoomFactor = zoomLevel < 2 ? 1 : zoomLevel < 3 ? 0.7 : 0.4;
+            const r = baseR * inv * zoomFactor;
+            const fadeOpacity = zoomLevel >= 4 ? 0 : zoomLevel >= 3 ? 0.06 : 0.15;
+            if (fadeOpacity === 0) return null;
+            const showLabel = sup.n >= 50 && zoomLevel >= 2;
+            const topCats = zoomLevel >= 3 ? sup.cats.slice(0, 5) : sup.cats.slice(0, 3);
+
+            return (
+              <g
+                key={'sup-' + i}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={(e) => {
+                  const rect = svgRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  setHoveredSupplier({
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top,
+                    country: sup.country,
+                    n: sup.n,
+                    cats: topCats,
+                  });
+                }}
+                onMouseMove={(e) => {
+                  const rect = svgRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  setHoveredSupplier(prev => prev ? {
+                    ...prev,
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top,
+                  } : null);
+                }}
+                onMouseLeave={() => setHoveredSupplier(null)}
+              >
+                <circle
+                  cx={p[0]}
+                  cy={p[1]}
+                  r={r}
+                  fill={SUPPLIER_COLOR}
+                  fillOpacity={fadeOpacity}
+                  stroke={SUPPLIER_COLOR}
+                  strokeWidth={Math.max(0.3, 1 * inv)}
+                  strokeOpacity={fadeOpacity * 2}
+                />
+                {showLabel && (
+                  <text
+                    x={p[0]}
+                    y={p[1] + Math.max(1.5, 3.5 * inv)}
+                    textAnchor="middle"
+                    fontSize={Math.max(3, 8 * inv)}
+                    fontWeight={600}
+                    fontFamily={V3.fontMono}
+                    fill={SUPPLIER_COLOR}
+                    opacity={0.6}
+                    pointerEvents="none"
+                  >
+                    {sup.n}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
           {/* Site markers */}
           {visibleSites.map((s, i) => {
@@ -517,6 +605,39 @@ export function MapMode({
         {zoomLevel.toFixed(1)}x
       </div>
 
+      {/* Supplier hover tooltip */}
+      {hoveredSupplier && (
+        <div
+          style={{
+            position: 'absolute',
+            left: hoveredSupplier.x + 16,
+            top: hoveredSupplier.y - 20,
+            background: '#0b1525ee',
+            border: '1px solid #1e3a5c',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontFamily: V3.font,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            zIndex: 120,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            maxWidth: 260,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
+            {hoveredSupplier.country}
+          </div>
+          <div style={{ fontSize: 11, color: SUPPLIER_COLOR, fontWeight: 600, marginTop: 2 }}>
+            {hoveredSupplier.n.toLocaleString()} suppliers
+          </div>
+          {hoveredSupplier.cats.length > 0 && (
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+              {hoveredSupplier.cats.join(' \u00b7 ')}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom-left detail panel — slides in when event selected */}
       {selectedEvent && (
         <div
@@ -547,48 +668,99 @@ export function MapMode({
         </div>
       )}
 
-      {/* Progressive disclosure legend */}
+      {/* Comprehensive map legend */}
       <div
         style={{
           position: 'absolute',
           top: 16,
           left: 16,
-          background: V3.closeBg,
-          border: `1px solid ${V3.panelBorder}`,
+          background: '#0b1525e0',
+          border: '1px solid #1e293b',
           borderRadius: 8,
-          padding: '8px 12px',
-          backdropFilter: 'blur(8px)',
+          padding: '10px 14px',
+          backdropFilter: 'blur(10px)',
           zIndex: 110,
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 3,
+          minWidth: 140,
         }}
       >
+        {/* Section: Event Severity */}
+        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+          Events
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Critical }} />
+          <div style={{ position: 'relative', width: 12, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Critical }} />
+            <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', border: `1.5px solid ${SEV_COLORS.Critical}`, opacity: 0.4, animation: 'v3-map-critical-pulse 1.5s ease-in-out infinite' }} />
+          </div>
           <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Critical</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.High }} />
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.High }} /></div>
           <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>High</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Medium }} />
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Medium }} /></div>
           <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Medium</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Low }} />
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLORS.Low }} /></div>
           <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Low</span>
         </div>
-        {zoomLevel >= 2 && (
-          <>
-            <div style={{ height: 1, background: '#1e293b', margin: '2px 0' }} />
-            <div style={{ fontSize: 9, color: '#4a6080', fontFamily: V3.font }}>Routes visible</div>
-          </>
-        )}
-        {zoomLevel >= 3 && (
-          <div style={{ fontSize: 9, color: '#4a6080', fontFamily: V3.font }}>Dependencies visible</div>
-        )}
+
+        {/* Divider */}
+        <div style={{ height: 1, background: '#1e293b', margin: '3px 0' }} />
+
+        {/* Section: Site Types */}
+        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+          Sites
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width={12} height={12} style={{ flexShrink: 0 }}>
+            <polygon points="6,1.5 10.5,9.5 1.5,9.5" fill="#3b82f6" opacity={0.7} />
+          </svg>
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Manufacturing</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', opacity: 0.7 }} />
+          </div>
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Logistics</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#4a5568', opacity: 0.5 }} />
+          </div>
+          <span style={{ fontSize: 10, color: '#64748b', fontFamily: V3.font }}>Sales / Admin</span>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: '#1e293b', margin: '3px 0' }} />
+
+        {/* Section: Network */}
+        <div style={{ fontSize: 9, fontWeight: 600, color: '#475569', fontFamily: V3.font, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>
+          Network
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width={12} height={12} style={{ flexShrink: 0 }}>
+            <line x1={0} y1={6} x2={12} y2={6} stroke="#38bdf8" strokeWidth={1.2} strokeDasharray="3,2" opacity={0.5} />
+          </svg>
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Sea Route</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: SUPPLIER_COLOR, opacity: 0.18, border: `1px solid ${SUPPLIER_COLOR}` }} />
+          </div>
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Supplier Cluster</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width={12} height={12} style={{ flexShrink: 0 }}>
+            <polygon points="6,1 10,6 6,11 2,6" fill="#1e2d44" stroke="#3a506c" strokeWidth={0.8} opacity={0.9} />
+          </svg>
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: V3.font }}>Chokepoint</span>
+        </div>
       </div>
     </div>
   );
