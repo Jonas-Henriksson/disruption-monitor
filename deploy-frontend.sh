@@ -22,6 +22,9 @@ echo "Syncing to S3..."
 aws s3 sync frontend/dist/ s3://$BUCKET/ \
   --region $REGION \
   --delete \
+  --exclude "data/*" \
+  --exclude "knowledge-base/*" \
+  --exclude "lambda/*" \
   $PROFILE_ARG
 
 echo "Invalidating CloudFront cache..."

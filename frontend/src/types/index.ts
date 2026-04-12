@@ -104,7 +104,7 @@ export interface Disruption {
   first_seen?: string;
   last_seen?: string;
   scan_count?: number;
-  computed_severity?: { score: number; label: string; components: Record<string, number>; affected_site_count: number };
+  computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
   possible_duplicate_of?: string;
   duplicate_reason?: string;
@@ -130,7 +130,7 @@ export interface GeopoliticalRisk {
   first_seen?: string;
   last_seen?: string;
   scan_count?: number;
-  computed_severity?: { score: number; label: string; components: Record<string, number>; affected_site_count: number };
+  computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
   possible_duplicate_of?: string;
   duplicate_reason?: string;
@@ -158,13 +158,25 @@ export interface TradeEvent {
   first_seen?: string;
   last_seen?: string;
   scan_count?: number;
-  computed_severity?: { score: number; label: string; components: Record<string, number>; affected_site_count: number };
+  computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
   confidence?: number;
   sources?: string[];
+}
+
+export interface ComputedSeverity {
+  score: number;
+  label: string;
+  components: Record<string, number>;
+  affected_site_count: number;
+  /** Practitioner severity dimensions */
+  probability?: number;       // 0-1
+  impact_magnitude?: number;  // 0-1
+  velocity?: string;          // immediate, days, weeks, months
+  recovery_estimate?: string; // hours, days, weeks, months
 }
 
 export type ScanItem = Disruption | GeopoliticalRisk | TradeEvent;
@@ -185,10 +197,22 @@ export interface Supplier {
   cats: string[];
 }
 
+export type SupplierTier = 1 | 2 | 3;
+export type SupplierCriticality = 'critical' | 'important' | 'standard';
+
+export interface SupplyGraphInput {
+  name: string;
+  tier: SupplierTier;
+  sole_source: boolean;
+  criticality: SupplierCriticality;
+}
+
 export interface SupplyGraphEntry {
   sup: string[];
   inputs: string[];
   bu: string;
+  /** Tiered input details — parallel to inputs array */
+  input_details?: SupplyGraphInput[];
 }
 
 export interface ImpactResult {
@@ -237,12 +261,17 @@ export interface ActionItem {
   id: number;
 }
 
+export type TicketPriority = 'critical' | 'high' | 'normal' | 'low';
+
 export interface Ticket {
   owner?: string | null;
   ticketStatus?: TicketStatus;
   actions?: ActionItem[];
   notes?: string;
   due?: string;
+  due_date?: string | null;
+  priority?: TicketPriority | null;
+  is_overdue?: boolean;
 }
 
 export interface EditEntry {
@@ -271,6 +300,48 @@ export interface SupplierAlternativesResponse {
   disrupted: DisruptedInfo;
   alternatives: SupplierAlternative[];
   disclaimer?: string;
+}
+
+export interface SiteSupplier {
+  supplier_name: string;
+  country: string;
+  category_l1: string;
+  category_l2: string;
+  spend_pct: number;  // percentage of site's total spend
+}
+
+export interface SiteSupplierCountry {
+  country: string;
+  supplier_count: number;
+  spend_pct: number;
+  categories: string[];
+  has_active_disruption: boolean;
+}
+
+export interface SiteSuppliersResponse {
+  site: { site_id: string; country: string; business_unit: string };
+  summary: {
+    total_suppliers: number;
+    total_countries: number;
+    concentration_score: number;
+    top_country: string;
+    top_country_spend_pct: number;
+    active_disruptions_affecting: number;
+  };
+  suppliers: SiteSupplier[];
+  by_country: SiteSupplierCountry[];
+}
+
+export interface WeeklySummary {
+  period: { from: string; to: string };
+  headline: string;
+  severity_snapshot: Record<Severity, number>;
+  new_events: ScanItem[];
+  escalated_events: ScanItem[];
+  resolved_events: ScanItem[];
+  overdue_tickets: { id: number; event_id: string; owner: string | null; status: string; due_date: string; event_title?: string }[];
+  top_regions: { region: string; event_count: number }[];
+  week_over_week_delta: { new: string; resolved: string; active_total: string };
 }
 
 export interface ExecBriefData {

@@ -1,37 +1,39 @@
-# Session Start Snapshot — 2026-03-30
+# Session Start Snapshot — 2026-04-01
 
 ## Git Status
 - **Branch:** `master`
-- **Backup:** `backup/pre-session-2026-03-29` at `d4c0f77`
-- **Uncommitted changes:** Modified `.claude/commands/start.md`, `.claude/commands/stop.md`, `.claude/settings.local.json`
-- **Untracked:** `.claude/retros/`, `.claude/settings.json`, `ARCHITECTURE.md`, `DESIGN_EXCELLENCE_FRAMEWORK.md`, `DESIGN_SYSTEM.md`, `PROGRESS.md`
-- **Last commit:** `014715f` — Add full intelligence platform: persistence, scanning, alerts, scoring, 305 tests
+- **Uncommitted changes:** backend (main.py, scanner.py, scheduler.py, events.py, test files) + frontend (App.tsx, DrawerPanel.tsx, LeftPanel.tsx, styles.ts)
+- **Last commit:** `f850a09` — Add Serper web search pre-step for live scan context
 
 ## Services
-- Backend: Not started (port 3101)
-- Frontend: Not started (port 3100)
-- Services were not started as the session priority is design system work, not runtime testing
+- Backend: Port 3101 (starting)
+- Frontend: Port 3100 (starting)
 
 ## Test Results
-- **Backend:** 217/217 passing (`pytest backend/tests/ -q --ignore=test_api.py`) in 2.23s
-- **Frontend:** 51/51 passing (`vitest run`) in 656ms
-- **TypeScript:** 0 errors (`tsc --noEmit`)
-- **Build:** 444KB / 134KB gzip
+- **Backend:** 335/335 passing (up from 254 last session)
+- **Frontend:** 145/145 passing
+- **TypeScript:** 0 errors
+- **Build:** 700KB / 200KB gzip (within 300KB budget)
 
 ## Performance Budget
 | Metric | Budget | Status |
 |---|---|---|
-| JS Bundle (gzipped) | < 300KB | 134KB |
+| JS Bundle (gzipped) | < 300KB | 200KB |
 | TypeScript errors | 0 | 0 |
-| Backend tests | All pass | 217/217 |
-| Frontend tests | All pass | 51/51 |
+| Backend tests | All pass | 335/335 |
+| Frontend tests | All pass | 145/145 |
 
-## Missing Files
-- **DEVELOPER_BRIEF.md** — referenced in start protocol but does not exist. Need to create or clarify.
+## Work Completed This Session
+1. **Dual collapsible panel layout** — Major UI redesign
+   - Left panel: Talking Points / Exec Summary (360px, collapsible)
+   - Right panel: Active Disruptions with severity cards (420px, collapsible)
+   - Map in center, flex:1, expands as panels collapse
+   - Smooth 280ms CSS transitions, chevron toggles
+2. **Backend test fixes** — Fixed import errors (test_narrative.py, test_scheduler_status.py) and telegram test failures
+   - Added TalkingPoints model + parsing to events router
+   - Added scan status tracking to scheduler
+   - Installed pytest-asyncio
 
-## Priority Items (from last session handoff)
-1. **DESIGN_SYSTEM.md population** — user-directed #1 priority this session
-2. **ARCHITECTURE.md population** — empty template needs ADRs
-3. Frontend vitest expansion — currently 51 tests, target more coverage
-4. MapCanvas extraction — App.tsx at 1517 lines
-5. Demo to Steffen — scheduling, not technical work
+## Priority Items
+1. Start services and verify layout visually
+2. Continue with brief/handoff priorities from previous session

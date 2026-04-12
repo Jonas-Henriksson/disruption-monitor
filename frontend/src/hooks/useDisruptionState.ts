@@ -248,7 +248,7 @@ export function useDisruptionState() {
     tickets, setTickets, showArchived, setShowArchived, showAssign, setShowAssign,
     supExpand, setSupExpand, scView, setScView, impactView, setImpactView,
     scan, loadLatest, dataSource, recs, loadRecs, syncStatus,
-    narratives, narrativeLoading, loadNarrative,
+    narratives, setNarratives, narrativeLoading, loadNarrative,
     timelineOpen, setTimelineOpen,
     timelineData,
   };

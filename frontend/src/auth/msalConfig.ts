@@ -16,12 +16,17 @@ const tenantId =
 
 const authority = `https://login.microsoftonline.com/${tenantId}`;
 
+const CLOUDFRONT_ORIGIN = "https://d2rbfnbkfx00z5.cloudfront.net";
+const redirectUri =
+  (import.meta.env.VITE_MSAL_REDIRECT_URI as string) || `${CLOUDFRONT_ORIGIN}/callback`;
+const postLogoutRedirectUri = redirectUri.replace(/\/callback$/, "");
+
 const msalConfig: Configuration = {
   auth: {
     clientId,
     authority,
-    redirectUri: "https://d2rbfnbkfx00z5.cloudfront.net/callback",
-    postLogoutRedirectUri: "https://d2rbfnbkfx00z5.cloudfront.net",
+    redirectUri,
+    postLogoutRedirectUri,
   },
   cache: {
     cacheLocation: "localStorage",
@@ -37,6 +42,11 @@ const msalConfig: Configuration = {
 /** Scopes requested during login */
 export const loginRequest = {
   scopes: ["openid", "profile", "email"],
+};
+
+/** Scopes for MS Graph API (email, Teams, calendar) */
+export const graphScopes = {
+  scopes: ["Mail.Send", "Calendars.ReadWrite", "Chat.ReadWrite", "User.Read"],
 };
 
 /** Singleton MSAL instance — shared across the app */

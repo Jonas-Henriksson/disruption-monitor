@@ -6,7 +6,7 @@
 
 import { useMsal, useIsAuthenticated, useAccount } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { loginRequest } from "./msalConfig";
+import { loginRequest, graphScopes } from "./msalConfig";
 
 export interface AuthUser {
   name: string;
@@ -62,6 +62,26 @@ export function useAuth() {
     }
   };
 
+  const getGraphAccessToken = async (): Promise<string | null> => {
+    if (!account) return null;
+    try {
+      const response = await instance.acquireTokenSilent({
+        ...graphScopes,
+        account,
+      });
+      return response.accessToken;
+    } catch {
+      // Silent failed — need incremental consent via popup
+      try {
+        const response = await instance.acquireTokenPopup(graphScopes);
+        return response.accessToken;
+      } catch (err) {
+        console.error("[SC Hub] Graph token acquisition failed:", err);
+        return null;
+      }
+    }
+  };
+
   const isLoading = inProgress !== InteractionStatus.None;
 
   return {
@@ -71,5 +91,6 @@ export function useAuth() {
     login,
     logout,
     getAccessToken,
+    getGraphAccessToken,
   };
 }

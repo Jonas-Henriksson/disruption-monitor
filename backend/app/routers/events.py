@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,8 +12,14 @@ from pydantic import BaseModel
 from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_trade
-from ..db.database import get_event, get_events, get_timeline_data, update_event_status
-from ..models.schemas import EventRecommendationsResponse
+from ..db.database import get_event, get_event_edits, get_event_feedback, get_events, get_feedback_stats, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
+from ..models.schemas import EventFeedbackCreate, EventRecommendationsResponse, FeedbackStats
+from ..services.narrative import (
+    TalkingPoints,
+    build_fallback_narrative,
+    generate_claude_narrative,
+    parse_talking_points,
+)
 from ..services.telegram import _format_alert, send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -23,6 +29,16 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 class StatusUpdate(BaseModel):
     status: str
+
+
+class EventEditCreate(BaseModel):
+    field: str
+    old_value: str
+    new_value: str
+
+
+class NarrativeUpdate(BaseModel):
+    narrative: str
 
 
 def _find_event(event_id: str) -> dict | None:
@@ -39,13 +55,22 @@ def _find_event(event_id: str) -> dict | None:
 
 
 @router.get("")
-async def list_events(mode: str | None = None, status: str | None = None, limit: int = 100):
+async def list_events(mode: str | None = None, status: str | None = None, limit: int = 100, user: dict[str, Any] = Depends(get_current_user)):
     """List events with optional filters."""
     return get_events(mode=mode, status=status, limit=limit)
 
 
+@router.get("/feedback/stats", response_model=FeedbackStats)
+async def feedback_stats():
+    """Return aggregate event accuracy statistics.
+
+    Precision = true_positives / (true_positives + false_positives).
+    """
+    return get_feedback_stats()
+
+
 @router.get("/timeline")
-async def get_timeline(days: int = 30):
+async def get_timeline(days: int = 30, user: dict[str, Any] = Depends(get_current_user)):
     """Return risk data over time, grouped by day.
 
     Powers the Layer 2 risk timeline chart. Queries event_snapshots
@@ -56,8 +81,20 @@ async def get_timeline(days: int = 30):
     return get_timeline_data(days=days)
 
 
+@router.get("/weekly-summary")
+async def weekly_summary(days: int = 7, user: dict[str, Any] = Depends(get_current_user)):
+    """Return a curated weekly summary for Monday-morning executive review.
+
+    Includes new, escalated, and resolved events; severity snapshot;
+    overdue tickets; top regions; and week-over-week deltas.
+    """
+    if days < 1 or days > 90:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 90")
+    return get_weekly_summary(days=days)
+
+
 @router.get("/{event_id}")
-async def get_event_detail(event_id: str):
+async def get_event_detail(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Return full event detail."""
     event = _find_event(event_id)
     if event is None:
@@ -66,7 +103,7 @@ async def get_event_detail(event_id: str):
 
 
 @router.get("/{event_id}/recommendations", response_model=EventRecommendationsResponse)
-async def get_event_recommendations(event_id: str):
+async def get_event_recommendations(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Return structured recommendations for a specific disruption event.
 
     Includes impact chain (affected sites, suppliers, unit exposure),
@@ -127,134 +164,130 @@ async def send_event_alert(event_id: str, user: dict[str, Any] = Depends(get_cur
     return {"sent": ok, "event_id": event_id}
 
 
+@router.post("/{event_id}/feedback")
+async def submit_event_feedback(event_id: str, body: EventFeedbackCreate):
+    """Submit accuracy feedback for an event (true_positive, false_positive, missed)."""
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+
+    feedback_id = save_event_feedback(
+        event_id=event_id,
+        outcome=body.outcome,
+        actual_impact=body.actual_impact,
+        feedback_by=body.feedback_by,
+    )
+    return {"id": feedback_id, "event_id": event_id, "outcome": body.outcome}
+
+
+@router.get("/{event_id}/feedback")
+async def get_event_feedback_entries(event_id: str):
+    """Get all feedback entries for a specific event."""
+    return get_event_feedback(event_id)
+
+
+# ── Event edits ─────────────────────────────────────────────────────
+
+
+@router.post("/{event_id}/edits")
+async def create_event_edit(event_id: str, body: EventEditCreate, user: dict[str, Any] = Depends(get_current_user)):
+    """Save a user edit to an AI-generated field (audit trail)."""
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+
+    save_event_edit(event_id, body.field, body.old_value, body.new_value)
+    return {"event_id": event_id, "field": body.field, "saved": True}
+
+
+@router.get("/{event_id}/edits")
+async def list_event_edits(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
+    """Return all user edits for an event."""
+    return get_event_edits(event_id)
+
+
+@router.patch("/{event_id}/narrative")
+async def save_narrative_edit(event_id: str, body: NarrativeUpdate, user: dict[str, Any] = Depends(get_current_user)):
+    """Save a user-edited narrative for an event.
+
+    Stores the edit in event_edits with field='narrative'.
+    Future narrative requests will return this version instead of calling Claude.
+    """
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+
+    # Check for existing narrative edits to use as old_value
+    edits = get_event_edits(event_id)
+    narrative_edits = [e for e in edits if e["field"] == "narrative"]
+    old_value = narrative_edits[0]["edited_value"] if narrative_edits else "(ai-generated)"
+
+    save_event_edit(event_id, "narrative", old_value, body.narrative)
+    return {"event_id": event_id, "narrative": body.narrative, "edited": True}
+
+
 # ── Narrative generation ──────────────────────────────────────────
 
 
 class NarrativeResponse(BaseModel):
     event_id: str
     narrative: str
+    talking_points: TalkingPoints | None = None
     generated_by: str = "claude"
+    generated_at: str | None = None
 
 
-_NARRATIVE_PROMPT = """\
-You are a supply chain intelligence analyst at SKF Group preparing a structured \
-executive briefing for senior SC leadership.
-
-Given the disruption event data below, produce a briefing in EXACTLY this format \
-with these 4 sections. Use bullet points, not paragraphs. Be concrete — cite \
-specific factory names, supplier counts, and numbers.
-
-SITUATION:
-• One bullet: what is happening, severity level, trend direction
-
-EXPOSURE:
-• Which specific SKF manufacturing sites are in the blast radius (name them)
-• How many suppliers are affected and in which countries
-• Estimated units/week at risk if known
-
-RECOMMENDED ACTIONS:
-• Action 1 with owner and timeframe (e.g., "Procurement: activate backup suppliers in Germany within 48h")
-• Action 2 with owner and timeframe
-• Action 3 if applicable
-
-OUTLOOK:
-• Recovery timeline with vs without mitigation
-• Key risk: what could make this worse
-
-No preamble, no sign-off, no hedging. Start directly with "SITUATION:".
-
-Event data:
-{event_json}
-"""
+# Keep underscore-prefixed aliases for backward compatibility with tests
+# that import directly from this module.
+_parse_talking_points = parse_talking_points
+from ..services.narrative import parse_sections_fallback as _parse_sections_fallback
+from ..services.narrative import talking_points_to_narrative as _talking_points_to_narrative
+_build_fallback_narrative = build_fallback_narrative
 
 
 @router.post("/{event_id}/narrative", response_model=NarrativeResponse)
 async def generate_narrative(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Generate a Claude-powered SKF-specific exposure narrative for a disruption.
 
-    Returns a 2-3 sentence executive briefing suitable for Monday leadership meetings.
+    Returns a structured executive briefing suitable for Monday leadership meetings.
+    If the user has previously edited the narrative, returns the edited version instead.
     Requires ANTHROPIC_API_KEY to be configured; returns a pre-built fallback otherwise.
     """
     event = _find_event(event_id)
     if event is None:
         raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
 
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Check if user has edited the narrative — return their version instead of regenerating
+    edits = get_event_edits(event_id)
+    narrative_edits = [e for e in edits if e["field"] == "narrative"]
+    if narrative_edits:
+        user_narrative = narrative_edits[0]["edited_value"]
+        tp = parse_talking_points(user_narrative)
+        return NarrativeResponse(
+            event_id=event_id, narrative=user_narrative, talking_points=tp,
+            generated_by="user-edited", generated_at=narrative_edits[0].get("edited_at", now),
+        )
+
     if not settings.has_claude_api:
-        # Build a decent fallback narrative from the event data itself
-        narrative = _build_fallback_narrative(event)
-        return NarrativeResponse(event_id=event_id, narrative=narrative, generated_by="fallback")
+        narrative, tp = build_fallback_narrative(event)
+        return NarrativeResponse(
+            event_id=event_id, narrative=narrative, talking_points=tp,
+            generated_by="fallback", generated_at=now,
+        )
 
     try:
-        narrative = await _generate_claude_narrative(event)
-        return NarrativeResponse(event_id=event_id, narrative=narrative, generated_by="claude")
+        narrative = await generate_claude_narrative(event)
+        tp = parse_talking_points(narrative)
+        return NarrativeResponse(
+            event_id=event_id, narrative=narrative, talking_points=tp,
+            generated_by="claude", generated_at=now,
+        )
     except Exception as exc:
         logger.error("Narrative generation failed for %s: %s", event_id, exc)
-        narrative = _build_fallback_narrative(event)
-        return NarrativeResponse(event_id=event_id, narrative=narrative, generated_by="fallback")
-
-
-async def _generate_claude_narrative(event: dict) -> str:
-    """Call Claude to generate an executive narrative for an event."""
-    import asyncio
-
-    from ..services.scanner import _get_claude_client
-
-    client = _get_claude_client()
-
-    # Build a focused subset of event data for the prompt
-    event_subset = {
-        k: v
-        for k, v in event.items()
-        if k
-        not in ("first_seen", "last_seen", "scan_count", "status", "lat", "lng", "trend_arrow")
-    }
-    event_json = json.dumps(event_subset, indent=2, default=str)
-
-    # Run the synchronous Claude API call in a thread to avoid blocking the event loop
-    response = await asyncio.to_thread(
-        client.messages.create,
-        model=settings.claude_model,
-        max_tokens=300,
-        messages=[
-            {
-                "role": "user",
-                "content": _NARRATIVE_PROMPT.format(event_json=event_json),
-            }
-        ],
-    )
-
-    # Extract text
-    for block in response.content:
-        if hasattr(block, "text"):
-            return block.text.strip()
-
-    return _build_fallback_narrative(event)
-
-
-def _build_fallback_narrative(event: dict) -> str:
-    """Build a narrative from structured event data when Claude is unavailable."""
-    title = event.get("event") or event.get("risk", "Unknown event")
-    severity = event.get("severity") or event.get("risk_level", "Medium")
-    exposure = (
-        event.get("skf_exposure")
-        or event.get("skf_relevance")
-        or event.get("skf_cost_impact", "")
-    )
-    action = event.get("recommended_action", "")
-
-    # Get affected site names from impact data if available
-    impact = event.get("impact")
-    site_names = ""
-    if impact and impact.get("affected_sites"):
-        names = [s["name"] for s in impact["affected_sites"][:4]]
-        site_names = f" Affected sites: {', '.join(names)}."
-
-    parts = [f"{title} ({severity})."]
-    if exposure:
-        parts.append(exposure)
-    if site_names:
-        parts.append(site_names.strip())
-    if action:
-        parts.append(f"Recommended action: {action}")
-
-    return " ".join(parts)
+        narrative, tp = build_fallback_narrative(event)
+        return NarrativeResponse(
+            event_id=event_id, narrative=narrative, talking_points=tp,
+            generated_by="fallback", generated_at=now,
+        )

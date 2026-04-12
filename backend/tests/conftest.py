@@ -21,6 +21,7 @@ def _clean_db(tmp_path):
 
     db_file = tmp_path / "test.db"
     database.DB_PATH = db_file
+    database._init_db()
     yield
     # Cleanup happens automatically when tmp_path is removed
 

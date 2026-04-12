@@ -9,6 +9,7 @@ import { SitePopup } from "./components/Map/SitePopup";
 import { RoutePopup } from "./components/Map/RoutePopup";
 import { SupplierPopup } from "./components/Map/SupplierPopup";
 import { DrawerPanel } from "./components/DrawerPanel";
+import { LeftPanel } from "./components/LeftPanel";
 import { HeaderBar } from "./components/HeaderBar";
 import { KPIStrip, useKpiData } from "./components/KPIStrip";
 import { TimelineStrip } from "./components/TimelineStrip";
@@ -24,7 +25,9 @@ import { topoToGeo, COUNTRY_NAMES, CENTROID_OVERRIDES } from "./utils/geo";
 import { computeImpactWithGraph, computeExposureScores } from "./utils/impact";
 import { eventId } from "./utils/format";
 import { getSev } from "./utils/scan";
-import type { FrictionLevel } from "./types";
+import type { FrictionLevel, SiteSuppliersResponse } from "./types";
+import { fetchSiteSuppliers, fetchSupplierSpendByCountry } from "./services/api";
+import type { SupplierCountrySpend } from "./services/api";
 import { useMapState } from "./hooks/useMapState";
 import { useDisruptionState } from "./hooks/useDisruptionState";
 import { useFilterState } from "./hooks/useFilterState";
@@ -36,6 +39,9 @@ export default function App() {
   const dis = useDisruptionState();
   const fil = useFilterState();
   const kb = useKeyboardShortcuts({ dis, fil });
+
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [land, setLand] = useState<any>(null);
@@ -70,6 +76,7 @@ export default function App() {
     if (critIdx >= 0) {
       autoOpenFired.current = true;
       dis.setDOpen(true);
+      setRightOpen(true);
       dis.setSel(critIdx);
     }
   }, [dis.items]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,6 +96,42 @@ export default function App() {
       }
     }
   }, [dis.sel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch supplier data when a factory site is selected
+  const supplierCache = useRef<Record<string, SiteSuppliersResponse>>({});
+  useEffect(() => {
+    if (map.selSite === null) {
+      map.setSiteSuppliers(null);
+      map.setSiteSuppliersLoading(false);
+      return;
+    }
+    const site = vis[map.selSite];
+    if (!site || site.type !== 'mfg') {
+      map.setSiteSuppliers(null);
+      return;
+    }
+    // Check cache first
+    if (supplierCache.current[site.name]) {
+      map.setSiteSuppliers(supplierCache.current[site.name]);
+      return;
+    }
+    const abortCtrl = new AbortController();
+    map.setSiteSuppliersLoading(true);
+    fetchSiteSuppliers(site.name, abortCtrl.signal).then(data => {
+      if (!abortCtrl.signal.aborted) {
+        if (data) supplierCache.current[site.name] = data;
+        map.setSiteSuppliers(data);
+        map.setSiteSuppliersLoading(false);
+      }
+    });
+    return () => { abortCtrl.abort(); };
+  }, [map.selSite]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch supplier spend by country (for bubble color intensity)
+  const [spendByCountry, setSpendByCountry] = useState<Record<string, SupplierCountrySpend> | null>(null);
+  useEffect(() => {
+    fetchSupplierSpendByCountry().then(data => { if (data) setSpendByCountry(data); });
+  }, []);
 
   // Load world map
   useEffect(() => {
@@ -207,21 +250,19 @@ export default function App() {
     return { clusters: clusterList, standalone: [...standalone, ...singletons] };
   }, [vis, map.zK, pt]);
 
-  // Affected sites from backend recommendations — sites with red ring/glow based on distance
+  // Affected sites from the SELECTED event's recommendations only
   const recAffectedSites = useMemo(() => {
     const aff: Record<string, { distance_km: number; maxSeverity: string }> = {};
-    Object.values(dis.recs).forEach(rec => {
-      if (rec?.impact?.affected_sites) {
-        rec.impact.affected_sites.forEach(s => {
-          const prev = aff[s.name];
-          if (!prev || s.distance_km < prev.distance_km) {
-            aff[s.name] = { distance_km: s.distance_km, maxSeverity: rec.severity || 'Medium' };
-          }
-        });
-      }
-    });
+    if (dis.sel === null || !dis.items?.[dis.sel]) return aff;
+    const selId = eventId(dis.items[dis.sel]);
+    const rec = dis.recs[selId];
+    if (rec?.impact?.affected_sites) {
+      rec.impact.affected_sites.forEach(s => {
+        aff[s.name] = { distance_km: s.distance_km, maxSeverity: rec.severity || 'Medium' };
+      });
+    }
     return aff;
-  }, [dis.recs]);
+  }, [dis.sel, dis.items, dis.recs]);
 
   const exposureScores = useMemo(() => {
     if (!dis.items) return {};
@@ -269,11 +310,30 @@ export default function App() {
         <button onClick={() => fil.setSSup(!fil.sSup)} style={{ padding: '3px 8px', border: `1px solid ${fil.sSup ? '#a78bfa44' : '#14243e'}`, borderRadius: 4, background: fil.sSup ? '#a78bfa18' : 'transparent', color: fil.sSup ? '#a78bfa' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Suppliers <span style={{ fontFamily: FM, fontSize: 8, opacity: 0.5 }}>5,090</span></button>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
         <span style={{ fontSize: 8, color: '#2a3d5c', fontWeight: 700, letterSpacing: 2, fontFamily: FM }}>DIVISION</span>
-        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{Object.entries(BU_CFG).map(([k, v]) => { const on = fil.buF[k]; const cnt = SITES.filter(s => s.bu === k).length; return <button key={k} onClick={() => fil.setBuF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{cnt}</span></button>; })}</div>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Industrial — top-level toggle */}
+          {(() => { const k = 'ind'; const v = BU_CFG[k]; const on = fil.buF[k]; const cnt = SITES.filter(s => s.bu === k).length; return <button key={k} onClick={() => fil.setBuF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{cnt}</span></button>; })()}
+          {/* SIS — group toggle + sub-levels */}
+          {(() => {
+            const sisKeys = ['sis-seal', 'sis-lube', 'sis-aero', 'sis-mag'] as const;
+            const allOn = sisKeys.every(k => fil.buF[k]);
+            const someOn = sisKeys.some(k => fil.buF[k]);
+            const sisTotal = SITES.filter(s => s.bu && s.bu.startsWith('sis-')).length;
+            return <>
+              <button onClick={() => { const next = !allOn; fil.setBuF(p => { const n = { ...p }; sisKeys.forEach(k => n[k] = next); return n; }); }} style={{ padding: '3px 8px', border: `1px solid ${someOn ? '#a78bfa44' : '#14243e'}`, borderRadius: 4, background: someOn ? '#a78bfa18' : 'transparent', color: someOn ? '#a78bfa' : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: someOn ? 600 : 400 }}>SIS <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{sisTotal}</span></button>
+              {sisKeys.map(k => { const v = BU_CFG[k]; const on = fil.buF[k]; const cnt = SITES.filter(s => s.bu === k).length; const short = v.label.replace('SIS ', ''); return <button key={k} onClick={() => fil.setBuF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '2px 6px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 3, background: on ? v.color + '12' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 9, cursor: 'pointer', fontWeight: on ? 500 : 400, marginLeft: -1 }}>{short} <span style={{ fontFamily: FM, fontSize: 7, opacity: .5 }}>{cnt}</span></button>; })}
+            </>;
+          })()}
+        </div>
       </div>}
 
-      {/* MAP */}
-      <div ref={map.cR} style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }} onClick={(e) => { if (!(e.target as HTMLElement).closest?.('[data-click]')) { map.setSelSite(null); map.setSelRt(null); map.setSelSupC(null); dis.setScView(null); } }}>
+      {/* MAIN CONTENT ROW: LEFT PANEL + MAP + RIGHT PANEL */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* LEFT PANEL — Talking Points / Exec Summary */}
+        <LeftPanel dis={dis} open={leftOpen} onToggle={() => setLeftOpen(o => !o)} />
+
+        {/* MAP */}
+        <div ref={map.cR} style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none', minWidth: 0 }} onClick={(e) => { if (!(e.target as HTMLElement).closest?.('[data-click]')) { map.setSelSite(null); map.setSelRt(null); map.setSelSupC(null); dis.setScView(null); } }}>
         <svg ref={map.svgRef} width={map.dm.w} height={map.dm.h} style={{ display: 'block', cursor: 'grab', touchAction: 'none' }}>
           <rect width={map.dm.w} height={map.dm.h} fill="#060a12" />
           <defs>
@@ -349,6 +409,8 @@ export default function App() {
               const vpRight = (map.dm.w - zt.x) / zt.k;
               const vpBottom = (map.dm.h - zt.y) / zt.k;
               const pad = 40 * inv; // padding so circles near edge aren't clipped
+              // Pre-compute max spend_pct for normalization
+              const maxSpendPct = spendByCountry ? Math.max(...Object.values(spendByCountry).map(c => c.spend_pct), 1) : 1;
               return SUPPLIERS.map((s, i) => {
                 const p = pt(s.lat, s.lng); if (!p) return null;
                 // Viewport culling — skip suppliers outside visible area
@@ -356,9 +418,16 @@ export default function App() {
                 const r = Math.max(2, (Math.sqrt(s.n / maxSup) * 30)) * inv;
                 const ih = map.hSup === i;
                 const isAff = impact && impact.suppliers.includes(s.country);
+                // Spend-based color: interpolate from dim slate (#4a5568) to bright purple (#a78bfa) to amber (#f59e0b) based on spend share
+                const spendEntry = spendByCountry?.[s.country];
+                const spendT = spendEntry ? Math.min(spendEntry.spend_pct / maxSpendPct, 1) : 0;
+                // Low spend: muted blue-gray, mid: purple, high: amber-gold
+                const spendColor = isAff ? "#ef4444" : spendT > 0.6 ? "#f59e0b" : spendT > 0.2 ? "#a78bfa" : "#6b7fa0";
+                const spendFillOpacity = isAff ? 0.2 : (ih ? 0.3 : (0.06 + spendT * 0.22));
+                const spendStrokeOpacity = isAff ? 0.6 : (ih ? 0.7 : (0.2 + spendT * 0.45));
                 return <g key={'sup' + i} onMouseEnter={() => map.setHSup(i)} onMouseLeave={() => map.setHSup(null)} data-click="1" onClick={(e) => { const rect = map.cR.current!.getBoundingClientRect(); map.setClickPos({ x: e.clientX - rect.left, y: e.clientY - rect.top }); map.setSelSupC(map.selSupC === i ? null : i); map.setSelSite(null); map.setSelRt(null); dis.setSupExpand({}); }} style={{ cursor: 'pointer' }}>
-                  <circle cx={p[0]} cy={p[1]} r={r} fill={isAff ? "#ef4444" : "#a78bfa"} fillOpacity={isAff ? 0.2 : (ih ? 0.25 : 0.12)} stroke={isAff ? "#ef4444" : "#a78bfa"} strokeWidth={Math.max(0.3, (isAff ? 1.2 : 0.8) * inv)} strokeOpacity={isAff ? 0.6 : (ih ? 0.6 : 0.3)} />
-                  {(ih || isAff) && <circle cx={p[0]} cy={p[1]} r={r + Math.max(2, 4 * inv)} fill="none" stroke={isAff ? "#ef4444" : "#a78bfa"} strokeWidth={Math.max(0.2, 0.4 * inv)} strokeOpacity={0.3} />}
+                  <circle cx={p[0]} cy={p[1]} r={r} fill={spendColor} fillOpacity={spendFillOpacity} stroke={spendColor} strokeWidth={Math.max(0.3, (isAff ? 1.2 : 0.8) * inv)} strokeOpacity={spendStrokeOpacity} />
+                  {(ih || isAff) && <circle cx={p[0]} cy={p[1]} r={r + Math.max(2, 4 * inv)} fill="none" stroke={spendColor} strokeWidth={Math.max(0.2, 0.4 * inv)} strokeOpacity={0.3} />}
                 </g>;
               });
             })()}
@@ -380,7 +449,7 @@ export default function App() {
                     <circle cx={p[0]} cy={p[1]} r={r * 3} fill="none" stroke="#ef4444" strokeWidth={Math.max(.4, 1 * inv)} opacity={.5} strokeDasharray={`${Math.max(1, 2 * inv)},${Math.max(.5, 1 * inv)}`} />
                     <circle cx={p[0]} cy={p[1]} r={r * 2} fill="#ef4444" opacity={.08} />
                   </>}
-                  {recAffectedSites[s.name] && !impact?.factories.includes(s.name) && (() => {
+                  {impact && recAffectedSites[s.name] && !impact.factories.includes(s.name) && (() => {
                     const aff = recAffectedSites[s.name];
                     const proximity = Math.max(0, 1 - aff.distance_km / 2000);
                     const ringR = r * (2 + proximity * 2);
@@ -436,21 +505,78 @@ export default function App() {
               return vis.map((s, i) => renderSite(s, i));
             })()}
 
-            {/* Supply chain overlay */}
-            {dis.scView && SUPPLY_GRAPH[dis.scView] && (() => {
-              const graph = SUPPLY_GRAPH[dis.scView];
+            {/* Supply chain overlay — great-circle arcs from supplier countries */}
+            {dis.scView && (() => {
               const site = SITES.find(s => s.name === dis.scView);
               if (!site) return null;
               const sp = pt(site.lat, site.lng);
               if (!sp) return null;
+              // Use API supplier data (by_country arcs) when available, else fall back to SUPPLY_GRAPH
+              if (map.siteSuppliers && map.siteSuppliers.by_country.length > 0) {
+                const countries = map.siteSuppliers.by_country;
+                const maxSpend = Math.max(...countries.map(c => c.spend_pct), 1);
+                return <g>
+                  {countries.map((cEntry, ci) => {
+                    const sup = SUPPLIERS.find(s => s.country === cEntry.country);
+                    if (!sup) return null;
+                    const cp = pt(sup.lat, sup.lng);
+                    if (!cp) return null;
+                    // Great-circle arc via geoInterpolate
+                    const interp = geoInterpolate([sup.lng, sup.lat], [site.lng, site.lat]);
+                    const pts = Array.from({ length: 25 }, (_, j) => proj(interp(j / 24)) as [number, number]);
+                    const arcPath = line().curve(curveBasis)(pts);
+                    if (!arcPath) return null;
+                    // Color: green (low spend) -> amber (high spend)
+                    const t = cEntry.spend_pct / maxSpend;
+                    const r = Math.round(34 + t * (245 - 34));
+                    const g = Math.round(197 + t * (158 - 197));
+                    const b = Math.round(94 + t * (11 - 94));
+                    const arcColor = `rgb(${r},${g},${b})`;
+                    // Width scales with sqrt of spend_pct
+                    const arcW = Math.max(0.5, Math.min(4, Math.sqrt(cEntry.spend_pct / 5) * 2)) * inv;
+                    return <g key={'sc-arc-' + ci}>
+                      <path
+                        d={arcPath}
+                        fill="none"
+                        stroke={arcColor}
+                        strokeWidth={arcW}
+                        strokeLinecap="round"
+                        opacity={0.7}
+                        strokeDasharray="1000"
+                        strokeDashoffset="1000"
+                        style={{ animation: `sc-arc-draw 1.2s ease-out ${ci * 0.08}s forwards` }}
+                      />
+                      {/* Supplier country dot */}
+                      <circle cx={cp[0]} cy={cp[1]} r={Math.max(1.5, (2 + Math.sqrt(cEntry.spend_pct / 10)) * inv)} fill={arcColor} opacity={0.5} />
+                      {cEntry.has_active_disruption && <circle cx={cp[0]} cy={cp[1]} r={Math.max(3, 6 * inv)} fill="none" stroke="#ef4444" strokeWidth={Math.max(0.3, 0.8 * inv)} opacity={0.6} strokeDasharray={`${Math.max(1, 2 * inv)},${Math.max(0.5, 1 * inv)}`}>
+                        <animate attributeName="stroke-opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
+                      </circle>}
+                    </g>;
+                  })}
+                  {/* Factory highlight ring */}
+                  <circle cx={sp[0]} cy={sp[1]} r={Math.max(4, 8 * inv)} fill="none" stroke="#22c55e" strokeWidth={Math.max(0.6, 1.8 * inv)} opacity={0.8}>
+                    <animate attributeName="r" values={`${Math.max(4, 8 * inv)};${Math.max(5, 10 * inv)};${Math.max(4, 8 * inv)}`} dur="3s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.8;0.4;0.8" dur="3s" repeatCount="indefinite" />
+                  </circle>
+                  <circle cx={sp[0]} cy={sp[1]} r={Math.max(2.5, 5 * inv)} fill="#22c55e" opacity={0.15} />
+                </g>;
+              }
+              // Fallback: existing SUPPLY_GRAPH dashed lines
+              const graph = SUPPLY_GRAPH[dis.scView];
+              if (!graph) return null;
               return <g opacity={.6}>
                 {graph.sup.map((country, ci) => {
                   const sup = SUPPLIERS.find(s => s.country === country);
                   if (!sup) return null;
                   const cp = pt(sup.lat, sup.lng);
                   if (!cp) return null;
+                  // Great-circle arc even for fallback
+                  const interp = geoInterpolate([sup.lng, sup.lat], [site.lng, site.lat]);
+                  const pts = Array.from({ length: 25 }, (_, j) => proj(interp(j / 24)) as [number, number]);
+                  const arcPath = line().curve(curveBasis)(pts);
+                  if (!arcPath) return null;
                   return <g key={'sc' + ci}>
-                    <line x1={cp[0]} y1={cp[1]} x2={sp[0]} y2={sp[1]} stroke="#22c55e" strokeWidth={Math.max(.4, 1.2 * inv)} strokeDasharray={`${Math.max(2, 4 * inv)},${Math.max(1, 2 * inv)}`} opacity={.4} />
+                    <path d={arcPath} fill="none" stroke="#22c55e" strokeWidth={Math.max(.4, 1.2 * inv)} strokeDasharray={`${Math.max(2, 4 * inv)},${Math.max(1, 2 * inv)}`} opacity={.4} />
                     <circle cx={cp[0]} cy={cp[1]} r={Math.max(2, 4 * inv)} fill="#22c55e" opacity={.3} />
                   </g>;
                 })}
@@ -513,7 +639,7 @@ export default function App() {
               const pc = sv === 'Critical' ? 'spc' : sv === 'High' ? 'sph' : sv === 'Medium' ? 'spm' : 'spl';
               const du = sv === 'Critical' ? '1.5s' : sv === 'High' ? '2.5s' : '3.5s';
               const cr = Math.max(2, 4.5 * inv);
-              return <g key={'d' + i} data-click="1" onClick={e => { e.stopPropagation(); dis.setSel(is ? null : i); if (!dis.dOpen) { dis.setDOpen(true); dis.setDClosing(false); } }} onMouseEnter={() => map.setHD(i)} onMouseLeave={() => map.setHD(null)} style={{ cursor: 'pointer' }}>
+              return <g key={'d' + i} data-click="1" onClick={e => { e.stopPropagation(); dis.setSel(is ? null : i); if (!rightOpen) { setRightOpen(true); } if (!dis.dOpen) { dis.setDOpen(true); dis.setDClosing(false); } }} onMouseEnter={() => map.setHD(i)} onMouseLeave={() => map.setHD(null)} style={{ cursor: 'pointer' }}>
                 <circle cx={p[0]} cy={p[1]} fill="none" stroke={co} strokeWidth={Math.max(.5, 1.5 * inv)} opacity={.4} style={{ animation: `${pc} ${du} ease-in-out infinite` }} />
                 {sv === 'Critical' && <circle cx={p[0]} cy={p[1]} fill="none" stroke={co} strokeWidth={Math.max(.3, .8 * inv)} opacity={.2} style={{ animation: `${pc} ${du} ease-in-out infinite`, animationDelay: '.75s' }} />}
                 <circle cx={p[0]} cy={p[1]} r={cr} fill={co} stroke={is ? '#fff' : '#000'} strokeWidth={is ? Math.max(1, 2 * inv) : Math.max(.5, inv)} filter="url(#g2)" />
@@ -532,7 +658,7 @@ export default function App() {
             <line x1={10} y1={70} x2={26} y2={70} stroke="#38bdf8" strokeWidth={1.2} strokeDasharray="4,3" opacity={.5} /><text x={30} y={73} fontSize={9} fill="#4a6080" fontFamily="DM Sans">Sea Lane</text>
             <line x1={10} y1={84} x2={26} y2={84} stroke="#c084fc" strokeWidth={0.8} strokeDasharray="1.5,1.5" opacity={.6} /><text x={30} y={87} fontSize={9} fill="#4a6080" fontFamily="DM Sans">Air Lane</text>
             <circle cx={18} cy={98} r={3} fill="#ef4444" opacity={.8} /><circle cx={18} cy={98} r={6} fill="none" stroke="#ef4444" strokeWidth={.8} opacity={.3} /><text x={30} y={101} fontSize={9} fill="#4a6080" fontFamily="DM Sans">Disruption</text>
-            <circle cx={18} cy={114} r={5} fill="#a78bfa" fillOpacity={.15} stroke="#a78bfa" strokeWidth={.6} strokeOpacity={.4} /><text x={30} y={117} fontSize={9} fill="#4a6080" fontFamily="DM Sans">Suppliers</text>
+            <circle cx={12} cy={114} r={4} fill="#6b7fa0" fillOpacity={.15} stroke="#6b7fa0" strokeWidth={.6} strokeOpacity={.4} /><circle cx={22} cy={114} r={4} fill="#a78bfa" fillOpacity={.2} stroke="#a78bfa" strokeWidth={.6} strokeOpacity={.5} /><circle cx={32} cy={114} r={4} fill="#f59e0b" fillOpacity={.25} stroke="#f59e0b" strokeWidth={.6} strokeOpacity={.6} /><text x={42} y={117} fontSize={9} fill="#4a6080" fontFamily="DM Sans">Suppliers (spend)</text>
           </g>
           <text x={map.dm.w - 14} y={map.dm.h - 10} textAnchor="end" fontSize={8} fill="#14243e" fontFamily="DM Sans">Scroll to zoom {'\u00b7'} Drag to pan</text>
         </svg>
@@ -570,7 +696,7 @@ export default function App() {
           const tx = Math.min(map.clickPos.x + 12, map.dm.w - 310);
           const ty = Math.max(map.clickPos.y - 20, 8);
           return <div data-click="1" style={{ position: 'absolute', left: tx, top: ty, zIndex: 22, background: '#080e1cf0', border: '1px solid #1e3a5c', borderRadius: 10, padding: '14px 16px', boxShadow: '0 12px 40px rgba(0,0,0,.7)', backdropFilter: 'blur(16px)', width: 290, maxHeight: 440, overflow: 'auto' }} className="sc-s">
-            <SitePopup site={s} exposureScore={exposureScores[s.name]} onClose={() => { map.setSelSite(null); dis.setScView(null); }} supExpand={dis.supExpand} setSupExpand={dis.setSupExpand} />
+            <SitePopup site={s} exposureScore={exposureScores[s.name]} onClose={() => { map.setSelSite(null); dis.setScView(null); map.setSiteSuppliers(null); }} supExpand={dis.supExpand} setSupExpand={dis.setSupExpand} siteSuppliers={map.siteSuppliers} siteSuppliersLoading={map.siteSuppliersLoading} />
           </div>;
         })()}
 
@@ -601,8 +727,10 @@ export default function App() {
           <p style={{ color: '#14243e', fontSize: 11, margin: '4px 0 0', fontFamily: FM }}>{SITES.length} sites {'\u00b7'} {countryCount} countries</p>
         </div>}
 
-        {/* RIGHT DRAWER */}
-        <DrawerPanel dis={dis} fil={fil} />
+      </div>
+
+        {/* RIGHT PANEL — Active Disruptions */}
+        <DrawerPanel dis={dis} fil={fil} open={rightOpen} onToggle={() => setRightOpen(o => !o)} />
       </div>
 
       {/* Keyboard shortcut help button */}

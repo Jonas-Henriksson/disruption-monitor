@@ -185,6 +185,9 @@ class ComputedSeverity(BaseModel):
     Returned as `computed_severity` on every scan item. Formula:
     score = (0.30 * magnitude + 0.25 * proximity + 0.25 * asset_criticality
              + 0.20 * supply_chain_impact) * 100
+
+    Practitioner dimensions decompose the score into decision-relevant axes:
+    probability, impact_magnitude, velocity, and recovery_estimate.
     """
 
     score: float = Field(ge=0, le=100, description="Composite severity score (0-100)")
@@ -193,6 +196,11 @@ class ComputedSeverity(BaseModel):
     )
     components: SeverityComponents
     affected_site_count: int = Field(ge=0, description="Number of SKF sites within blast radius")
+    # Practitioner severity dimensions
+    probability: float = Field(default=0.0, ge=0, le=1, description="Likelihood of occurrence (0-1)")
+    impact_magnitude: float = Field(default=0.0, ge=0, le=1, description="Scale of impact on SKF operations (0-1)")
+    velocity: str = Field(default="unknown", description="Speed of onset: immediate, days, weeks, months")
+    recovery_estimate: str = Field(default="unknown", description="Expected recovery horizon: hours, days, weeks, months")
 
 
 # ── Disruption events & scanning ────────────────────────────────
@@ -365,12 +373,18 @@ class ScanStreamEvent(BaseModel):
 # ── Tickets ─────────────────────────────────────────────────────
 
 
+TicketPriority = Literal["critical", "high", "normal", "low"]
+
+
 class Ticket(BaseModel):
     id: int
     event_id: str
     owner: Optional[str] = Field(None, description="Team member ID")
     status: Literal["open", "assigned", "in_progress", "blocked", "done"] = "open"
     notes: Optional[str] = None
+    due_date: Optional[datetime] = Field(None, description="ISO datetime deadline for SLA tracking")
+    priority: Optional[TicketPriority] = Field(None, description="Ticket priority: critical, high, normal, low")
+    is_overdue: bool = Field(False, description="True if due_date is past and status is not done")
     created_at: datetime
     updated_at: datetime
 
@@ -379,6 +393,8 @@ class TicketCreate(BaseModel):
     event_id: str
     owner: Optional[str] = None
     notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+    priority: Optional[TicketPriority] = None
 
 
 class TicketUpdate(BaseModel):
@@ -387,6 +403,8 @@ class TicketUpdate(BaseModel):
         None
     )
     notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+    priority: Optional[TicketPriority] = None
 
 
 class TicketsResponse(BaseModel):
@@ -449,6 +467,41 @@ class SupplierAlternative(BaseModel):
     overlap_pct: float = Field(
         ge=0, le=100,
         description="Percentage of disrupted categories covered by this alternative",
+    )
+
+
+# ── Event feedback (accuracy tracking) ───────────────────────
+
+
+class EventFeedbackCreate(BaseModel):
+    """User feedback on whether a detected event was accurate."""
+
+    outcome: Literal["true_positive", "false_positive", "missed"]
+    actual_impact: Optional[str] = Field(None, description="Free-text description of what actually happened")
+    feedback_by: str = Field(default="unknown", description="User or team who provided feedback")
+
+
+class EventFeedback(BaseModel):
+    """Stored feedback record."""
+
+    id: int
+    event_id: str
+    outcome: Literal["true_positive", "false_positive", "missed"]
+    actual_impact: Optional[str] = None
+    feedback_by: str = "unknown"
+    created_at: datetime
+
+
+class FeedbackStats(BaseModel):
+    """Aggregate accuracy statistics across all event feedback."""
+
+    total: int = Field(description="Total feedback entries")
+    true_positive_count: int
+    false_positive_count: int
+    missed_count: int
+    precision_pct: Optional[float] = Field(
+        None,
+        description="true_positives / (true_positives + false_positives) * 100, null if no data",
     )
 
 

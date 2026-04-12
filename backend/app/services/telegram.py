@@ -14,11 +14,32 @@ from urllib.parse import quote
 import httpx
 
 from ..config import settings
+from ..db.database import (
+    get_all_alerted_event_ids,
+    get_alerted_event_count,
+    mark_event_alerted,
+    clear_alerted_events,
+)
+from ..utils.retry import retry_async
+from .metrics import emit_count
 
 logger = logging.getLogger(__name__)
 
-# Track which events we've already alerted on to avoid duplicate notifications
+# In-memory cache of alerted event IDs. Populated from SQLite on first access
+# so that Lambda cold starts don't lose track of previously-alerted events.
 _alerted_events: set[str] = set()
+_cache_loaded: bool = False
+
+
+def _ensure_cache_loaded() -> None:
+    """Load alerted event IDs from DB into the in-memory cache on first access."""
+    global _cache_loaded
+    if not _cache_loaded:
+        try:
+            _alerted_events.update(get_all_alerted_event_ids())
+        except Exception:
+            logger.warning("Failed to load alerted events from DB, using empty cache")
+        _cache_loaded = True
 
 # Severity ranking for filtering
 _SEV_RANK = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
@@ -101,19 +122,34 @@ async def send_telegram_message(text: str, chat_id: str | None = None) -> bool:
     async with httpx.AsyncClient(timeout=10.0) as client:
         for cid in ids:
             try:
-                resp = await client.post(url, json={
-                    "chat_id": cid,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                })
+                async def _post_telegram(chat_id=cid):
+                    resp = await client.post(url, json={
+                        "chat_id": chat_id,
+                        "text": text,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                    })
+                    # Raise on 5xx so retry logic kicks in
+                    if resp.status_code >= 500:
+                        resp.raise_for_status()
+                    return resp
+
+                resp = await retry_async(
+                    _post_telegram,
+                    max_retries=3,
+                    base_delay=1.0,
+                    operation=f"telegram-send-{cid}",
+                )
                 if resp.status_code == 200:
                     logger.info("Telegram alert sent to %s", cid)
+                    emit_count("telegram.alert_sent")
                 else:
                     logger.warning("Telegram API error for %s: %s %s", cid, resp.status_code, resp.text[:200])
+                    emit_count("telegram.alert_failed")
                     success = False
             except Exception as exc:
                 logger.error("Failed to send Telegram message to %s: %s", cid, exc)
+                emit_count("telegram.alert_failed")
                 success = False
 
     return success
@@ -127,6 +163,8 @@ async def send_scan_alerts(items: list[dict], mode: str) -> int:
     if not settings.has_telegram:
         return 0
 
+    _ensure_cache_loaded()
+
     sent = 0
     for item in items:
         event_id = item.get("id", "")
@@ -139,6 +177,10 @@ async def send_scan_alerts(items: list[dict], mode: str) -> int:
         ok = await send_telegram_message(message)
         if ok:
             _alerted_events.add(event_id)
+            try:
+                mark_event_alerted(event_id)
+            except Exception:
+                logger.warning("Failed to persist alerted event %s to DB", event_id)
             sent += 1
 
     if sent:
@@ -147,8 +189,14 @@ async def send_scan_alerts(items: list[dict], mode: str) -> int:
 
 
 def clear_alerted_cache() -> None:
-    """Clear the alerted events cache (for testing)."""
+    """Clear the alerted events cache (in-memory and DB)."""
+    global _cache_loaded
     _alerted_events.clear()
+    _cache_loaded = False
+    try:
+        clear_alerted_events()
+    except Exception:
+        logger.warning("Failed to clear alerted events from DB")
 
 
 def get_telegram_status() -> dict:
@@ -157,5 +205,5 @@ def get_telegram_status() -> dict:
         "configured": settings.has_telegram,
         "min_severity": settings.telegram_min_severity,
         "chat_ids": len([c for c in settings.telegram_chat_ids.split(",") if c.strip()]) if settings.telegram_chat_ids else 0,
-        "alerted_events": len(_alerted_events),
+        "alerted_events": get_alerted_event_count() if _cache_loaded else len(_alerted_events),
     }

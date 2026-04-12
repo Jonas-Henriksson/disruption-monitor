@@ -18,6 +18,7 @@ from ..db.database import (
 from ..models.schemas import ScanRequest
 from ..services.scanner import ScanMode, run_scan
 from ..services.telegram import send_scan_alerts
+from ..services.webhooks import publish_scan_complete
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -96,6 +97,18 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
     # Send Telegram alerts for Critical/High events
     if result.get("source") == "live":
         await send_scan_alerts(items, request.mode)
+
+    # Publish outbound webhooks / SNS notifications
+    try:
+        await publish_scan_complete(
+            mode=request.mode,
+            scan_id=result.get("scan_id", "unknown"),
+            source=result.get("source", "sample"),
+            item_count=result.get("count", 0),
+            items=items,
+        )
+    except Exception:
+        pass  # Fire-and-forget; errors logged inside publish_scan_complete
 
     return result
 

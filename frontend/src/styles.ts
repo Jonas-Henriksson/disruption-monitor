@@ -31,6 +31,10 @@ export const GLOBAL_CSS = `
 .sc-tl-close{animation:sc-timeline-close .3s ease forwards}
 @keyframes sc-narrative-in{from{opacity:0;max-height:0}to{opacity:1;max-height:400px}}
 .sc-narr-in{animation:sc-narrative-in .4s ease both;overflow:hidden}
+@keyframes sc-arc-draw{from{stroke-dashoffset:1000;opacity:0}to{stroke-dashoffset:0;opacity:1}}
+.sc-arc{stroke-dasharray:1000;animation:sc-arc-draw 1.2s ease-out forwards}
 button:focus-visible,[data-click]:focus-visible,[tabindex]:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
 button:focus:not(:focus-visible){outline:none}
+.sc-left-panel{transition:width 280ms cubic-bezier(.16,1,.3,1),min-width 280ms cubic-bezier(.16,1,.3,1)}
+.sc-right-panel{transition:width 280ms cubic-bezier(.16,1,.3,1),min-width 280ms cubic-bezier(.16,1,.3,1)}
 `;

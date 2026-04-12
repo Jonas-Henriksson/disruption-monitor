@@ -5,8 +5,8 @@
  * All functions gracefully return null on failure so callers can fall back to sample data.
  */
 
-import type { ScanMode, ScanItem, SupplierAlternativesResponse, Ticket, TicketStatus } from "../types";
-import { getToken } from "../auth/tokenProvider";
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary } from "../types";
+import { getToken, getGraphToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
 const API_PREFIX = "/api/v1";
@@ -138,6 +138,7 @@ export interface NarrativeResponse {
   event_id: string;
   narrative: string;
   generated_at: string;
+  generated_by?: string;
 }
 
 /**
@@ -169,6 +170,54 @@ export async function fetchNarrative(eventId: string): Promise<NarrativeResponse
   } catch (err) {
     console.error('[SC Hub] Narrative error:', err);
     return null;
+  }
+}
+
+/**
+ * Save a user-edited narrative for an event.
+ * Returns true on success, false on failure.
+ */
+export async function saveNarrativeEdit(eventId: string, narrative: string): Promise<boolean> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/narrative`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ narrative }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Event edit entry from backend */
+export interface EventEdit {
+  id: number;
+  event_id: string;
+  field: string;
+  original_value: string;
+  edited_value: string;
+  edited_by: string;
+  edited_at: string;
+}
+
+/**
+ * Fetch all user edits for a specific event.
+ * Returns empty array on failure.
+ */
+export async function fetchEventEdits(eventId: string): Promise<EventEdit[]> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/edits`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return [];
+    return (await resp.json()) as EventEdit[];
+  } catch {
+    return [];
   }
 }
 
@@ -234,15 +283,23 @@ export async function fetchSupplierAlternatives(country: string): Promise<Suppli
 
 /**
  * Assign a ticket to a team member for a specific event.
+ * Optionally set a due_date (ISO string) and priority for SLA tracking.
  * Returns the created/updated Ticket or null on failure.
  */
-export async function assignTicket(eventId: string, owner: string): Promise<Ticket | null> {
+export async function assignTicket(
+  eventId: string,
+  owner: string,
+  options?: { due_date?: string | null; priority?: string | null },
+): Promise<Ticket | null> {
   try {
     const headers = await authHeaders({ "Content-Type": "application/json" });
+    const body: Record<string, unknown> = { owner, notes: "" };
+    if (options?.due_date) body.due_date = options.due_date;
+    if (options?.priority) body.priority = options.priority;
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/ticket`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ owner, notes: "" }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
@@ -272,6 +329,67 @@ export async function updateTicketStatus(eventId: string, status: TicketStatus):
   }
 }
 
+/**
+ * Fetch supplier data for a specific factory site.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchSiteSuppliers(siteId: string, signal?: AbortSignal): Promise<SiteSuppliersResponse | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/sites/${encodeURIComponent(siteId)}/suppliers`, {
+      headers,
+      signal: signal || AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as SiteSuppliersResponse;
+  } catch {
+    return null;
+  }
+}
+
+/** Spend share per supplier country (% of global spend). */
+export interface SupplierCountrySpend {
+  country: string;
+  spend_pct: number;
+  supplier_count: number;
+  site_count: number;
+}
+
+export async function fetchSupplierSpendByCountry(): Promise<Record<string, SupplierCountrySpend> | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/suppliers/spend-by-country`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const map: Record<string, SupplierCountrySpend> = {};
+    for (const c of data.countries) map[c.country] = c;
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the weekly summary for the Monday-morning executive review.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchWeeklySummary(days: number = 7): Promise<WeeklySummary | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/weekly-summary?days=${days}`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as WeeklySummary;
+  } catch {
+    return null;
+  }
+}
+
 export async function triggerScan(mode: ScanMode): Promise<ScanResponse | null> {
   try {
     const headers = await authHeaders({ "Content-Type": "application/json" });
@@ -284,6 +402,134 @@ export async function triggerScan(mode: ScanMode): Promise<ScanResponse | null> 
     });
     if (!resp.ok) return null;
     return (await resp.json()) as ScanResponse;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Graph API integration
+// ---------------------------------------------------------------------------
+
+/** Build headers with both backend auth token and Graph API token. */
+async function graphHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const headers = await authHeaders(extra);
+  try {
+    const graphToken = await getGraphToken();
+    if (graphToken) {
+      headers["X-Graph-Token"] = graphToken;
+    }
+  } catch {
+    // Proceed without Graph token — backend will return 401
+  }
+  return headers;
+}
+
+/** Fetch the authenticated user's MS Graph profile. */
+export async function graphGetProfile(): Promise<any> {
+  try {
+    const headers = await graphHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/profile`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Send a test email via MS Graph. */
+export async function graphTestEmail(): Promise<any> {
+  try {
+    const headers = await graphHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/test-email`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Send a test Teams message via MS Graph. */
+export async function graphTestTeams(): Promise<any> {
+  try {
+    const headers = await graphHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/test-teams`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Send an email alert for a specific event via MS Graph. */
+export async function graphSendEventEmail(eventId: string): Promise<any> {
+  try {
+    const headers = await graphHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/email`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Send a Teams message for a specific event via MS Graph. */
+export async function graphSendEventTeams(eventId: string): Promise<any> {
+  try {
+    const headers = await graphHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/teams`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Create a calendar meeting for a specific event via MS Graph. */
+export async function graphCreateEventMeeting(eventId: string): Promise<any> {
+  try {
+    const headers = await graphHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/events/${encodeURIComponent(eventId)}/meeting`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Get the status of Graph API integration (permissions, connectivity). */
+export async function graphGetStatus(): Promise<any> {
+  try {
+    const headers = await graphHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/graph/status`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
   } catch {
     return null;
   }

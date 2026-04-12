@@ -9,16 +9,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
 from ..config import settings
-from ..data import load_disruptions, load_geopolitical, load_sites, load_trade
+from .metrics import emit_count, emit_metric
+from ..data import load_disruptions, load_geopolitical, load_sites, load_trade, SUPPLY_GRAPH
 from ..services.dedup import tag_duplicates
 from ..services.serper import fetch_search_context
 from ..services.severity import compute_severity_score
 from ..utils.geo import haversine_km
+from ..utils.retry import retry_async
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ For each disruption found, return a JSON object with these exact fields:
 - skf_exposure: string (how this affects SKF specifically — mention specific factories or suppliers)
 - recommended_action: string (concrete mitigation steps)
 
-Return a JSON array of 8-12 disruptions, ordered by severity (Critical first).
+Return all significant disruptions you find. If fewer than 5 exist, return fewer. Do not pad with low-relevance items. Order by severity (Critical first).
 Only return the JSON array, no other text.
 """
 
@@ -125,6 +128,8 @@ For each event, return a JSON object with these exact fields:
 - skf_cost_impact: string (cost impact description)
 - recommended_action: string (concrete steps)
 
+Focus on changes in the last 7 days. Prioritize tariff changes, sanctions updates, and export control modifications that directly affect bearing manufacturing supply chains.
+
 Return a JSON array of 6-8 events, ordered by severity.
 Only return the JSON array, no other text.
 """
@@ -174,11 +179,110 @@ _BLAST_RADIUS_KM: dict[str, float] = {
 
 _haversine_km = haversine_km
 
+# Categories where haversine blast-radius is the correct primary model
+_DISTANCE_PRIMARY_CATEGORIES = {"Natural Disaster"}
+
+
+def _resolve_event_country(item: dict, sites: list[dict]) -> str | None:
+    """Resolve the country an event is located in.
+
+    Strategy: find the nearest SKF site and use its country. This is a
+    lightweight reverse-geocode that works well for industrial regions
+    where SKF has presence.
+    """
+    lat = item.get("lat")
+    lng = item.get("lng")
+    if lat is None or lng is None:
+        return None
+
+    best_dist = float("inf")
+    best_country = None
+    for site in sites:
+        dist = _haversine_km(lat, lng, site["lat"], site["lng"])
+        if dist < best_dist:
+            best_dist = dist
+            best_country = site["country"]
+    # Only trust the match if within 500 km — beyond that the event is
+    # likely in an area without SKF sites and the country match is weak.
+    if best_dist <= 500:
+        return best_country
+    return best_country  # still return best guess; routing check will validate
+
+
+def _match_by_routing_dependency(item: dict, sites: list[dict]) -> list[dict]:
+    """Find SKF factories affected via supply-chain routing dependency.
+
+    For non-natural-disaster events (port closures, trade policy, strikes,
+    geopolitical), a factory is affected if it sources inputs from the
+    country where the event is occurring — regardless of geographic distance.
+
+    Returns a list of {name, type, distance_km, match_reason, affected_inputs,
+    max_input_tier} dicts.
+    """
+    event_country = _resolve_event_country(item, sites)
+    if not event_country:
+        return []
+
+    # Build a name->site lookup for type and coords
+    site_lookup: dict[str, dict] = {s["name"]: s for s in sites}
+
+    lat = item.get("lat", 0)
+    lng = item.get("lng", 0)
+
+    affected: list[dict] = []
+    for factory_name, graph_entry in SUPPLY_GRAPH.items():
+        supplier_countries: list[str] = graph_entry.get("sup", [])
+        if event_country not in supplier_countries:
+            continue
+
+        # Determine which inputs are affected and their tier
+        input_details: list[dict] = graph_entry.get("input_details", [])
+        affected_inputs: list[str] = []
+        best_tier = 99
+        has_sole_source = False
+
+        for inp in input_details:
+            # All inputs from this factory may be affected since the
+            # supplier country is in the disruption zone.  We tag all
+            # inputs; severity weighting uses the best (lowest) tier.
+            affected_inputs.append(inp["name"])
+            if inp["tier"] < best_tier:
+                best_tier = inp["tier"]
+            if inp.get("sole_source"):
+                has_sole_source = True
+
+        site_data = site_lookup.get(factory_name)
+        if site_data:
+            dist = _haversine_km(lat, lng, site_data["lat"], site_data["lng"])
+            site_type = site_data["type"]
+        else:
+            dist = 0.0
+            site_type = "mfg"
+
+        affected.append({
+            "name": factory_name,
+            "type": site_type,
+            "distance_km": round(dist, 1),
+            "match_reason": "routing_dependency",
+            "affected_inputs": affected_inputs,
+            "max_input_tier": best_tier if best_tier < 99 else 2,
+            "sole_source_risk": has_sole_source,
+        })
+
+    return affected
+
 
 def _match_affected_sites(item: dict, mode: str) -> list[dict]:
-    """Find SKF sites within the blast radius of a disruption.
+    """Find SKF sites affected by a disruption event.
 
-    Returns a list of {name, type, distance_km} dicts sorted by distance.
+    Uses a DUAL model:
+    - Natural Disaster events: haversine blast-radius as primary (distance
+      propagation is correct for earthquakes, floods, typhoons).
+    - All other categories (Logistics/Port, Geopolitical, Labour/Strike,
+      Trade Policy, Currency): supply-chain routing dependency as primary,
+      with haversine as a secondary signal for nearby factories.
+
+    Returns a list of {name, type, distance_km, ...} dicts sorted by distance.
     """
     lat = item.get("lat")
     lng = item.get("lng")
@@ -187,20 +291,47 @@ def _match_affected_sites(item: dict, mode: str) -> list[dict]:
 
     severity = item.get("severity") or item.get("risk_level", "Medium")
     radius = _BLAST_RADIUS_KM.get(severity, 1000.0)
+    category = item.get("category", "")
 
     sites = load_sites()
-    affected = []
+
+    # ── Haversine matches (always computed) ──────────────────────
+    haversine_matches: list[dict] = []
     for site in sites:
         dist = _haversine_km(lat, lng, site["lat"], site["lng"])
         if dist <= radius:
-            affected.append({
+            haversine_matches.append({
                 "name": site["name"],
                 "type": site["type"],
                 "distance_km": round(dist, 1),
+                "match_reason": "proximity",
             })
 
-    affected.sort(key=lambda s: s["distance_km"])
-    return affected
+    # ── For natural disasters, haversine-only is correct ─────────
+    if category in _DISTANCE_PRIMARY_CATEGORIES:
+        haversine_matches.sort(key=lambda s: s["distance_km"])
+        return haversine_matches
+
+    # ── For all other events, routing dependency is primary ──────
+    routing_matches = _match_by_routing_dependency(item, sites)
+
+    # Merge: routing matches are primary, haversine adds nearby sites
+    seen_names: set[str] = set()
+    combined: list[dict] = []
+
+    # Add routing-dependency matches first (they are the real signal)
+    for match in routing_matches:
+        seen_names.add(match["name"])
+        combined.append(match)
+
+    # Add haversine matches that aren't already covered by routing
+    for match in haversine_matches:
+        if match["name"] not in seen_names:
+            seen_names.add(match["name"])
+            combined.append(match)
+
+    combined.sort(key=lambda s: s["distance_km"])
+    return combined
 
 
 # ── Core scanning logic ─────────────────────────────────────────
@@ -217,12 +348,12 @@ def _get_sample_data(mode: ScanMode) -> list[dict]:
 
 
 def _get_claude_client():
-    """Create the appropriate Anthropic client (direct API or Bedrock)."""
+    """Create the appropriate async Anthropic client (direct API or Bedrock)."""
     import anthropic
 
     if settings.use_bedrock:
-        return anthropic.AnthropicBedrock(aws_region=settings.aws_region)
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        return anthropic.AsyncAnthropicBedrock(aws_region=settings.aws_region)
+    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 
 async def check_claude_api_status() -> dict[str, str]:
@@ -234,15 +365,14 @@ async def check_claude_api_status() -> dict[str, str]:
         client = _get_claude_client()
         if settings.use_bedrock:
             # Bedrock health check: lightweight invoke attempt
-            await asyncio.to_thread(
-                client.messages.create,
+            await client.messages.create(
                 model=settings.claude_model,
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
             return {"status": "connected", "detail": f"Bedrock reachable ({settings.aws_region})"}
         else:
-            await asyncio.to_thread(client.models.list, limit=1)
+            await client.models.list(limit=1)
             return {"status": "connected", "detail": "Claude API reachable"}
     except Exception as exc:
         logger.warning("Claude API health check failed: %s", exc)
@@ -273,14 +403,26 @@ async def run_scan(mode: ScanMode) -> dict:
     async with lock:
         scan_id = str(uuid.uuid4())[:8]
         started_at = datetime.now(timezone.utc)
+        dims = {"mode": mode}
 
         if not settings.has_claude_api:
             logger.info("No Claude API key configured -- returning sample data for %s", mode)
+            emit_count("scan.fallback_used", dimensions=dims)
             return _build_sample_result(mode, scan_id, started_at)
 
+        t0 = time.monotonic()
         try:
-            return await _run_live_scan(mode, scan_id, started_at)
+            result = await _run_live_scan(mode, scan_id, started_at)
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            emit_metric("scan.duration_ms", round(elapsed_ms, 1), unit="Milliseconds", dimensions=dims)
+            emit_count("scan.success", dimensions=dims)
+            emit_metric("scan.items_count", result.get("count", 0), unit="Count", dimensions=dims)
+            return result
         except Exception as exc:
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            emit_metric("scan.duration_ms", round(elapsed_ms, 1), unit="Milliseconds", dimensions=dims)
+            emit_count("scan.failure", dimensions=dims)
+            emit_count("scan.fallback_used", dimensions=dims)
             logger.error("Live scan failed for %s, falling back to sample data: %s", mode, exc)
             result = _build_sample_result(mode, scan_id, started_at)
             result["fallback"] = True
@@ -361,10 +503,15 @@ async def _run_live_scan(
             }
         ]
 
-    # Run the synchronous Claude API call in a thread to avoid blocking the event loop
-    response = await asyncio.to_thread(
-        client.messages.create,
-        **create_kwargs,
+    # Call the async Claude API with retry on transient errors
+    async def _call_claude():
+        return await client.messages.create(**create_kwargs)
+
+    response = await retry_async(
+        _call_claude,
+        max_retries=3,
+        base_delay=1.0,
+        operation=f"claude-scan-{mode}",
     )
 
     # Extract the text content from the response
@@ -373,8 +520,12 @@ async def _run_live_scan(
         if hasattr(block, "text"):
             raw_text += block.text
 
-    # Parse JSON from the response
-    items = _parse_json_response(raw_text)
+    logger.info("Claude response for %s: %d chars, stop_reason=%s", mode, len(raw_text), response.stop_reason)
+    if response.stop_reason == "max_tokens":
+        logger.warning("Claude response for %s was truncated (max_tokens) — attempting recovery", mode)
+
+    # Parse JSON from the response — handle truncated output from max_tokens
+    items = _parse_json_response(raw_text, truncated=(response.stop_reason == "max_tokens"))
 
     # Validate and filter items
     items = _validate_items(items, mode)
@@ -470,11 +621,11 @@ def _validate_items(items: list[dict], mode: str) -> list[dict]:
     return valid
 
 
-def _parse_json_response(text: str) -> list[dict]:
+def _parse_json_response(text: str, *, truncated: bool = False) -> list[dict]:
     """Extract a JSON array from Claude's response text.
 
     Handles cases where the JSON may be wrapped in markdown code fences,
-    or preceded by preamble text containing stray brackets.
+    preceded by preamble text, or truncated mid-array due to max_tokens.
     """
     text = text.strip()
 
@@ -489,22 +640,90 @@ def _parse_json_response(text: str) -> list[dict]:
     # Claude may include preamble text with stray brackets like
     # "Here are results [note: abbreviated]:" before the real JSON.
     end = text.rfind("]")
-    if end == -1:
-        logger.warning("No JSON array found in Claude response")
-        return []
+    if end != -1:
+        pos = 0
+        while True:
+            start = text.find("[", pos)
+            if start == -1 or start > end:
+                break
+            try:
+                result = json.loads(text[start : end + 1])
+                if isinstance(result, list):
+                    return result
+            except json.JSONDecodeError:
+                pass
+            pos = start + 1
 
-    pos = 0
-    while True:
-        start = text.find("[", pos)
-        if start == -1 or start > end:
-            break
-        try:
-            result = json.loads(text[start : end + 1])
-            if isinstance(result, list):
-                return result
-        except json.JSONDecodeError:
-            pass
-        pos = start + 1
+    # If the response was truncated (max_tokens), try to recover complete
+    # JSON objects from the partial array by closing it manually.
+    if truncated:
+        return _recover_truncated_json(text)
 
     logger.warning("No valid JSON array found in Claude response")
+    return []
+
+
+def _recover_truncated_json(text: str) -> list[dict]:
+    """Recover complete JSON objects from a truncated JSON array.
+
+    When Claude hits max_tokens, the response is cut mid-array like:
+      [{...}, {...}, {"key": "val    <-- cut off here
+    This finds the last complete object and closes the array.
+    """
+    # Find the start of the JSON array
+    start = text.find("[")
+    if start == -1:
+        logger.warning("No JSON array start found in truncated response")
+        return []
+
+    fragment = text[start:]
+
+    # Walk backwards from the end to find the last complete object boundary.
+    # A complete object ends with '}' possibly followed by ',' or whitespace.
+    # Find the last '}' that closes a top-level array element.
+    depth = 0
+    last_complete_end = -1
+    in_string = False
+    escape_next = False
+
+    for i, ch in enumerate(fragment):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            if in_string:
+                escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            # depth==1 means we just closed a top-level object in the array
+            if depth == 1:
+                last_complete_end = i
+
+    if last_complete_end == -1:
+        logger.warning("No complete objects found in truncated JSON")
+        return []
+
+    # Close the array after the last complete object
+    repaired = fragment[: last_complete_end + 1] + "]"
+    try:
+        result = json.loads(repaired)
+        if isinstance(result, list):
+            logger.info("Recovered %d items from truncated JSON response", len(result))
+            return result
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse repaired truncated JSON: %s", exc)
+
     return []

@@ -5,6 +5,8 @@
  * to get a Bearer token without needing React hooks.
  */
 
+import { msalInstance, graphScopes } from "./msalConfig";
+
 type TokenProviderFn = () => Promise<string | null>;
 
 let _tokenProvider: TokenProviderFn | null = null;
@@ -21,5 +23,31 @@ export async function getToken(): Promise<string | null> {
     return await _tokenProvider();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Acquire a token with MS Graph API scopes (incremental consent).
+ * Tries silent acquisition first, falls back to popup for consent prompt.
+ * Returns the access token string or null on failure.
+ */
+export async function getGraphToken(): Promise<string | null> {
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) return null;
+    const response = await msalInstance.acquireTokenSilent({
+      ...graphScopes,
+      account: accounts[0],
+    });
+    return response.accessToken;
+  } catch {
+    // Silent failed — need incremental consent via popup
+    try {
+      const response = await msalInstance.acquireTokenPopup(graphScopes);
+      return response.accessToken;
+    } catch (err) {
+      console.error("[SC Hub] Graph token acquisition failed:", err);
+      return null;
+    }
   }
 }

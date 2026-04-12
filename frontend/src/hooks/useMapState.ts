@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import type { SiteSuppliersResponse } from "../types";
 
 /** Map-related state: zoom, hover, selection, dimensions */
 export function useMapState() {
@@ -16,6 +17,8 @@ export function useMapState() {
   const svgRef = useRef<SVGSVGElement>(null);
   const gR = useRef<SVGGElement>(null);
   const cR = useRef<HTMLDivElement>(null);
+  const [siteSuppliers, setSiteSuppliers] = useState<SiteSuppliersResponse | null>(null);
+  const [siteSuppliersLoading, setSiteSuppliersLoading] = useState(false);
 
   const clearHovers = () => {
     setHS(null);
@@ -34,5 +37,7 @@ export function useMapState() {
     dm, setDm,
     svgRef, gR, cR,
     clearHovers,
+    siteSuppliers, setSiteSuppliers,
+    siteSuppliersLoading, setSiteSuppliersLoading,
   };
 }

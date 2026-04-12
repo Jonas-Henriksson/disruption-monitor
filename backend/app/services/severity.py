@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from ..data import load_sites, load_suppliers, BU_MAP
+from ..data import load_sites, load_suppliers, BU_MAP, SUPPLY_GRAPH
 from ..utils.geo import haversine_km
 
 # ── Asset criticality weights by site type ──────────────────────
@@ -67,6 +67,20 @@ _SEVERITY_MAGNITUDE: dict[str, float] = {
     "Low": 0.25,
 }
 
+# ── Supplier tier criticality multipliers ──────────────────────
+# Applied to supply_chain_impact based on the highest-tier input
+# sourced from the disrupted region by affected sites.
+# Tier 1 sole-source = maximum risk amplification (1.5x)
+# Tier 1 non-sole-source = elevated risk (1.2x)
+# Tier 2 = baseline (1.0x, no change)
+# Tier 3 = commodity/replaceable, slightly reduces severity (0.8x)
+TIER_MULTIPLIER: dict[str, float] = {
+    "tier1_sole": 1.5,
+    "tier1": 1.2,
+    "tier2": 1.0,
+    "tier3": 0.8,
+}
+
 # Blast radius for proximity scoring (km)
 _MAX_PROXIMITY_KM = 3000.0
 
@@ -94,6 +108,59 @@ def _site_criticality(site: dict) -> float:
     bu = site.get("business_unit")
     bu_weight = BU_CRITICALITY.get(bu, 0.5) if bu else 0.5
     return type_weight * bu_weight
+
+
+def _get_tier_multiplier(affected_sites: list[dict], event: dict) -> float:
+    """Determine the supply chain tier multiplier based on SUPPLY_GRAPH tiering.
+
+    For each affected site in the SUPPLY_GRAPH, checks if the event's region
+    overlaps with any supplier countries and what tier those inputs are.
+    Returns the highest (worst-case) multiplier found.
+
+    The event region is matched against supplier countries in the graph entry
+    to determine which inputs are at risk.
+    """
+    event_region = (event.get("region") or "").strip()
+    if not event_region or not affected_sites:
+        return TIER_MULTIPLIER["tier2"]  # no data → neutral
+
+    worst_multiplier = TIER_MULTIPLIER["tier3"]  # start optimistic
+
+    for site in affected_sites:
+        site_name = site.get("name", "")
+        graph_entry = SUPPLY_GRAPH.get(site_name)
+        if not graph_entry or "input_details" not in graph_entry:
+            continue
+
+        sup_countries = graph_entry.get("sup", [])
+
+        # Check if the event region matches any supplier country for this site.
+        # Region can be a country name ("Germany") or broad region ("Europe").
+        # We do a simple substring/containment check both ways.
+        region_lower = event_region.lower()
+        matched_country = False
+        for country in sup_countries:
+            country_lower = country.lower()
+            if country_lower in region_lower or region_lower in country_lower:
+                matched_country = True
+                break
+
+        if not matched_country:
+            continue
+
+        # This site sources from the disrupted region — check input tiers
+        for detail in graph_entry["input_details"]:
+            tier = detail.get("tier", 2)
+            sole = detail.get("sole_source", False)
+            if tier == 1 and sole:
+                return TIER_MULTIPLIER["tier1_sole"]  # max — early exit
+            elif tier == 1:
+                worst_multiplier = max(worst_multiplier, TIER_MULTIPLIER["tier1"])
+            elif tier == 2:
+                worst_multiplier = max(worst_multiplier, TIER_MULTIPLIER["tier2"])
+            # tier 3 already at baseline
+
+    return worst_multiplier
 
 
 def compute_severity_score(event: dict) -> dict[str, Any]:
@@ -175,8 +242,10 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
         asset_criticality = 0.0
 
     # ── 3. Supply Chain Impact (0-1) ──
-    # Based on number of affected sites and their types
-    # More manufacturing sites affected = higher impact
+    # Based on number of affected sites, their types, and supplier tiering.
+    # The tier multiplier amplifies or dampens impact based on whether
+    # affected sites source critical (Tier 1) or commodity (Tier 3) inputs
+    # from the disrupted region.
     mfg_count = sum(1 for s in affected_sites if s.get("type") == "mfg")
     total_affected = len(affected_sites)
 
@@ -188,6 +257,10 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
         # Manufacturing sites count double
         mfg_bonus = min(0.3, mfg_count * 0.1)
         supply_chain_impact = min(1.0, base_impact + mfg_bonus)
+
+    # Apply supplier tier multiplier to supply_chain_impact
+    tier_mult = _get_tier_multiplier(affected_sites, event)
+    supply_chain_impact = min(1.0, supply_chain_impact * tier_mult)
 
     # ── Combine into final score (0-100) ──
     # Weights: magnitude 30%, proximity 25%, criticality 25%, supply chain 20%
@@ -210,6 +283,85 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
     else:
         label = "Low"
 
+    # ── Practitioner dimensions ──
+    # Probability (0-1): based on trend and category likelihood
+    _CATEGORY_PROBABILITY: dict[str, float] = {
+        "Natural Disaster": 0.9,   # already occurring
+        "Geopolitical": 0.6,
+        "Logistics/Port": 0.7,
+        "Labour/Strike": 0.6,
+        "Trade Policy": 0.7,       # announced / legislated
+        "Currency": 0.5,
+        "Other": 0.5,
+        "Critical": 0.9,
+        "High": 0.7,
+        "Medium": 0.5,
+        "Low": 0.3,
+        "Tariffs": 0.8,
+        "Anti-Dumping": 0.6,
+        "Export Controls": 0.7,
+        "FTA": 0.4,
+        "Sanctions": 0.85,
+    }
+    trend_factor = 0.8 if trend == "escalating" else 0.2 if trend == "de-escalating" else 0.5
+    cat_prob = _CATEGORY_PROBABILITY.get(category, 0.5)
+    probability = round(min(1.0, trend_factor * 0.4 + cat_prob * 0.6), 3)
+
+    # Impact magnitude (0-1): site count, criticality, manufacturing weight
+    if total_affected == 0:
+        impact_magnitude = round(magnitude * 0.3, 3)  # residual from event magnitude
+    else:
+        site_scale = min(1.0, total_affected / 20.0)  # 20 sites = max
+        mfg_ratio = mfg_count / total_affected if total_affected else 0.0
+        impact_magnitude = round(min(1.0, 0.3 * site_scale + 0.4 * asset_criticality + 0.3 * mfg_ratio), 3)
+
+    # Velocity of onset
+    _CATEGORY_VELOCITY: dict[str, str] = {
+        "Natural Disaster": "immediate",
+        "Geopolitical": "days",
+        "Logistics/Port": "days",
+        "Labour/Strike": "days",
+        "Trade Policy": "weeks",
+        "Currency": "months",
+        "Other": "weeks",
+        "Critical": "immediate",
+        "High": "days",
+        "Medium": "weeks",
+        "Low": "months",
+        "Tariffs": "weeks",
+        "Anti-Dumping": "weeks",
+        "Export Controls": "days",
+        "FTA": "months",
+        "Sanctions": "days",
+    }
+    velocity = _CATEGORY_VELOCITY.get(category, "unknown")
+
+    # Recovery estimate
+    _BASE_RECOVERY: dict[str, str] = {
+        "Natural Disaster": "weeks",
+        "Geopolitical": "months",
+        "Logistics/Port": "weeks",
+        "Labour/Strike": "days",
+        "Trade Policy": "months",
+        "Currency": "months",
+        "Other": "weeks",
+        "Critical": "months",
+        "High": "weeks",
+        "Medium": "days",
+        "Low": "days",
+        "Tariffs": "months",
+        "Anti-Dumping": "months",
+        "Export Controls": "months",
+        "FTA": "weeks",
+        "Sanctions": "months",
+    }
+    recovery_estimate = _BASE_RECOVERY.get(category, "unknown")
+    # Upgrade recovery if score is very high
+    if score >= 75 and recovery_estimate in ("days", "hours"):
+        recovery_estimate = "weeks"
+    elif score >= 50 and recovery_estimate == "hours":
+        recovery_estimate = "days"
+
     return {
         "score": score,
         "label": label,
@@ -220,4 +372,8 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
             "supply_chain_impact": round(supply_chain_impact, 3),
         },
         "affected_site_count": total_affected,
+        "probability": probability,
+        "impact_magnitude": impact_magnitude,
+        "velocity": velocity,
+        "recovery_estimate": recovery_estimate,
     }

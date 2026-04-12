@@ -96,6 +96,7 @@ class TestScanStatusUpdatedDuringScan:
             patch("backend.app.services.scheduler.save_scan_record"),
             patch("backend.app.services.scheduler.upsert_event", return_value=True),
             patch("backend.app.services.scheduler.send_scan_alerts", new_callable=AsyncMock),
+            patch("backend.app.services.scheduler._INITIAL_DELAYS", {"disruptions": 0, "geopolitical": 0, "trade": 0}),
         ):
             from backend.app.services.scheduler import _scan_loop, _scan_status as status_ref
             import backend.app.services.scheduler as sched_mod
@@ -143,6 +144,7 @@ class TestScanStatusUpdatedDuringScan:
             patch("backend.app.services.scheduler.save_scan_record"),
             patch("backend.app.services.scheduler.upsert_event", return_value=True),
             patch("backend.app.services.scheduler.send_scan_alerts", new_callable=AsyncMock, return_value=0),
+            patch("backend.app.services.scheduler._INITIAL_DELAYS", {"disruptions": 0, "geopolitical": 0, "trade": 0}),
         ):
             import backend.app.services.scheduler as sched_mod
             from backend.app.services.scheduler import _scan_loop
@@ -182,6 +184,7 @@ class TestScanStatusUpdatedDuringScan:
             patch("backend.app.services.scheduler.save_scan_record"),
             patch("backend.app.services.scheduler.upsert_event"),
             patch("backend.app.services.scheduler.send_scan_alerts", new_callable=AsyncMock),
+            patch("backend.app.services.scheduler._INITIAL_DELAYS", {"disruptions": 0, "geopolitical": 0, "trade": 0}),
         ):
             import backend.app.services.scheduler as sched_mod
             from backend.app.services.scheduler import _scan_loop
