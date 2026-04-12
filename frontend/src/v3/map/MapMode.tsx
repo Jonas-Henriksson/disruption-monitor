@@ -767,6 +767,12 @@ export function MapMode({
           <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Sea Route</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width={12} height={12} style={{ flexShrink: 0 }}>
+            <line x1={0} y1={6} x2={12} y2={6} stroke="#c084fc" strokeWidth={0.8} strokeDasharray="1.5,1.5" opacity={0.5} />
+          </svg>
+          <span style={{ fontSize: 10, color: V3.legendText, fontFamily: V3.font }}>Air Route</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 12, display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: SUPPLIER_COLOR, opacity: 0.18, border: `1px solid ${SUPPLIER_COLOR}` }} />
           </div>

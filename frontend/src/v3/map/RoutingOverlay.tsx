@@ -181,15 +181,16 @@ export function RoutingOverlay({
       {showGhostRoutes && routePaths.map((d, i) => {
         if (!d) return null;
         const route = routes[i];
-        if (route.type !== 'sea') return null; // only sea routes as ghost
+        const isSea = route.type === 'sea';
         return (
           <path
             key={'ghost-' + i}
             d={d}
             fill="none"
-            stroke="#64748b"
-            strokeWidth={0.5}
-            strokeOpacity={ghostOpacity}
+            stroke={isSea ? '#64748b' : '#a78bfa'}
+            strokeWidth={isSea ? 0.5 : 0.3}
+            strokeOpacity={isSea ? ghostOpacity : ghostOpacity * 0.7}
+            strokeDasharray={isSea ? 'none' : '2,2'}
             pointerEvents="none"
           />
         );
