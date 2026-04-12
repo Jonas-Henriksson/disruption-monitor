@@ -366,7 +366,7 @@ async def check_claude_api_status() -> dict[str, str]:
         if settings.use_bedrock:
             # Bedrock health check: lightweight invoke attempt
             await client.messages.create(
-                model=settings.claude_model,
+                model=settings.resolved_model,
                 max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
@@ -490,7 +490,7 @@ async def _run_live_scan(
 
     # Build request kwargs — web_search tool is only available on direct Anthropic API, not Bedrock
     create_kwargs: dict[str, Any] = {
-        "model": settings.claude_model,
+        "model": settings.resolved_model,
         "max_tokens": 4096,
         "messages": [{"role": "user", "content": prompt}],
     }

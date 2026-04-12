@@ -84,7 +84,7 @@ async def generate_claude_narrative(event: dict) -> str:
     event_json = json.dumps(event_subset, indent=2, default=str)
 
     response = await client.messages.create(
-        model=settings.claude_model,
+        model=settings.resolved_model,
         max_tokens=1024,
         messages=[
             {

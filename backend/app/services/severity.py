@@ -12,6 +12,14 @@ import math
 from typing import Any
 
 from ..data import load_sites, load_suppliers, BU_MAP, SUPPLY_GRAPH
+from ..data.routes import (
+    AIR_ROUTES,
+    CHOKEPOINT_PROXIMITY_KM,
+    CHOKEPOINTS,
+    ORIGIN_ROUTE_INDEX,
+    ROUTE_WAYPOINT_PROXIMITY_KM,
+    SEA_ROUTES,
+)
 from ..utils.geo import haversine_km
 
 # ── Asset criticality weights by site type ──────────────────────
@@ -163,6 +171,98 @@ def _get_tier_multiplier(affected_sites: list[dict], event: dict) -> float:
     return worst_multiplier
 
 
+def _route_passes_near(route_pts: list[list[float]], lat: float, lng: float, threshold_km: float) -> bool:
+    """Check if any waypoint on a sea route is within threshold_km of (lat, lng)."""
+    for pt in route_pts:
+        if haversine_km(lat, lng, pt[0], pt[1]) <= threshold_km:
+            return True
+    return False
+
+
+def _air_route_passes_near(route: dict, lat: float, lng: float, threshold_km: float) -> bool:
+    """Check if either endpoint of an air route is within threshold_km of (lat, lng)."""
+    f = route["from"]
+    t = route["to"]
+    return (
+        haversine_km(lat, lng, f[0], f[1]) <= threshold_km
+        or haversine_km(lat, lng, t[0], t[1]) <= threshold_km
+    )
+
+
+def _routing_dependency_score(
+    event_lat: float, event_lng: float, affected_sites: list[dict]
+) -> tuple[float, list[str]]:
+    """Score routing dependency exposure for affected sites (0-1).
+
+    For each affected site, checks if any active sea/air routes originating
+    from that site's factory pass through the disruption area or through
+    a chokepoint near the disruption.
+
+    Returns:
+        (score, reasons): score 0-1 and list of human-readable reasons.
+    """
+    if not affected_sites or event_lat is None or event_lng is None:
+        return 0.0, []
+
+    # 1. Check if the disruption is near any chokepoint
+    affected_chokepoints: list[str] = []
+    for cp in CHOKEPOINTS:
+        dist = haversine_km(event_lat, event_lng, cp["lat"], cp["lng"])
+        if dist <= CHOKEPOINT_PROXIMITY_KM:
+            affected_chokepoints.append(cp["name"])
+
+    # 2. For each affected site, check if its routes pass through the disruption zone
+    site_exposure_scores: list[float] = []
+    reasons: list[str] = []
+    seen_routes: set[str] = set()
+
+    for site in affected_sites:
+        site_name = site.get("name", "")
+        # Look up routes originating from this site
+        route_entries = ORIGIN_ROUTE_INDEX.get(site_name, [])
+        if not route_entries:
+            continue
+
+        site_max = 0.0
+        for route_type, route_idx in route_entries:
+            if route_type == "sea":
+                route = SEA_ROUTES[route_idx]
+                if _route_passes_near(route["pts"], event_lat, event_lng, ROUTE_WAYPOINT_PROXIMITY_KM):
+                    label = route["label"]
+                    if label not in seen_routes:
+                        seen_routes.add(label)
+                        reasons.append(f"Sea route {label} passes through disruption zone")
+                    site_max = max(site_max, 0.9)
+            else:
+                route = AIR_ROUTES[route_idx]
+                if _air_route_passes_near(route, event_lat, event_lng, ROUTE_WAYPOINT_PROXIMITY_KM):
+                    label = route["label"]
+                    if label not in seen_routes:
+                        seen_routes.add(label)
+                        reasons.append(f"Air route {label} passes through disruption zone")
+                    site_max = max(site_max, 0.7)
+
+        # Chokepoint exposure: if the disruption is near a chokepoint and
+        # this site has routes that transit through that chokepoint region
+        if affected_chokepoints and route_entries:
+            for cp_name in affected_chokepoints:
+                if cp_name not in [r for r in reasons]:
+                    reasons.append(f"Chokepoint {cp_name} near disruption affects {site_name}")
+                site_max = max(site_max, 0.8)
+
+        if site_max > 0:
+            site_exposure_scores.append(site_max)
+
+    if not site_exposure_scores:
+        return 0.0, []
+
+    # Blend: max exposure weighted 70%, mean 30%
+    score = 0.7 * max(site_exposure_scores) + 0.3 * (
+        sum(site_exposure_scores) / len(site_exposure_scores)
+    )
+    return min(1.0, score), reasons
+
+
 def compute_severity_score(event: dict) -> dict[str, Any]:
     """Compute an algorithmic severity score for a disruption event.
 
@@ -223,6 +323,12 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
                     "business_unit": site.get("business_unit"),
                 })
 
+    # ── Routing dependency analysis ──
+    routing_score = 0.0
+    routing_reasons: list[str] = []
+    if lat is not None and lng is not None and affected_sites:
+        routing_score, routing_reasons = _routing_dependency_score(lat, lng, affected_sites)
+
     if affected_sites:
         # Proximity: weighted average of proximity scores, biased toward closest
         prox_scores = []
@@ -235,7 +341,16 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
             crit_scores.append(crit * prox)  # weight criticality by proximity
 
         # Use max proximity (closest site matters most) blended with mean
-        proximity = 0.7 * max(prox_scores) + 0.3 * (sum(prox_scores) / len(prox_scores))
+        haversine_proximity = 0.7 * max(prox_scores) + 0.3 * (sum(prox_scores) / len(prox_scores))
+
+        # Blend haversine proximity with routing dependency:
+        # If routing dependency exists, weight it 70% routing / 30% haversine
+        # This ensures port closures score high for dependent factories even if far away
+        if routing_score > 0:
+            proximity = 0.70 * routing_score + 0.30 * haversine_proximity
+        else:
+            proximity = haversine_proximity
+
         asset_criticality = max(crit_scores)  # worst-case criticality
     else:
         proximity = 0.0
@@ -362,7 +477,7 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
     elif score >= 50 and recovery_estimate == "hours":
         recovery_estimate = "days"
 
-    return {
+    result = {
         "score": score,
         "label": label,
         "components": {
@@ -377,3 +492,12 @@ def compute_severity_score(event: dict) -> dict[str, Any]:
         "velocity": velocity,
         "recovery_estimate": recovery_estimate,
     }
+
+    # Add routing dependency context when present
+    if routing_reasons:
+        result["routing_dependency"] = {
+            "score": round(routing_score, 3),
+            "reasons": routing_reasons,
+        }
+
+    return result

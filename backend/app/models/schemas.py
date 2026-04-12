@@ -179,6 +179,13 @@ class SeverityComponents(BaseModel):
     supply_chain_impact: float = Field(ge=0, le=1, description="Affected routes and supplier density (0-1)")
 
 
+class RoutingDependency(BaseModel):
+    """Routing dependency context explaining why proximity scored high."""
+
+    score: float = Field(ge=0, le=1, description="Routing dependency score (0-1)")
+    reasons: list[str] = Field(description="Human-readable reasons for the routing dependency score")
+
+
 class ComputedSeverity(BaseModel):
     """Algorithmic severity score computed by the severity engine.
 
@@ -201,6 +208,10 @@ class ComputedSeverity(BaseModel):
     impact_magnitude: float = Field(default=0.0, ge=0, le=1, description="Scale of impact on SKF operations (0-1)")
     velocity: str = Field(default="unknown", description="Speed of onset: immediate, days, weeks, months")
     recovery_estimate: str = Field(default="unknown", description="Expected recovery horizon: hours, days, weeks, months")
+    # Routing dependency context (present when route-based scoring was used)
+    routing_dependency: Optional[RoutingDependency] = Field(
+        None, description="Routing dependency context — explains why proximity scored high due to logistics route exposure"
+    )
 
 
 # ── Disruption events & scanning ────────────────────────────────

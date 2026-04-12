@@ -46,8 +46,8 @@ import { TimelineStrip } from "./components/TimelineStrip";
 import { VersionToggle } from "./VersionToggle";
 
 interface V2AppProps {
-  version: 'v1' | 'v2';
-  onVersionChange: (v: 'v1' | 'v2') => void;
+  version: 'v1' | 'v2' | 'v3';
+  onVersionChange: (v: 'v1' | 'v2' | 'v3') => void;
 }
 
 /** Inner component that uses theme context */

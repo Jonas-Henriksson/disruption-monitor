@@ -28,7 +28,16 @@ class Settings(BaseSettings):
     # Claude model for scanning
     # Direct API: claude-sonnet-4-20250514
     # Bedrock:    eu.anthropic.claude-sonnet-4-6
-    claude_model: str = os.environ.get("TARS_CLAUDE_MODEL", "") or os.environ.get("CLAUDE_MODEL", "") or "claude-sonnet-4-20250514"
+    claude_model: str = os.environ.get("TARS_CLAUDE_MODEL", "") or os.environ.get("CLAUDE_MODEL", "") or ""
+
+    @property
+    def resolved_model(self) -> str:
+        """Return the correct model ID for the active backend (direct API vs Bedrock)."""
+        if self.claude_model:
+            return self.claude_model
+        if self.use_bedrock:
+            return "eu.anthropic.claude-opus-4-6-v1"
+        return "claude-sonnet-4-20250514"
 
     # Database — on Lambda, use /tmp/ (writable, persists across warm invocations)
     db_path: str = os.environ.get("TARS_DB_PATH", "") or (

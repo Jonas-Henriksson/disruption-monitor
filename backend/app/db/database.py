@@ -1168,6 +1168,16 @@ def get_weekly_summary(days: int = 7) -> dict:
                ORDER BY t.due_date ASC""",
         ).fetchall()
 
+        # ── Overdue actions ──
+        overdue_action_rows = conn.execute(
+            """SELECT a.*, e.event_title FROM actions a
+               LEFT JOIN events e ON a.event_id = e.id
+               WHERE a.due_date IS NOT NULL
+                 AND a.due_date < datetime('now', 'utc')
+                 AND a.status NOT IN ('completed', 'dismissed')
+               ORDER BY a.due_date ASC""",
+        ).fetchall()
+
         # ── Top regions ──
         region_rows = conn.execute(
             "SELECT region, COUNT(*) as cnt FROM events WHERE status IN ('active', 'watching') GROUP BY region ORDER BY cnt DESC"
@@ -1231,11 +1241,19 @@ def get_weekly_summary(days: int = 7) -> dict:
             "escalated_events": [_event_payload(r) for r in escalated_rows],
             "resolved_events": [_event_payload(r) for r in resolved_rows],
             "overdue_tickets": [dict(r) for r in overdue_rows],
+            "overdue_actions": [dict(r) for r in overdue_action_rows],
             "top_regions": top_regions,
             "week_over_week_delta": {
                 "new": _delta(cur_new, prev_new),
                 "resolved": _delta(cur_resolved, prev_resolved),
                 "active_total": _delta(cur_active, prev_active),
+                "severity": {
+                    sev: _delta(
+                        severity_snapshot.get(sev, 0),
+                        0,  # Previous-period severity not tracked yet
+                    )
+                    for sev in ("Critical", "High", "Medium", "Low")
+                },
             },
         }
 

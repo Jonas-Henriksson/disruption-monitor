@@ -1,19 +1,25 @@
+/**
+ * V3 VersionToggle — 3-way toggle between v1, v2, and v3 UI versions.
+ * Used inside V3App; mirrors the V2 VersionToggle pattern.
+ */
+
 import { useCallback } from 'react';
 
 type UIVersion = 'v1' | 'v2' | 'v3';
 
-/**
- * Floating pill button to switch between v1, v2, and v3 UI.
- * Self-contained: reads/writes localStorage and reloads the page.
- */
-export function VersionToggle({ version }: { version: UIVersion }) {
+export interface VersionToggleProps {
+  version: UIVersion;
+  onVersionChange: (v: UIVersion) => void;
+}
+
+export function VersionToggle({ version, onVersionChange }: VersionToggleProps) {
   const handleSwitch = useCallback((target: UIVersion) => {
     if (target === version) return;
     try {
       localStorage.setItem('ui-version', target);
     } catch { /* ignore */ }
-    window.location.reload();
-  }, [version]);
+    onVersionChange(target);
+  }, [version, onVersionChange]);
 
   const versions: UIVersion[] = ['v1', 'v2', 'v3'];
 

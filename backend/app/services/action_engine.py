@@ -20,6 +20,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from ..data import SUPPLY_GRAPH
+
 logger = logging.getLogger(__name__)
 
 
@@ -212,11 +214,120 @@ def generate_actions_for_event(event: dict) -> list[dict]:
     # Sort by priority (critical first)
     actions = sorted(candidates.values(), key=lambda a: priority_rank.get(a["priority"], 2))
 
+    # ── Supplier-specific actions from SUPPLY_GRAPH ──
+    # These are appended after generic actions, providing concrete
+    # guidance about which inputs/sites need attention.
+    supplier_actions = _generate_supplier_specific_actions(event)
+    if supplier_actions:
+        # Add supplier-specific actions that don't duplicate generic ones.
+        # They use the same action_type but have site-specific titles,
+        # so we always include them as supplementary actions.
+        actions.extend(sorted(
+            supplier_actions,
+            key=lambda a: priority_rank.get(a["priority"], 2),
+        ))
+
     logger.info(
-        "Generated %d actions for event %s (score=%.1f)",
-        len(actions), event_id, score,
+        "Generated %d actions for event %s (score=%.1f, %d supplier-specific)",
+        len(actions), event_id, score, len(supplier_actions),
     )
     return actions
+
+
+def _generate_supplier_specific_actions(event: dict) -> list[dict]:
+    """Generate supplier-specific actions by cross-referencing SUPPLY_GRAPH.
+
+    For each affected site in the event, checks SUPPLY_GRAPH for:
+    - sole_source inputs from the disrupted region -> urgent backup supplier action
+    - non-sole-source inputs -> review alternatives action
+    """
+    affected_sites = event.get("affected_sites", [])
+    event_region = (event.get("region") or "").strip()
+    event_id = event.get("id", "")
+
+    if not affected_sites or not event_region:
+        return []
+
+    actions: list[dict] = []
+    region_lower = event_region.lower()
+
+    for site in affected_sites:
+        site_name = site["name"] if isinstance(site, dict) else str(site)
+        graph_entry = SUPPLY_GRAPH.get(site_name)
+        if not graph_entry or "input_details" not in graph_entry:
+            continue
+
+        sup_countries = graph_entry.get("sup", [])
+
+        # Check if the event region matches any supplier country for this site
+        matched_countries: list[str] = []
+        for country in sup_countries:
+            country_lower = country.lower()
+            if country_lower in region_lower or region_lower in country_lower:
+                matched_countries.append(country)
+
+        if not matched_countries:
+            continue
+
+        # This site sources from the disrupted region -- check input tiers
+        for detail in graph_entry["input_details"]:
+            input_name = detail.get("name", "Unknown input")
+            tier = detail.get("tier", 2)
+            sole = detail.get("sole_source", False)
+
+            if tier == 1 and sole:
+                actions.append({
+                    "event_id": event_id,
+                    "action_type": "activate_backup_supplier",
+                    "title": f"Qualify backup supplier for {input_name} at {site_name}",
+                    "description": (
+                        f"URGENT: {input_name} at {site_name} is sole-sourced from "
+                        f"{', '.join(matched_countries)}. Identify and qualify alternative "
+                        f"suppliers immediately. Current source is in the disrupted region "
+                        f"with no backup. Verify capacity, lead times, and quality "
+                        f"certifications before switching."
+                    ),
+                    "assignee_hint": "Procurement",
+                    "owner_hint": "Procurement",
+                    "priority": "critical",
+                    "due_date": _compute_due_date("critical"),
+                    "sole_source": True,
+                    "input_name": input_name,
+                    "site_name": site_name,
+                })
+            elif tier == 1:
+                # Count how many supplier countries exist for this site
+                n_sources = len(sup_countries)
+                actions.append({
+                    "event_id": event_id,
+                    "action_type": "activate_backup_supplier",
+                    "title": f"Review alternative suppliers for {input_name} at {site_name}",
+                    "description": (
+                        f"{input_name} at {site_name} is Tier 1 (critical) and partially "
+                        f"sourced from {', '.join(matched_countries)}. "
+                        f"{n_sources} source countries currently available. "
+                        f"Verify that alternative suppliers in other countries can absorb "
+                        f"volume. Expedite qualification if needed."
+                    ),
+                    "assignee_hint": "Procurement",
+                    "owner_hint": "Procurement",
+                    "priority": "high",
+                    "due_date": _compute_due_date("high"),
+                    "sole_source": False,
+                    "input_name": input_name,
+                    "site_name": site_name,
+                })
+
+    # Deduplicate: if same input+site appears multiple times, keep highest priority
+    seen: dict[str, dict] = {}
+    priority_rank = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+    for action in actions:
+        key = f"{action.get('input_name', '')}|{action.get('site_name', '')}"
+        existing = seen.get(key)
+        if existing is None or priority_rank.get(action["priority"], 2) < priority_rank.get(existing["priority"], 2):
+            seen[key] = action
+
+    return list(seen.values())
 
 
 def _contextualize_description(base_description: str, event: dict) -> str:
