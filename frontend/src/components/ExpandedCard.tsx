@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ScanItem, Severity, ImpactResult, SupplierAlternativesResponse } from '../types';
 import { fetchSupplierAlternatives, saveNarrativeEdit } from '../services/api';
 import { FM, F, SUPPLIERS } from '../data';
+import { TYP } from '../tokens';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import { EventActions } from './EventActions';
 
@@ -160,9 +161,9 @@ function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urge
           borderBottom: hasDimensions ? 'none' : '1px solid #14243e',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM, whiteSpace: 'nowrap' }}>AI: {sv}</span>
+            <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM, whiteSpace: 'nowrap' }}>AI: {sv}</span>
             <span style={{ color: '#1e3050', fontSize: 10 }}>{'\u007C'}</span>
-            <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: scoreColor, fontFamily: FM, whiteSpace: 'nowrap' }}>Algorithm: {Math.round(cs.score)}/100</span>
+            <span style={{ ...TYP.label, color: scoreColor, fontFamily: FM, whiteSpace: 'nowrap' }}>Algorithm: {Math.round(cs.score)}/100</span>
           </div>
           <div style={{ width: 80, height: 6, background: '#0d1525', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
             <div style={{ width: `${Math.min(100, cs.score)}%`, height: '100%', background: scoreColor, borderRadius: 3, transition: 'width 0.3s' }} />
@@ -218,7 +219,7 @@ function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urge
 
     {!ig && 'description' in d && <p style={{ color: '#94a3b8', margin: '0 0 10px', lineHeight: 1.5 }}>{d.description as string}</p>}
     {ig && 'this_week' in d && <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}><span style={{ fontSize: 10 }}>{'\ud83d\udcc5'}</span><span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>This Week</span></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}><span style={{ fontSize: 10 }}>{'\ud83d\udcc5'}</span><span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>This Week</span></div>
       <div style={{ color: '#c8d6e5', fontSize: 11 }}>{(d as { this_week: string }).this_week}</div>
     </div>}
 
@@ -229,7 +230,7 @@ function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urge
       return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
           <span style={{ fontSize: 10 }}>{it ? '\ud83d\udcb0' : '\ud83c\udfed'}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
           <span style={{ fontSize: 8, color: '#2a3d5c', fontStyle: 'italic', marginLeft: 'auto' }}>AI-generated</span>
         </div>
         <div style={{ color: '#c8d6e5', fontSize: 11, lineHeight: 1.5 }}>{aiSrc}</div>
@@ -243,7 +244,7 @@ function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urge
         return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
             <span style={{ fontSize: 10 }}>{'\u26A1'}</span>
-            <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
+            <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
             <span style={{ fontSize: 7, color: '#22c55e', marginLeft: 'auto', fontFamily: FM }}>Backend</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -280,7 +281,7 @@ function OverviewTab({ d, dis, impact, sv, co, ig, it, rec, priorityColors, urge
       return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
           <span style={{ fontSize: 10 }}>{'\u26A1'}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>{label}</span>
         </div>
         {steps.length > 1 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -339,7 +340,7 @@ function ImpactTab({ d, impact, co, rec, altLoading, altData }: ImpactTabProps) 
       return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
           <span style={{ fontSize: 10 }}>{'\ud83d\udd17'}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Impact Chain</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Impact Chain</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {chainSteps.map((step, si) => (
@@ -357,7 +358,7 @@ function ImpactTab({ d, impact, co, rec, altLoading, altData }: ImpactTabProps) 
                   {si < chainSteps.length - 1 && <div style={{ width: 1.5, height: 16, background: step.color, opacity: 0.4, marginTop: 2, marginBottom: 2 }} />}
                 </div>
                 <div style={{ flex: 1, paddingTop: 1 }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: step.color, fontFamily: FM, marginBottom: 2 }}>
+                  <div style={{ ...TYP.label, color: step.color, fontFamily: FM, marginBottom: 2 }}>
                     {step.label}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: si < chainSteps.length - 1 ? 4 : 0 }}>
@@ -388,7 +389,7 @@ function ImpactTab({ d, impact, co, rec, altLoading, altData }: ImpactTabProps) 
     {(altLoading || altData) && <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: altData ? 8 : 0 }}>
         <span style={{ fontSize: 10 }}>{'\u26A1'}</span>
-        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Backup Regions</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Backup Regions</span>
         {altData && <span style={{ fontSize: 8, fontFamily: FM, color: '#1e3050', marginLeft: 'auto' }}>{altData.alternatives.length} options</span>}
       </div>
       {altLoading && !altData && <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
@@ -424,7 +425,7 @@ function ImpactTab({ d, impact, co, rec, altLoading, altData }: ImpactTabProps) 
       return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: '1px solid #14243e' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
           <span style={{ fontSize: 10 }}>{'\ud83c\udfaf'}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Confidence & Sources</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Confidence & Sources</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: rec.sources?.length ? 6 : 0 }}>
           <div style={{ flex: 1, height: 4, background: '#0d1525', borderRadius: 2, overflow: 'hidden' }}>
@@ -468,7 +469,7 @@ function BriefingTab({ d, dis, recId, backendId, copiedId, setCopiedId }: Briefi
       return <div style={{ background: '#060a12', borderRadius: 6, padding: '8px 10px', marginBottom: 8, border: `1px solid ${narrativeEditing ? '#2563eb44' : '#14243e'}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: narrative ? 8 : 0 }}>
           <span style={{ fontSize: 10 }}>{'\ud83d\udcdd'}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Executive Briefing</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Executive Briefing</span>
           {isEdited && !narrativeEditing && <span style={{ background: '#2563eb22', color: '#60a5fa', padding: '1px 6px', borderRadius: 3, fontSize: 7, fontWeight: 700, fontFamily: FM, letterSpacing: 0.5, border: '1px solid #2563eb33' }}>Edited</span>}
           <div style={{ flex: 1 }} />
           {/* Edit / Save / Cancel buttons */}
@@ -588,7 +589,7 @@ function BriefingTab({ d, dis, recId, backendId, copiedId, setCopiedId }: Briefi
             const headerMatch = trimmed.match(/^(SITUATION|EXPOSURE|RECOMMENDED ACTIONS|OUTLOOK|IMPACT|RISK|TIMELINE|RECOVERY|ACTIONS?):?\s*$/i);
             if (headerMatch) {
               const hc: Record<string, string> = { SITUATION: '#ef4444', EXPOSURE: '#f59e0b', 'RECOMMENDED ACTIONS': '#22c55e', ACTIONS: '#22c55e', OUTLOOK: '#3b82f6', IMPACT: '#f59e0b', RISK: '#ef4444', TIMELINE: '#3b82f6', RECOVERY: '#22c55e' };
-              return <div key={li} style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: hc[headerMatch[1].toUpperCase()] || '#94a3b8', fontFamily: FM, marginTop: li > 0 ? 10 : 0, marginBottom: 4 }}>{headerMatch[1]}</div>;
+              return <div key={li} style={{ ...TYP.label, color: hc[headerMatch[1].toUpperCase()] || '#94a3b8', fontFamily: FM, marginTop: li > 0 ? 10 : 0, marginBottom: 4 }}>{headerMatch[1]}</div>;
             }
             if (trimmed.startsWith('\u2022') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
               const text = trimmed.replace(/^[\u2022\-*]\s*/, '');

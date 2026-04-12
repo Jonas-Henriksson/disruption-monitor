@@ -37,4 +37,13 @@ button:focus-visible,[data-click]:focus-visible,[tabindex]:focus-visible{outline
 button:focus:not(:focus-visible){outline:none}
 .sc-left-panel{transition:width 280ms cubic-bezier(.16,1,.3,1),min-width 280ms cubic-bezier(.16,1,.3,1)}
 .sc-right-panel{transition:width 280ms cubic-bezier(.16,1,.3,1),min-width 280ms cubic-bezier(.16,1,.3,1)}
+@media(max-width:767px){
+  .sc-left-panel,.sc-right-panel{width:100%!important;min-width:0!important;border:none!important}
+  .sc-s::-webkit-scrollbar{display:none}
+  .sc-s{-ms-overflow-style:none;scrollbar-width:none}
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+}
+@media(min-width:768px) and (max-width:1023px){
+  .sc-left-panel{display:none!important}
+}
 `;

@@ -7,6 +7,7 @@ import { getSev, getTrend } from '../utils/scan';
 import type { ScanItem, Severity } from '../types';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import type { useFilterState } from '../hooks/useFilterState';
+import type { Viewport } from '../hooks/useMediaQuery';
 
 type DisruptionState = ReturnType<typeof useDisruptionState>;
 type FilterState = ReturnType<typeof useFilterState>;
@@ -94,9 +95,10 @@ interface KPIStripProps {
   kpi: KpiData;
   mode: DisruptionState['mode'];
   fil: FilterState;
+  viewport?: Viewport;
 }
 
-export function KPIStrip({ kpi, mode, fil }: KPIStripProps) {
+export function KPIStrip({ kpi, mode, fil, viewport = 'desktop' }: KPIStripProps) {
   const deltas = useKpiDeltas(kpi);
 
   const criticalCount = kpi.sevCounts.Critical || 0;
@@ -158,10 +160,38 @@ export function KPIStrip({ kpi, mode, fil }: KPIStripProps) {
   const stripBorder = hasCritical ? `2px solid ${ACCENT.red}55` : 'none';
   const muted = !hasCritical && !hasHigh;
 
+  const isMobile = viewport === 'mobile';
+  const isTablet = viewport === 'tablet';
+
   return (
-    <div style={{ background: stripBg, borderTop: stripBorder, borderBottom: `1px solid ${B.subtle}`, padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, zIndex: 26 }}>
+    <div style={{
+      background: stripBg,
+      borderTop: stripBorder,
+      borderBottom: `1px solid ${B.subtle}`,
+      padding: isMobile ? '6px 10px' : '5px 16px',
+      display: isMobile ? 'grid' : 'flex',
+      ...(isMobile ? {
+        gridTemplateColumns: '1fr 1fr',
+        gap: 6,
+      } : isTablet ? {
+        alignItems: 'center',
+        gap: 8,
+        overflowX: 'auto' as const,
+        WebkitOverflowScrolling: 'touch' as const,
+      } : {
+        alignItems: 'center',
+        gap: 14,
+      }),
+      flexShrink: 0,
+      zIndex: 26,
+    }}>
       {/* PRIMARY TIER: Severity counts — clickable filters, visual hierarchy */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        ...(isMobile ? { gridColumn: '1 / -1', overflowX: 'auto' as const, WebkitOverflowScrolling: 'touch' as const, paddingBottom: 2 } : {}),
+      }}>
         {(['Critical', 'High', 'Medium', 'Low'] as Severity[]).map(sev => {
           const count = kpi.sevCounts[sev];
           if (!count) return null;
@@ -173,10 +203,13 @@ export function KPIStrip({ kpi, mode, fil }: KPIStripProps) {
           const ds = dotSize(sev, count);
           const bp = btnPadding(sev, count);
           return <button key={sev} onClick={() => fil.setSevFilter(active ? null : sev)} style={{
-            display: 'flex', alignItems: 'center', gap: isCritical ? 8 : 5, padding: bp,
+            display: 'flex', alignItems: 'center', gap: isCritical ? 8 : 5,
+            padding: isMobile ? '8px 12px' : bp,
+            minHeight: isMobile ? 44 : undefined,
             background: active ? color + '22' : (isCritical ? color + '0a' : 'transparent'),
             border: `1px solid ${active ? color + '55' : (isCritical ? color + '30' : B.subtle)}`,
             borderRadius: isCritical ? 8 : 6, cursor: 'pointer', transition: 'all .15s',
+            flexShrink: 0,
           }}>
             <div className={isCritical ? 'sc-live-dot' : undefined} style={{
               width: ds, height: ds, borderRadius: '50%', background: color,
@@ -215,10 +248,10 @@ export function KPIStrip({ kpi, mode, fil }: KPIStripProps) {
         {fil.sevFilter && <button onClick={() => fil.setSevFilter(null)} style={{ padding: '3px 8px', border: `1px solid ${B.subtle}`, borderRadius: 4, background: 'transparent', color: T.muted, fontSize: 9, cursor: 'pointer', fontFamily: FM }}>Clear</button>}
       </div>
 
-      <div style={{ width: 1, height: 22, background: B.subtle, opacity: 0.6 }} />
+      {!isMobile && <div style={{ width: 1, height: 22, background: B.subtle, opacity: 0.6 }} />}
 
-      {/* SECONDARY TIER: Affected assets — smaller, supporting */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: FM, fontSize: 9, opacity: muted ? 0.6 : 0.85 }}>
+      {/* SECONDARY TIER: Affected assets — smaller, supporting (hidden on mobile) */}
+      <div style={{ display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 10, fontFamily: FM, fontSize: 9, opacity: muted ? 0.6 : 0.85 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span style={{ color: ACCENT.red, fontWeight: 600, fontSize: 10 }}>{kpi.affectedMfgSites}</span>
           <span style={{ color: B.chokepoint, fontSize: 8 }}>MFG sites</span>
@@ -229,24 +262,24 @@ export function KPIStrip({ kpi, mode, fil }: KPIStripProps) {
         </div>
       </div>
 
-      <div style={{ width: 1, height: 16, background: B.subtle, opacity: 0.4 }} />
+      {!isMobile && <div style={{ width: 1, height: 16, background: B.subtle, opacity: 0.4 }} />}
 
-      {/* TERTIARY TIER: Risk trend — smallest, contextual */}
+      {/* TERTIARY TIER: Risk trend — smallest, contextual (hidden on mobile) */}
       {(() => {
         const trendColor = kpi.trend === 'up' ? ACCENT.red : kpi.trend === 'down' ? ACCENT.green : '#475569';
         const trendIcon = kpi.trend === 'up' ? '\u25B2' : kpi.trend === 'down' ? '\u25BC' : '\u25C6';
         const trendLabel = kpi.trend === 'up' ? 'Escalating' : kpi.trend === 'down' ? 'Improving' : 'Stable';
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, opacity: muted ? 0.45 : 0.65 }}>
+          <div style={{ display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 3, opacity: muted ? 0.45 : 0.65 }}>
             <Badge label={`${trendIcon} ${trendLabel}`} color={trendColor} bg="transparent" border="transparent" size="sm" style={{ fontWeight: 500, letterSpacing: '0.5px', padding: 0, border: 'none' }} />
           </div>
         );
       })()}
 
-      <div style={{ flex: 1 }} />
+      {!isMobile && <div style={{ flex: 1 }} />}
 
-      {/* Total — far right, muted */}
-      <div style={{ fontFamily: FM, fontSize: 8, color: T.dim, opacity: 0.7 }}>
+      {/* Total — far right, muted (hidden on mobile) */}
+      <div style={{ display: isMobile ? 'none' : 'block', fontFamily: FM, fontSize: 8, color: T.dim, opacity: 0.7 }}>
         {kpi.total} {mode === 'trade' ? 'trade' : mode === 'geopolitical' ? 'risks' : 'events'}
       </div>
     </div>

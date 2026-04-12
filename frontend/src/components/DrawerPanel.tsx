@@ -5,6 +5,7 @@ import {
   STATUS_CFG, TEAM, TEAM_MAP,
   SITES, ROUTES, SUPPLY_GRAPH,
 } from '../data';
+import { TYP } from '../tokens';
 import { relTime, eventId } from '../utils/format';
 import { computeImpactWithGraph } from '../utils/impact';
 import { getSev, getEvent, getRegion, getTrend } from '../utils/scan';
@@ -12,6 +13,7 @@ import { WhatChangedBanner } from './WhatChangedBanner';
 import { ExpandedCard } from './ExpandedCard';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import type { useFilterState } from '../hooks/useFilterState';
+import type { Viewport } from '../hooks/useMediaQuery';
 
 type DisruptionState = ReturnType<typeof useDisruptionState>;
 type FilterState = ReturnType<typeof useFilterState>;
@@ -21,9 +23,12 @@ interface DrawerPanelProps {
   fil: FilterState;
   open: boolean;
   onToggle: () => void;
+  viewport?: Viewport;
+  /** When true, panel renders without its own outer wrapper (embedded in bottom sheet) */
+  embedded?: boolean;
 }
 
-export function DrawerPanel({ dis, fil, open, onToggle }: DrawerPanelProps) {
+export function DrawerPanel({ dis, fil, open, onToggle, viewport = 'desktop', embedded = false }: DrawerPanelProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -122,12 +127,88 @@ export function DrawerPanel({ dis, fil, open, onToggle }: DrawerPanelProps) {
     }
   }, [dis.items, fil.groupBy, dis.registry, dis.tickets, fil.assignFilter, fil.sevFilter]);
 
+  const isMobileEmbed = embedded && viewport === 'mobile';
+
+  // In embedded (mobile bottom sheet) mode, render content directly without the outer shell
+  if (isMobileEmbed) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+        {/* Drawer header */}
+        <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid #14243e', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {dis.mode === 'disruptions' ? 'Active Disruptions' : dis.mode === 'trade' ? 'Trade & Tariff Brief' : 'Geopolitical Brief'}
+              {dis.items && <span style={{ fontFamily: FM, fontSize: 10, fontWeight: 600, color: '#4a6080', background: '#0d1525', border: '1px solid #1e3050', borderRadius: 4, padding: '2px 6px' }}>{dis.items.length}</span>}
+            </div>
+            {dis.sTime && <div style={{ fontSize: 9, color: '#2a3d5c', fontFamily: FM, marginTop: 4 }}>Scanned {relTime(dis.sTime)}</div>}
+          </div>
+        </div>
+
+        {/* Group by toggle */}
+        {dis.items && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderBottom: '1px solid #14243e' }}>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Group by</span>
+          <div style={{ display: 'flex', background: '#0a1220', borderRadius: 6, border: '1px solid #14243e', overflow: 'hidden' }}>
+            <button onClick={() => fil.setGroupBy('severity')} style={{ padding: '6px 12px', fontSize: 10, fontWeight: 600, fontFamily: FM, border: 'none', cursor: 'pointer', background: fil.groupBy === 'severity' ? '#1e3050' : 'transparent', color: fil.groupBy === 'severity' ? '#e2e8f0' : '#4a6080', transition: 'all .15s', minHeight: 44 }}>Severity</button>
+            <button onClick={() => fil.setGroupBy('region')} style={{ padding: '6px 12px', fontSize: 10, fontWeight: 600, fontFamily: FM, border: 'none', cursor: 'pointer', background: fil.groupBy === 'region' ? '#1e3050' : 'transparent', color: fil.groupBy === 'region' ? '#e2e8f0' : '#4a6080', transition: 'all .15s', minHeight: 44 }}>Region</button>
+          </div>
+        </div>}
+
+        {/* Grouped items list */}
+        {dis.items && <div ref={scrollRef} className="sc-s" style={{ flex: 1, overflow: 'auto', padding: '4px 0', WebkitOverflowScrolling: 'touch' }}>
+          <WhatChangedBanner items={dis.items} registry={dis.registry} sTime={dis.sTime} onScrollTo={handleScrollToCard} />
+          {Object.entries(grouped).map(([grp, ri_items], ri) => {
+            const isSev = fil.groupBy === 'severity';
+            const hdrColor = isSev ? (SEV[grp as Severity] || '#64748b') : (RMC[grp] || '#64748b');
+            return <div key={grp} style={{ padding: '8px 16px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 0 4px' }}>
+                <div style={{ width: 3, height: 16, borderRadius: 2, background: hdrColor }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: hdrColor, textTransform: 'uppercase', letterSpacing: 1.5, fontFamily: FM }}>{grp}</span>
+                <span style={{ fontFamily: FM, fontSize: 9, color: '#2a3d5c' }}>{ri_items.length}</span>
+                <div style={{ flex: 1, height: 1, background: '#14243e' }} />
+              </div>
+              {ri_items.map((d: ScanItem & { _i: number }, ci: number) => {
+                const idx = d._i;
+                const is = dis.sel === idx;
+                const sv = getSev(d);
+                const co = SEV[sv] || '#6b7280';
+                const trend = getTrend(d);
+                const ta = dis.mode === 'geopolitical' ? (('trend_arrow' in d ? d.trend_arrow : '') as string) : (trend === 'Escalating' ? '\u2197' : trend === 'De-escalating' ? '\u2198' : trend === 'New' ? '\u26A1' : '\u2192');
+                const tc = ta === '\u2197' || ta === '\u26A1' ? '#ef4444' : ta === '\u2198' ? '#22c55e' : '#64748b';
+                const eid = eventId(d as { event?: string; risk?: string; region?: string });
+                const reg = dis.registry[eid] || {};
+
+                return <div key={idx} data-card-idx={idx} className="sc-ce" onClick={() => dis.setSel(is ? null : idx)}
+                  style={{ background: is ? '#0d1830' : '#0a1220', border: `1px solid ${is ? co + '44' : '#14243e'}`, borderRadius: 8, padding: '12px 14px', cursor: 'pointer', transition: 'all .18s', marginBottom: 6, animationDelay: `${ri * 60 + ci * 40}ms`, minHeight: 44 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                        <span style={{ fontSize: 12 }}>{CAT[('category' in d ? d.category : '') as string] || '\u26A0\uFE0F'}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{getEvent(d)}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {isSev ? <span style={{ background: '#4a608022', color: '#4a6080', padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 500, fontFamily: FM, border: '1px solid #4a608033' }}>{getRegion(d)}</span>
+                          : <span style={{ background: SBG[sv] || '#333', color: co, padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, fontFamily: FM, border: `1px solid ${co}33` }}>{sv}</span>}
+                        <span style={{ background: '#0d1525', color: tc, padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 600, fontFamily: FM, border: `1px solid ${tc}22`, display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ fontSize: 13, lineHeight: 1 }}>{ta}</span>{trend}</span>
+                      </div>
+                    </div>
+                    <span style={{ color: '#2a3d5c', fontSize: 12, transform: is ? 'rotate(180deg)' : '', transition: 'transform .2s' }}>{'\u25BE'}</span>
+                  </div>
+                  {is && <ExpandedCard d={d} dis={dis} impact={computeImpactWithGraph(d, ROUTES, SUPPLY_GRAPH)} eid={eid} sv={sv as Severity} co={co} reg={reg} copiedId={copiedId} setCopiedId={setCopiedId} />}
+                </div>;
+              })}
+            </div>;
+          })}
+        </div>}
+      </div>
+    );
+  }
+
   return (
     <div
       className="sc-right-panel"
       style={{
-        width: open ? 420 : 32,
-        minWidth: open ? 420 : 32,
+        width: open ? (viewport === 'tablet' ? 380 : 420) : 32,
+        minWidth: open ? (viewport === 'tablet' ? 380 : 420) : 32,
         height: '100%',
         background: '#080e1c',
         borderLeft: '1px solid #14243e',
@@ -209,17 +290,17 @@ export function DrawerPanel({ dis, fil, open, onToggle }: DrawerPanelProps) {
         opacity: open ? 1 : 0,
         transition: 'opacity 200ms ease',
         pointerEvents: open ? 'auto' : 'none',
-        minWidth: 388,
+        minWidth: viewport === 'tablet' ? 348 : 388,
       }}>
       {/* Drawer header */}
       <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid #14243e', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ ...TYP.h2, display: 'flex', alignItems: 'center', gap: 8 }}>
             {dis.mode === 'disruptions' ? 'Active Disruptions' : dis.mode === 'trade' ? 'Trade & Tariff Brief' : 'Geopolitical Brief'}
-            {dis.items && <span style={{ fontFamily: FM, fontSize: 10, fontWeight: 600, color: '#4a6080', background: '#0d1525', border: '1px solid #1e3050', borderRadius: 4, padding: '2px 6px' }}>{dis.items.length}</span>}
+            {dis.items && <span style={{ fontFamily: FM, ...TYP.monoSm, color: '#4a6080', background: '#0d1525', border: '1px solid #1e3050', borderRadius: 4, padding: '2px 6px' }}>{dis.items.length}</span>}
             {dis.loading && !dis.items && <span className="sc-spin" style={{ width: 12, height: 12, border: '2px solid #2563eb33', borderTop: '2px solid #2563eb', borderRadius: '50%', display: 'inline-block' }} />}
           </div>
-          {dis.sTime && <div style={{ fontSize: 9, color: '#2a3d5c', fontFamily: FM, marginTop: 4 }}>Scanned {relTime(dis.sTime)} {'\u00b7'} {dis.sTime.toLocaleTimeString()} {'\u00b7'} {dis.sTime.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>}
+          {dis.sTime && <div style={{ ...TYP.caption, fontFamily: FM, marginTop: 4 }}>Scanned {relTime(dis.sTime)} {'\u00b7'} {dis.sTime.toLocaleTimeString()} {'\u00b7'} {dis.sTime.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>}
           {cc > 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, background: '#7f1d1d44', border: '1px solid #ef444433', borderRadius: 4, padding: '2px 8px' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
             <span style={{ fontSize: 9, color: '#fca5a5', fontWeight: 600, fontFamily: FM }}>{cc} CRITICAL</span>
@@ -234,7 +315,7 @@ export function DrawerPanel({ dis, fil, open, onToggle }: DrawerPanelProps) {
 
       {/* Group by toggle */}
       {dis.items && <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderBottom: '1px solid #14243e' }}>
-        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Group by</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Group by</span>
         <div style={{ display: 'flex', background: '#0a1220', borderRadius: 6, border: '1px solid #14243e', overflow: 'hidden' }}>
           <button onClick={() => fil.setGroupBy('severity')} style={{ padding: '3px 8px', fontSize: 9, fontWeight: 600, fontFamily: FM, border: 'none', cursor: 'pointer', background: fil.groupBy === 'severity' ? '#1e3050' : 'transparent', color: fil.groupBy === 'severity' ? '#e2e8f0' : '#4a6080', transition: 'all .15s' }}>Severity</button>
           <button onClick={() => fil.setGroupBy('region')} style={{ padding: '3px 8px', fontSize: 9, fontWeight: 600, fontFamily: FM, border: 'none', cursor: 'pointer', background: fil.groupBy === 'region' ? '#1e3050' : 'transparent', color: fil.groupBy === 'region' ? '#e2e8f0' : '#4a6080', transition: 'all .15s' }}>Region</button>
@@ -311,8 +392,8 @@ export function DrawerPanel({ dis, fil, open, onToggle }: DrawerPanelProps) {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                      <span style={{ fontSize: 12 }}>{CAT[('category' in d ? d.category : '') as string] || '\u26A0\uFE0F'}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{getEvent(d)}</span>
+                      <span style={{ fontSize: TYP.h4.fontSize }}>{CAT[('category' in d ? d.category : '') as string] || '\u26A0\uFE0F'}</span>
+                      <span style={{ ...TYP.h4 }}>{getEvent(d)}</span>
                     </div>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                       {isSev ? <span style={{ background: '#4a608022', color: '#4a6080', padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 500, fontFamily: FM, border: '1px solid #4a608033' }}>{getRegion(d)}</span>

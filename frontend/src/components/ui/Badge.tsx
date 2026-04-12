@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { FM } from '../../data/config';
-import { FS, SP, BR } from '../../tokens';
+import { FS, SP, BR, TYP } from '../../tokens';
 
 interface BadgeProps {
   label: string;

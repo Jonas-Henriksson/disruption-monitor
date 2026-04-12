@@ -1,5 +1,6 @@
 import { relTime } from '../utils/format';
 import { FM, countryCount } from '../data';
+import { TYP } from '../tokens';
 import type { ScanMode } from '../types';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 import type { useFilterState } from '../hooks/useFilterState';
@@ -23,8 +24,8 @@ export function HeaderBar({ dis, fil, vis, ha, cc }: HeaderBarProps) {
     <div style={{ background: 'linear-gradient(90deg,#080e1c,#0d1830)', borderBottom: '1px solid #14243e', padding: '0 16px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, zIndex: 30 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e88' }} />
-        <span style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', letterSpacing: '-0.01em' }}>SC Hub</span>
-        <span style={{ fontSize: 9, color: '#2a3d5c', letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 600, fontFamily: FM }}>DISRUPTION MONITOR</span>
+        <span style={{ ...TYP.h1 }}>SC Hub</span>
+        <span style={{ ...TYP.label, fontSize: 9, color: '#2a3d5c', letterSpacing: 2.5, fontFamily: FM }}>DISRUPTION MONITOR</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0a1220', border: '1px solid #162040', borderRadius: 6, padding: '4px 10px', fontFamily: FM, fontSize: 10 }}>

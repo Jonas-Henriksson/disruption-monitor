@@ -1,5 +1,5 @@
 import type { ReactNode, CSSProperties } from 'react';
-import { T, FS } from '../../tokens';
+import { T, TYP } from '../../tokens';
 import { FM } from '../../data/config';
 
 interface SectionHeaderProps {
@@ -11,18 +11,13 @@ interface SectionHeaderProps {
 /**
  * Standardized section header label.
  *
- * Replaces the repeated pattern:
- *   fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
- *   letterSpacing: 1.5, color: T.ghost, fontFamily: FM
+ * Uses TYP.label preset: fontSize 8, fontWeight 700, uppercase, letterSpacing 1.5
  */
 export function SectionHeader({ children, color = T.ghost, style }: SectionHeaderProps) {
   return (
     <span
       style={{
-        fontSize: FS.xs,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: 1.5,
+        ...TYP.label,
         color,
         fontFamily: FM,
         ...style,

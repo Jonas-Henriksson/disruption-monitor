@@ -514,3 +514,57 @@ class SupplierAlternativesResponse(BaseModel):
         default="Regional alternatives based on supplier density and category overlap. "
         "These are NOT confirmed site-level mappings — verify with procurement before acting.",
     )
+
+
+# ── Structured actions (workflow tracking) ──────────────────────
+
+
+ActionType = Literal[
+    "activate_backup_supplier",
+    "increase_safety_stock",
+    "reroute_shipment",
+    "contact_supplier",
+    "monitor_situation",
+    "escalate_to_leadership",
+    "file_insurance_claim",
+    "activate_bcp",
+]
+
+ActionStatus = Literal["pending", "in_progress", "completed", "dismissed"]
+ActionPriority = Literal["critical", "high", "normal", "low"]
+
+
+class Action(BaseModel):
+    """A structured, trackable action linked to a disruption event."""
+
+    id: int
+    event_id: str
+    action_type: ActionType
+    title: str
+    description: Optional[str] = None
+    assignee_hint: Optional[str] = Field(None, description="Suggested owner team/role")
+    priority: ActionPriority = "normal"
+    status: ActionStatus = "pending"
+    due_date: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ActionCreate(BaseModel):
+    """Create a new action manually."""
+
+    action_type: ActionType
+    title: Optional[str] = None
+    description: Optional[str] = None
+    assignee_hint: Optional[str] = None
+    priority: ActionPriority = "normal"
+    due_date: Optional[datetime] = None
+
+
+class ActionUpdate(BaseModel):
+    """Update an existing action."""
+
+    status: Optional[ActionStatus] = None
+    assignee_hint: Optional[str] = None
+    priority: Optional[ActionPriority] = None
+    due_date: Optional[datetime] = None

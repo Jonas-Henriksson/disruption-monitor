@@ -71,7 +71,7 @@ app.add_middleware(
 )
 
 # ── Routers ──────────────────────────────────────────────────────
-from .routers import events, graph, health, scans, sites, supplier_sites, suppliers, tickets, webhooks  # noqa: E402
+from .routers import actions, events, graph, health, scans, sites, supplier_sites, suppliers, tickets, webhooks  # noqa: E402
 
 API_PREFIX = "/api/v1"
 
@@ -82,6 +82,7 @@ app.include_router(sites.router, prefix=API_PREFIX)
 app.include_router(suppliers.router, prefix=API_PREFIX)
 app.include_router(supplier_sites.router, prefix=API_PREFIX)
 app.include_router(tickets.router, prefix=API_PREFIX)
+app.include_router(actions.router, prefix=API_PREFIX)
 app.include_router(graph.router, prefix=API_PREFIX)
 app.include_router(webhooks.router, prefix=API_PREFIX)
 

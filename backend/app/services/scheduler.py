@@ -16,7 +16,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
-from ..db.database import save_scan_record, upsert_event
+from ..db.database import create_action, save_scan_record, upsert_event
+from .action_engine import generate_actions_for_event
 from .scanner import ScanMode, run_scan
 from .telegram import send_scan_alerts
 from .webhooks import publish_scan_complete
@@ -85,16 +86,33 @@ async def _scan_loop(mode: ScanMode) -> None:
             items = result.get("items", result.get(mode, []))
             scan_id = result.get("scan_id", "unknown")
             new_count = 0
+            actions_count = 0
             for item in items:
                 event_id = item.get("id", f"{mode}-unknown")
                 is_new = upsert_event(event_id, mode, item, scan_id)
                 if is_new:
                     new_count += 1
+                    # Auto-generate structured actions for new events
+                    try:
+                        action_defs = generate_actions_for_event(item)
+                        for action_def in action_defs:
+                            create_action(
+                                event_id=event_id,
+                                action_type=action_def["action_type"],
+                                title=action_def["title"],
+                                description=action_def["description"],
+                                assignee_hint=action_def["assignee_hint"],
+                                priority=action_def["priority"],
+                                due_date=action_def.get("due_date"),
+                            )
+                        actions_count += len(action_defs)
+                    except Exception:
+                        logger.exception("Failed to generate actions for event %s", event_id)
 
             source = result.get("source", "unknown")
             logger.info(
-                "Scheduler: %s scan complete — %d items (%d new), source=%s",
-                mode, len(items), new_count, source,
+                "Scheduler: %s scan complete — %d items (%d new, %d actions), source=%s",
+                mode, len(items), new_count, actions_count, source,
             )
 
             # Send Telegram alerts for new Critical/High events

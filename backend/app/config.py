@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     digest_enabled: bool = os.environ.get("DIGEST_ENABLED", "false").lower() in ("1", "true", "yes")
     digest_recipients: str = os.environ.get("DIGEST_RECIPIENTS", "")  # comma-separated emails
 
+    # ITSM integration (ServiceNow / Jira bridge)
+    itsm_provider: str = os.environ.get("TARS_ITSM_PROVIDER", "") or os.environ.get("ITSM_PROVIDER", "") or "none"  # none | servicenow | jira
+    itsm_base_url: str = os.environ.get("TARS_ITSM_BASE_URL", "") or os.environ.get("ITSM_BASE_URL", "")
+    itsm_api_key: str = os.environ.get("TARS_ITSM_API_KEY", "") or os.environ.get("ITSM_API_KEY", "")
+
     model_config = {"env_file": ".env", "env_prefix": "TARS_", "extra": "ignore"}
 
     @property

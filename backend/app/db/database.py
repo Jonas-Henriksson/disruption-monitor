@@ -206,6 +206,27 @@ CREATE TABLE IF NOT EXISTS event_feedback (
 
 CREATE INDEX IF NOT EXISTS idx_event_feedback_event ON event_feedback(event_id);
 
+CREATE TABLE IF NOT EXISTS actions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id    TEXT NOT NULL REFERENCES events(id),
+    action_type TEXT NOT NULL CHECK (action_type IN (
+        'activate_backup_supplier', 'increase_safety_stock', 'reroute_shipment',
+        'contact_supplier', 'monitor_situation', 'escalate_to_leadership',
+        'file_insurance_claim', 'activate_bcp'
+    )),
+    title       TEXT NOT NULL DEFAULT '',
+    description TEXT,
+    assignee_hint TEXT,
+    priority    TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('critical', 'high', 'normal', 'low')),
+    status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'dismissed')),
+    due_date    TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_actions_event ON actions(event_id);
+CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status);
+
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_site ON supplier_relationships(site_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_country ON supplier_relationships(supplier_country);
 CREATE INDEX IF NOT EXISTS idx_supplier_rel_supplier ON supplier_relationships(supplier_name);
@@ -1137,9 +1158,126 @@ def get_db_stats() -> dict:
         scan_count = conn.execute("SELECT COUNT(*) FROM scan_records").fetchone()[0]
         ticket_count = conn.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
         active_events = conn.execute("SELECT COUNT(*) FROM events WHERE status = 'active'").fetchone()[0]
+        pending_actions = conn.execute("SELECT COUNT(*) FROM actions WHERE status = 'pending'").fetchone()[0]
         return {
             "events": event_count,
             "active_events": active_events,
             "scans": scan_count,
             "tickets": ticket_count,
+            "pending_actions": pending_actions,
         }
+
+
+# ── Actions (structured workflows) ──────────────────────────────
+
+
+def create_action(
+    event_id: str,
+    action_type: str,
+    title: str | None = None,
+    description: str | None = None,
+    assignee_hint: str | None = None,
+    priority: str = "normal",
+    due_date: str | None = None,
+) -> int:
+    """Create a structured action for an event. Returns the new action ID.
+
+    If title is not provided, a default is derived from the action_type.
+    """
+    if title is None:
+        title = action_type.replace("_", " ").title()
+    with get_db() as conn:
+        cursor = conn.execute(
+            """INSERT INTO actions (event_id, action_type, title, description, assignee_hint, priority, due_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, action_type, title, description, assignee_hint, priority, due_date),
+        )
+        return cursor.lastrowid
+
+
+def get_actions_for_event(event_id: str) -> list[dict]:
+    """Get all actions for a specific event, ordered by priority."""
+    priority_order = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM actions WHERE event_id = ? ORDER BY created_at ASC",
+            (event_id,),
+        ).fetchall()
+        result = [dict(r) for r in rows]
+        result.sort(key=lambda a: priority_order.get(a.get("priority", "normal"), 2))
+        return result
+
+
+def get_actions(
+    status: str | None = None,
+    event_id: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Get actions across all events with optional filters."""
+    conditions: list[str] = []
+    params: list[Any] = []
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if event_id:
+        conditions.append("event_id = ?")
+        params.append(event_id)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    params.append(limit)
+
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM actions {where} ORDER BY created_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def update_action(
+    action_id: int,
+    status: str | None = None,
+    assignee_hint: str | None = None,
+    due_date: str | None = None,
+    priority: str | None = None,
+) -> bool:
+    """Update an action's status or fields. Returns True if action existed."""
+    updates: list[str] = []
+    params: list[Any] = []
+    if status is not None:
+        updates.append("status = ?")
+        params.append(status)
+    if assignee_hint is not None:
+        updates.append("assignee_hint = ?")
+        params.append(assignee_hint)
+    if due_date is not None:
+        updates.append("due_date = ?")
+        params.append(due_date)
+    if priority is not None:
+        updates.append("priority = ?")
+        params.append(priority)
+    if not updates:
+        return False
+    updates.append("updated_at = ?")
+    params.append(datetime.now(timezone.utc).isoformat())
+    params.append(action_id)
+
+    with get_db() as conn:
+        cursor = conn.execute(
+            f"UPDATE actions SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        return cursor.rowcount > 0
+
+
+def get_action(action_id: int) -> dict | None:
+    """Get a single action by ID."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def delete_actions_for_event(event_id: str) -> int:
+    """Delete all actions for an event (used before regenerating). Returns count deleted."""
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM actions WHERE event_id = ?", (event_id,))
+        return cursor.rowcount

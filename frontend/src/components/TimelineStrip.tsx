@@ -1,4 +1,5 @@
 import { FM } from '../data';
+import { TYP } from '../tokens';
 import type { KpiData } from './KPIStrip';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 
@@ -38,7 +39,7 @@ export function TimelineStrip({ dis, mapWidth }: TimelineStripProps) {
       {/* Collapsed header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 40 }}>
         <span style={{ fontSize: 10, color: '#2a3d5c', transform: isOpen ? 'rotate(90deg)' : '', transition: 'transform .2s', flexShrink: 0 }}>{'\u25B6'}</span>
-        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Risk Timeline</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Risk Timeline</span>
         {hasBackendTimeline
           ? <span style={{ fontSize: 8, color: '#1e3050', fontFamily: FM }}>{timelineData.length} days</span>
           : <span style={{ fontSize: 8, color: '#1e3050', fontFamily: FM, fontStyle: 'italic' }}>No data yet {'\u2014'} accumulates from scans</span>

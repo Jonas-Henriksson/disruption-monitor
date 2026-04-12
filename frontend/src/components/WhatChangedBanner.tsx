@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ScanItem, Severity } from '../types';
 import { FM, SO, SEV } from '../data';
-import { S, T, B, ACCENT } from '../tokens';
+import { S, T, B, ACCENT, TYP } from '../tokens';
 import { SectionHeader, Badge } from './ui';
 import { eventId } from '../utils/format';
 import { getSev, getEvent, getTrend } from '../utils/scan';

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { FM, F } from '../../data/config';
-import { B, FS } from '../../tokens';
+import { B, FS, TYP } from '../../tokens';
 
 interface MetricCardProps {
   value: string | number;
@@ -34,10 +34,10 @@ export function MetricCard({ value, label, icon, color = '#e2e8f0', style }: Met
       <div
         style={{
           fontFamily: FM,
-          fontSize: FS['3xl'],
-          fontWeight: 700,
+          fontSize: TYP.h2.fontSize,
+          fontWeight: TYP.h2.fontWeight,
           color,
-          lineHeight: 1.2,
+          lineHeight: TYP.h2.lineHeight,
         }}
       >
         {icon && <>{icon} </>}
@@ -46,12 +46,9 @@ export function MetricCard({ value, label, icon, color = '#e2e8f0', style }: Met
       <div
         style={{
           fontFamily: F,
-          fontSize: FS.xs,
+          ...TYP.label,
           color: '#4a6080',
-          textTransform: 'uppercase',
-          letterSpacing: 1.5,
           marginTop: 2,
-          fontWeight: 600,
         }}
       >
         {label}

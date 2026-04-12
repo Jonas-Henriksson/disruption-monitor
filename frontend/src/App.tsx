@@ -13,6 +13,8 @@ import { LeftPanel } from "./components/LeftPanel";
 import { HeaderBar } from "./components/HeaderBar";
 import { KPIStrip, useKpiData } from "./components/KPIStrip";
 import { TimelineStrip } from "./components/TimelineStrip";
+import { MobileBottomSheet } from "./components/MobileBottomSheet";
+import type { MobileTab } from "./components/MobileBottomSheet";
 import { GLOBAL_CSS } from "./styles";
 import {
   SITES, TYPE_CFG, REGION_CFG, BU_CFG,
@@ -33,15 +35,22 @@ import { useDisruptionState } from "./hooks/useDisruptionState";
 import { useFilterState } from "./hooks/useFilterState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
+import { useViewport } from "./hooks/useMediaQuery";
+import { TYP } from "./tokens";
 
 export default function App() {
   const map = useMapState();
   const dis = useDisruptionState();
   const fil = useFilterState();
   const kb = useKeyboardShortcuts({ dis, fil });
+  const viewport = useViewport();
 
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [mobileTab, setMobileTab] = useState<MobileTab>('map');
+
+  const isMobile = viewport === 'mobile';
+  const isTablet = viewport === 'tablet';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [land, setLand] = useState<any>(null);
@@ -282,8 +291,8 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: F, background: '#060a12', color: '#c8d6e5', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* HEADER */}
-      <HeaderBar dis={dis} fil={fil} vis={vis} ha={ha} cc={cc} />
+      {/* HEADER — hidden on mobile, replaced by bottom tab bar */}
+      {!isMobile && <HeaderBar dis={dis} fil={fil} vis={vis} ha={ha} cc={cc} />}
 
       {/* SCAN PROGRESS BAR */}
       {(dis.loading || dis.scanPct > 0) && <div style={{ height: 2, background: '#0a1220', flexShrink: 0, overflow: 'hidden', position: 'relative', zIndex: 29 }}>
@@ -292,24 +301,24 @@ export default function App() {
       </div>}
 
       {/* KPI STRIP */}
-      {kpi && <KPIStrip kpi={kpi} mode={dis.mode} fil={fil} />}
+      {kpi && <KPIStrip kpi={kpi} mode={dis.mode} fil={fil} viewport={viewport} />}
 
       {/* RISK TIMELINE */}
       {kpi && <TimelineStrip dis={dis} kpi={kpi} mapWidth={map.dm.w} />}
 
-      {/* FILTERS */}
-      {fil.fO && <div style={{ background: '#080e1c', borderBottom: '1px solid #14243e', padding: '8px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', flexShrink: 0, zIndex: 25, animation: 'sfu 200ms ease both' }}>
-        <span style={{ fontSize: 8, color: '#2a3d5c', fontWeight: 700, letterSpacing: 2, fontFamily: FM }}>TYPE</span>
+      {/* FILTERS — hidden on mobile */}
+      {fil.fO && !isMobile && <div style={{ background: '#080e1c', borderBottom: '1px solid #14243e', padding: '8px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', flexShrink: 0, zIndex: 25, animation: 'sfu 200ms ease both' }}>
+        <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>TYPE</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{Object.entries(TYPE_CFG).map(([k, v]) => { const on = fil.tF[k]; return <button key={k} onClick={() => fil.setTF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{typeCounts[k] || 0}</span></button>; })}</div>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
-        <span style={{ fontSize: 8, color: '#2a3d5c', fontWeight: 700, letterSpacing: 2, fontFamily: FM }}>REGION</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>REGION</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{Object.entries(REGION_CFG).map(([k, v]) => { const on = fil.rF[k]; return <button key={k} onClick={() => fil.setRF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5, marginLeft: 4 }}>{regionCounts[k] || 0}</span></button>; })}</div>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
         <button onClick={() => fil.setSR(!fil.sR)} style={{ padding: '3px 8px', border: `1px solid ${fil.sR ? '#1a5f8a44' : '#14243e'}`, borderRadius: 4, background: fil.sR ? '#1a5f8a18' : 'transparent', color: fil.sR ? '#38bdf8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Routes</button>
         <button onClick={() => fil.setSC(!fil.sC)} style={{ padding: '3px 8px', border: `1px solid ${fil.sC ? '#64748b44' : '#14243e'}`, borderRadius: 4, background: fil.sC ? '#64748b18' : 'transparent', color: fil.sC ? '#94a3b8' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Chokepoints</button>
         <button onClick={() => fil.setSSup(!fil.sSup)} style={{ padding: '3px 8px', border: `1px solid ${fil.sSup ? '#a78bfa44' : '#14243e'}`, borderRadius: 4, background: fil.sSup ? '#a78bfa18' : 'transparent', color: fil.sSup ? '#a78bfa' : '#1e3050', fontSize: 10, cursor: 'pointer' }}>Suppliers <span style={{ fontFamily: FM, fontSize: 8, opacity: 0.5 }}>5,090</span></button>
         <div style={{ width: 1, height: 20, background: '#162040', margin: '0 4px' }} />
-        <span style={{ fontSize: 8, color: '#2a3d5c', fontWeight: 700, letterSpacing: 2, fontFamily: FM }}>DIVISION</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', letterSpacing: 2, fontFamily: FM }}>DIVISION</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Industrial — top-level toggle */}
           {(() => { const k = 'ind'; const v = BU_CFG[k]; const on = fil.buF[k]; const cnt = SITES.filter(s => s.bu === k).length; return <button key={k} onClick={() => fil.setBuF(p => ({ ...p, [k]: !p[k] }))} style={{ padding: '3px 8px', border: `1px solid ${on ? v.color + '44' : '#14243e'}`, borderRadius: 4, background: on ? v.color + '18' : 'transparent', color: on ? v.color : '#1e3050', fontSize: 10, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>{v.label} <span style={{ fontFamily: FM, fontSize: 8, opacity: .5 }}>{cnt}</span></button>; })()}
@@ -328,12 +337,12 @@ export default function App() {
       </div>}
 
       {/* MAIN CONTENT ROW: LEFT PANEL + MAP + RIGHT PANEL */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* LEFT PANEL — Talking Points / Exec Summary */}
-        <LeftPanel dis={dis} open={leftOpen} onToggle={() => setLeftOpen(o => !o)} />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* LEFT PANEL — Talking Points / Exec Summary (desktop only) */}
+        {!isMobile && !isTablet && <LeftPanel dis={dis} open={leftOpen} onToggle={() => setLeftOpen(o => !o)} />}
 
         {/* MAP */}
-        <div ref={map.cR} style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none', minWidth: 0 }} onClick={(e) => { if (!(e.target as HTMLElement).closest?.('[data-click]')) { map.setSelSite(null); map.setSelRt(null); map.setSelSupC(null); dis.setScView(null); } }}>
+        <div ref={map.cR} style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none', minWidth: 0, paddingBottom: isMobile ? 56 : 0 }} onClick={(e) => { if (!(e.target as HTMLElement).closest?.('[data-click]')) { map.setSelSite(null); map.setSelRt(null); map.setSelSupC(null); dis.setScView(null); } }}>
         <svg ref={map.svgRef} width={map.dm.w} height={map.dm.h} style={{ display: 'block', cursor: 'grab', touchAction: 'none' }}>
           <rect width={map.dm.w} height={map.dm.h} fill="#060a12" />
           <defs>
@@ -729,20 +738,32 @@ export default function App() {
 
       </div>
 
-        {/* RIGHT PANEL — Active Disruptions */}
-        <DrawerPanel dis={dis} fil={fil} open={rightOpen} onToggle={() => setRightOpen(o => !o)} />
+        {/* RIGHT PANEL — Active Disruptions (tablet: includes left panel content; mobile: hidden, uses bottom sheet) */}
+        {!isMobile && <DrawerPanel dis={dis} fil={fil} open={rightOpen} onToggle={() => setRightOpen(o => !o)} viewport={viewport} />}
+
+        {/* MOBILE BOTTOM SHEET — replaces both panels on mobile */}
+        {isMobile && (
+          <MobileBottomSheet activeTab={mobileTab} onTabChange={setMobileTab}>
+            {mobileTab === 'disruptions' && (
+              <DrawerPanel dis={dis} fil={fil} open={true} onToggle={() => {}} viewport="mobile" embedded />
+            )}
+            {mobileTab === 'brief' && (
+              <LeftPanel dis={dis} open={true} onToggle={() => {}} embedded />
+            )}
+          </MobileBottomSheet>
+        )}
       </div>
 
-      {/* Keyboard shortcut help button */}
+      {/* Keyboard shortcut help button — hidden on mobile */}
       <button
         onClick={kb.toggleHelp}
         title="Keyboard shortcuts (?)"
         style={{
-          position: 'fixed', bottom: 16, right: 16, zIndex: 50,
+          position: 'fixed', bottom: isMobile ? 72 : 16, right: 16, zIndex: 50,
           width: 28, height: 28, borderRadius: 6,
           background: '#0a1220', border: '1px solid #14243e',
           color: '#4a6080', fontSize: 14, fontWeight: 700, fontFamily: FM,
-          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', display: isMobile ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'color .15s, border-color .15s',
         }}
         onMouseEnter={e => { (e.target as HTMLElement).style.color = '#c8d6e5'; (e.target as HTMLElement).style.borderColor = '#1e3a5c'; }}

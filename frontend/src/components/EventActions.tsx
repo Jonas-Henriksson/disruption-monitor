@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ScanItem, Severity, ImpactResult } from '../types';
 import { assignTicket, updateTicketStatus, graphSendEventEmail, graphSendEventTeams, graphCreateEventMeeting } from '../services/api';
 import { FM, STATUS_CFG, TEAM, TEAM_MAP, SUPPLIERS } from '../data';
+import { TYP } from '../tokens';
 import { getEvent, getRegion, getSev, getTrend } from '../utils/scan';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
 
@@ -140,7 +141,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
         padding: 8, marginTop: 6, transition: 'opacity 150ms, transform 150ms',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Assign to</span>
+          <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Assign to</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <span style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#2a3d5c', fontFamily: FM }}>SLA</span>
             {([
@@ -232,7 +233,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
 
       {/* Status selector — only visible when ticket exists */}
       {dis.tickets[eid]?.owner && <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 3, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM, marginRight: 2 }}>Status</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM, marginRight: 2 }}>Status</span>
         {(Object.keys(STATUS_CFG) as Array<keyof typeof STATUS_CFG>).map(st => {
           const cfg = STATUS_CFG[st];
           const isCurrent = (dis.tickets[eid]?.ticketStatus || 'open') === st;
@@ -257,7 +258,7 @@ export function EventActions({ d, dis, impact, eid, sv, co, reg, copiedId, setCo
 
       {/* Due date display — shown when ticket has a due date */}
       {dis.tickets[eid]?.due_date && <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, padding: '3px 0' }}>
-        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#2a3d5c', fontFamily: FM }}>Due</span>
+        <span style={{ ...TYP.label, color: '#2a3d5c', fontFamily: FM }}>Due</span>
         <span style={{
           fontSize: 9, fontFamily: FM, fontWeight: 600,
           color: dis.tickets[eid]?.is_overdue ? '#ef4444' : (dis.tickets[eid]?.ticketStatus === 'done' ? '#22c55e' : '#94a3b8'),

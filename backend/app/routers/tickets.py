@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..auth.dependencies import get_current_user
 from ..db.database import create_ticket, get_overdue_tickets, get_tickets, update_ticket
 from ..models.schemas import Ticket, TicketCreate, TicketUpdate
+from ..services.itsm import get_itsm_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,20 @@ def _upsert_ticket(
                 status_code=422,
                 detail=f"Event not found: {event_id}. Cannot create ticket for non-existent event.",
             )
+        # Sync to external ITSM system (fire-and-forget, non-blocking)
+        try:
+            import asyncio
+            bridge = get_itsm_bridge()
+            asyncio.ensure_future(bridge.create_ticket(
+                event_id=event_id,
+                title=f"Disruption ticket for {event_id}",
+                description=notes or f"Auto-created ticket for event {event_id}",
+                priority=priority or "normal",
+                assignee=owner,
+                labels=["disruption-monitor", "auto-created"],
+            ))
+        except Exception:
+            logger.debug("ITSM sync skipped (non-fatal)")
         rows = get_tickets(event_id=event_id)
         return rows[0]
 

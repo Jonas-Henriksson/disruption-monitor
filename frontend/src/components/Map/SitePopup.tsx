@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SEV, FM, TYPE_CFG, REGION_CFG, BU_CFG, SITES, SUPPLIERS, ROUTES, SUPPLY_GRAPH, ADDR } from '../../data';
+import { TYP } from '../../tokens';
 import type { Severity, SiteSuppliersResponse } from '../../types';
 
 interface ExposureScore {
@@ -65,8 +66,8 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{site.name}{siteSuppliers?.site.site_id && siteSuppliers.site.site_id !== site.name ? <span style={{ color: '#4a6080', fontWeight: 400 }}> ({siteSuppliers.site.site_id})</span> : null}</div>
-          <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{site.country} {'\u00b7'} {REGION_CFG[site.region]?.label}</div>
+          <div style={{ ...TYP.headline }}>{site.name}{siteSuppliers?.site.site_id && siteSuppliers.site.site_id !== site.name ? <span style={{ color: '#4a6080', fontWeight: 400 }}> ({siteSuppliers.site.site_id})</span> : null}</div>
+          <div style={{ ...TYP.bodySm, marginTop: 2 }}>{site.country} {'\u00b7'} {REGION_CFG[site.region]?.label}</div>
         </div>
         <button onClick={onClose} style={{ background: '#0d1525', border: '1px solid #1e3050', borderRadius: 6, color: '#4a6080', cursor: 'pointer', fontSize: 10, padding: '2px 6px', fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{'\u2715'}</button>
       </div>
@@ -86,7 +87,7 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
         {/* Concentration score bar */}
         <div style={{ marginBottom: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#22c55e', fontFamily: FM }}>Supply Concentration</span>
+            <span style={{ ...TYP.label, color: '#22c55e', fontFamily: FM }}>Supply Concentration</span>
             <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FM, color: siteSuppliers.summary.concentration_score > 70 ? '#f59e0b' : siteSuppliers.summary.concentration_score > 40 ? '#eab308' : '#22c55e' }}>{siteSuppliers.summary.concentration_score}</span>
           </div>
           <div style={{ height: 4, background: '#0d1525', borderRadius: 2, overflow: 'hidden' }}>
@@ -161,7 +162,7 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
 
         {/* Active risks */}
         {disruptedCountries.length > 0 && <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #14243e' }}>
-          <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#ef4444', fontFamily: FM, marginBottom: 4 }}>Active Supply Risks ({disruptedCountries.length})</div>
+          <div style={{ ...TYP.label, color: '#ef4444', fontFamily: FM, marginBottom: 4 }}>Active Supply Risks ({disruptedCountries.length})</div>
           {disruptedCountries.map((dc, di) => (
             <div key={di} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', borderBottom: '1px solid #0d1525' }}>
               <div style={{ width: 5, height: 5, borderRadius: 3, background: '#ef4444', flexShrink: 0 }} />
@@ -175,7 +176,7 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
 
       {/* Loading indicator for supplier data */}
       {siteSuppliersLoading && site.type === 'mfg' && <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #14243e' }}>
-        <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#22c55e', fontFamily: FM, marginBottom: 6 }}>Inbound Supply Chain</div>
+        <div style={{ ...TYP.label, color: '#22c55e', fontFamily: FM, marginBottom: 6 }}>Inbound Supply Chain</div>
         <div className="sc-skel" style={{ height: 12, marginBottom: 6 }} />
         <div className="sc-skel" style={{ height: 8, width: '70%', marginBottom: 4 }} />
         <div className="sc-skel" style={{ height: 8, width: '50%' }} />
@@ -183,7 +184,7 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
 
       {/* Fallback: SUPPLY_GRAPH view when API data unavailable and not loading */}
       {!siteSuppliers && !siteSuppliersLoading && graph && <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #14243e' }}>
-        <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#22c55e', fontFamily: FM, marginBottom: 6 }}>Inbound Supply Chain</div>
+        <div style={{ ...TYP.label, color: '#22c55e', fontFamily: FM, marginBottom: 6 }}>Inbound Supply Chain</div>
         <div style={{ fontSize: 9, color: '#2a3d5c', marginBottom: 6 }}>Key inputs: {graph.inputs.join(', ')}</div>
         <div style={{ fontSize: 8, fontWeight: 600, color: '#2a3d5c', fontFamily: FM, marginBottom: 4 }}>Supplier Countries</div>
         {graph.sup.map((country, ci) => {
@@ -209,7 +210,7 @@ export function SitePopup({ site, exposureScore, onClose, supExpand: _supExpand,
 
       {/* Exposure threats */}
       {exp && exp.threats.length > 0 && <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #14243e' }}>
-        <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: SEV[exp.level as Severity], fontFamily: FM, marginBottom: 4 }}>Active Threats ({exp.threats.length})</div>
+        <div style={{ ...TYP.label, color: SEV[exp.level as Severity], fontFamily: FM, marginBottom: 4 }}>Active Threats ({exp.threats.length})</div>
         {exp.threats.slice(0, 5).map((t, ti) => <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 0', borderBottom: '1px solid #0d1525' }}>
           <div style={{ width: 6, height: 6, borderRadius: 3, background: SEV[t.severity as Severity], flexShrink: 0 }} />
           <span style={{ fontSize: 9, color: '#94a3b8', flex: 1 }}>{t.event}</span>

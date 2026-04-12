@@ -205,5 +205,53 @@ export const ACCENT = {
   rose: '#f43f5e',
 } as const;
 
+// ── Typography presets ──────────────────────────────────────────────
+// Style objects ready to spread into JSX `style` props.  Every text
+// element in the app should reference one of these instead of ad-hoc
+// fontSize / fontWeight / lineHeight combos.
+
+export const TYP = {
+  /** Page title — SC Hub header */
+  h1: { fontSize: FS['4xl'], fontWeight: 700 as const, lineHeight: 1.2, color: '#e2e8f0', letterSpacing: '-0.01em' },
+  /** Panel header titles — "Active Disruptions", "Talking Points" */
+  h2: { fontSize: FS['3xl'], fontWeight: 700 as const, lineHeight: 1.3, color: '#e2e8f0' },
+  /** Section headers — "Executive Summary", "Impact Chain" */
+  h3: { fontSize: FS.xl, fontWeight: 700 as const, lineHeight: 1.4, color: '#e2e8f0' },
+  /** Card titles — event names, site names */
+  h4: { fontSize: FS.xl, fontWeight: 700 as const, lineHeight: 1.3, color: '#e2e8f0' },
+  /** Headline text — talking point headlines */
+  headline: { fontSize: FS['2xl'], fontWeight: 700 as const, lineHeight: 1.5, color: '#e2e8f0' },
+  /** Primary body — descriptions, paragraphs */
+  body: { fontSize: FS.lg, fontWeight: 400 as const, lineHeight: 1.6, color: '#c8d6e5' },
+  /** Smaller body — card content, popup details */
+  bodySm: { fontSize: FS.md, fontWeight: 400 as const, lineHeight: 1.5, color: '#94a3b8' },
+  /** Caption — timestamps, metadata */
+  caption: { fontSize: FS.sm, fontWeight: 400 as const, lineHeight: 1.4, color: '#2a3d5c' },
+  /** Label — section headers (TYPE, REGION), uppercase micro labels */
+  label: { fontSize: FS.xs, fontWeight: 700 as const, lineHeight: 1.2, textTransform: 'uppercase' as const, letterSpacing: 1.5 },
+  /** Mono body — metric values, IDs, code-like text */
+  mono: { fontSize: FS.md, fontWeight: 600 as const, lineHeight: 1.3 },
+  /** Mono small — badge text, filter counts */
+  monoSm: { fontSize: FS.xs, fontWeight: 600 as const, lineHeight: 1.2 },
+  /** Micro — urgency pills, sub-filter counts */
+  micro: { fontSize: FS.xxs, fontWeight: 600 as const, lineHeight: 1.2 },
+  /** Hero number — large KPI display */
+  hero: { fontSize: FS.hero, fontWeight: 800 as const, lineHeight: 1, color: '#e2e8f0' },
+} as const;
+
+// ── Breakpoints ─────────────────────────────────────────────────────
+export const BP = {
+  /** Mobile max-width */
+  mobile: 768,
+  /** Tablet max-width */
+  tablet: 1024,
+} as const;
+
+// ── Touch targets ───────────────────────────────────────────────────
+export const TOUCH = {
+  /** Minimum tap target size (44px per Apple/WCAG guidelines) */
+  minTarget: 44,
+} as const;
+
 // Re-export runtime constants from config so consumers have ONE import source
 export { SEV, SBG, FM, F } from './data/config';

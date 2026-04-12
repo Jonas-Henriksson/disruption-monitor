@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { FM } from '../../data/config';
-import { BR } from '../../tokens';
+import { BR, TYP } from '../../tokens';
 
 interface PillProps {
   label: string;
@@ -24,8 +24,8 @@ export function Pill({ label, bg, color, style }: PillProps) {
         color: color ?? '#c8d6e5',
         padding: '2px 6px',
         borderRadius: BR.sm,
-        fontSize: 8,
-        fontWeight: 600,
+        fontSize: TYP.label.fontSize,
+        fontWeight: TYP.mono.fontWeight,
         fontFamily: FM,
         ...style,
       }}

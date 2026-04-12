@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Severity, WeeklySummary, ScanItem } from '../types';
 import { SEV, FM, F, SITES } from '../data';
-import { S, T, B, ACCENT } from '../tokens';
+import { S, T, B, ACCENT, TYP } from '../tokens';
 import { getRegion, getEvent, getTrend, getSev } from '../utils/scan';
 import { fetchWeeklySummary } from '../services/api';
 import type { useDisruptionState } from '../hooks/useDisruptionState';
@@ -14,9 +14,11 @@ interface LeftPanelProps {
   dis: DisruptionState;
   open: boolean;
   onToggle: () => void;
+  /** When true, panel renders without outer shell (embedded in mobile bottom sheet) */
+  embedded?: boolean;
 }
 
-export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
+export function LeftPanel({ dis, open, onToggle, embedded = false }: LeftPanelProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('talking-points');
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
@@ -134,6 +136,153 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
     return lines.join('\n');
   }, [weeklySummary]);
 
+  // Embedded mode: render content directly without outer shell (for mobile bottom sheet)
+  if (embedded) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+        {/* Header with tab toggle */}
+        <div style={{ padding: '10px 16px 0', borderBottom: `1px solid ${B.subtle}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 2, marginBottom: 10, background: S[2], borderRadius: 6, padding: 2 }}>
+            {([['talking-points', 'Talking Points'], ['weekly-brief', 'Weekly Brief']] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                style={{
+                  flex: 1,
+                  padding: '8px 8px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: FM,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1,
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  transition: 'all .15s',
+                  background: activeTab === id ? S[0] : 'transparent',
+                  color: activeTab === id ? T.primary : T.muted,
+                  boxShadow: activeTab === id ? `0 1px 3px ${S.base}` : 'none',
+                  minHeight: 44,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Talking Points tab */}
+        {activeTab === 'talking-points' && (
+          <div className="sc-s" style={{ flex: 1, overflow: 'auto', padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
+            {execBrief && (() => {
+              const worstSev = execBrief.sevCounts.Critical > 0 ? 'Critical' : execBrief.sevCounts.High > 0 ? 'High' : execBrief.sevCounts.Medium > 0 ? 'Medium' : 'Low';
+              const worstColor = SEV[worstSev as Severity];
+              const headlineLine = `${execBrief.total} active ${modeLabel}, ${execBrief.sevCounts.Critical > 0 ? execBrief.sevCounts.Critical + ' critical' : execBrief.sevCounts.High > 0 ? execBrief.sevCounts.High + ' high severity' : 'none critical'}`;
+              const exposureLine = execBrief.topRegion ? `Highest exposure: ${execBrief.topRegion[0]} \u2014 ${execBrief.topRegion[1]} events, ${execBrief.totalSites} sites at risk` : '';
+              const escalatingLine = execBrief.escalating.length > 0 ? `${execBrief.escalating.length} escalating: ${execBrief.escalating.join(', ')}` : '';
+              const actionLine = execBrief.actions.length > 0 ? `Priority action: ${execBrief.actions[0]}` : '';
+              const bullets: { text: string; borderColor: string; label: string; items?: string[] }[] = [
+                { text: headlineLine, borderColor: worstColor, label: 'HEADLINE' },
+              ];
+              if (exposureLine) bullets.push({ text: exposureLine, borderColor: ACCENT.blueFactory, label: 'EXPOSURE' });
+              if (execBrief.escalating.length > 0) bullets.push({ text: escalatingLine, borderColor: ACCENT.red, label: 'ESCALATING', items: execBrief.escalating });
+              if (execBrief.actions.length > 0) bullets.push({ text: actionLine, borderColor: ACCENT.green, label: 'ACTION', items: execBrief.actions });
+
+              return (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ ...TYP.label, color: T.primary, fontFamily: FM }}>Executive Summary</span>
+                  </div>
+                  {/* Severity distribution bar */}
+                  <div style={{ display: 'flex', gap: 2, marginBottom: 16, height: 4, borderRadius: 2, overflow: 'hidden' }}>
+                    {execBrief.sevCounts.Critical > 0 && <div style={{ flex: execBrief.sevCounts.Critical, background: SEV.Critical, borderRadius: 2 }} />}
+                    {execBrief.sevCounts.High > 0 && <div style={{ flex: execBrief.sevCounts.High, background: SEV.High, borderRadius: 2 }} />}
+                    {execBrief.sevCounts.Medium > 0 && <div style={{ flex: execBrief.sevCounts.Medium, background: SEV.Medium, borderRadius: 2 }} />}
+                    {execBrief.sevCounts.Low > 0 && <div style={{ flex: execBrief.sevCounts.Low, background: SEV.Low, borderRadius: 2 }} />}
+                  </div>
+                  {/* Severity counts row */}
+                  <div style={{ display: 'flex', gap: 1, marginBottom: 16, borderRadius: 6, overflow: 'hidden', border: `1px solid ${B.subtle}` }}>
+                    {(['Critical', 'High', 'Medium', 'Low'] as const).map(sev => {
+                      const count = execBrief.sevCounts[sev] || 0;
+                      if (count === 0) return null;
+                      const color = SEV[sev];
+                      return (
+                        <div key={sev} style={{ flex: 1, background: `${color}0d`, padding: '8px 6px', textAlign: 'center', borderRight: `1px solid ${B.subtle}` }}>
+                          <div style={{ fontFamily: FM, fontSize: 14, fontWeight: 700, color, lineHeight: 1.2 }}>{count}</div>
+                          <div style={{ fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2, fontWeight: 600 }}>{sev}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Talking points */}
+                  <div style={{ background: S.base, border: `1px solid ${B.subtle}`, borderRadius: 8, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {bullets.map((b, i) => (
+                        <div key={i}>
+                          {i > 0 && <div style={{ height: 1, background: B.subtle, margin: '6px 0', opacity: 0.5 }} />}
+                          <div style={{ borderLeft: `3px solid ${b.borderColor}`, paddingLeft: 10, paddingTop: 5, paddingBottom: 5, borderRadius: 2 }}>
+                            <div style={{ ...TYP.label, color: `${b.borderColor}88`, fontFamily: FM, marginBottom: 3 }}>{b.label}</div>
+                            {i === 0 ? (
+                              <div style={{ fontSize: 13, fontWeight: 700, color: worstColor, lineHeight: 1.5 }}>
+                                <span style={{ fontFamily: FM, fontWeight: 700 }}>{execBrief.total}</span>{' active ' + modeLabel}
+                              </div>
+                            ) : (b.items && b.items.length > 0) ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
+                                {b.items.map((item, ii) => (
+                                  <div key={ii} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11, color: T.body, lineHeight: 1.4 }}>
+                                    <span style={{ color: b.borderColor, fontSize: 8, marginTop: 3, flexShrink: 0, opacity: 0.7 }}>{'\u25b8'}</span>
+                                    <span>{item}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11, fontWeight: 400, color: T.body, lineHeight: 1.5 }}>{b.text}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            {!execBrief && !dis.loading && (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: T.dim }}>
+                <div style={{ fontSize: 9, fontFamily: FM, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5 }}>No data loaded</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Weekly Brief tab */}
+        {activeTab === 'weekly-brief' && (
+          <div className="sc-s" style={{ flex: 1, overflow: 'auto', padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
+            {weeklyLoading && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="sc-skel" style={{ height: 24, borderRadius: 4 }} />
+                ))}
+              </div>
+            )}
+            {!weeklyLoading && !weeklySummary && (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: T.dim }}>
+                <div style={{ fontSize: 9, fontFamily: FM, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5 }}>No weekly data available</div>
+              </div>
+            )}
+            {!weeklyLoading && weeklySummary && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <span style={{ ...TYP.label, color: T.primary, fontFamily: FM }}>Weekly Brief</span>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, lineHeight: 1.5 }}>
+                  {weeklySummary.headline}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className="sc-left-panel"
@@ -240,7 +389,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
                   {/* Brief header with copy */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 8, fontWeight: 700, color: T.primary, textTransform: 'uppercase', letterSpacing: 1.5, fontFamily: FM }}>Executive Summary</span>
+                      <span style={{ ...TYP.label, color: T.primary, fontFamily: FM }}>Executive Summary</span>
                     </div>
                     <button
                       onClick={() => { navigator.clipboard.writeText(fullBriefText); setCopiedId('brief-all'); setTimeout(() => setCopiedId(null), 1500); }}
@@ -287,7 +436,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
                               title="Click to copy"
                               style={{ borderLeft: `3px solid ${b.borderColor}`, paddingLeft: 10, paddingTop: 5, paddingBottom: 5, cursor: 'pointer', borderRadius: 2, transition: 'background .15s', background: isCopied ? `${b.borderColor}0d` : 'transparent' }}
                             >
-                              <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: `${b.borderColor}88`, fontFamily: FM, marginBottom: 3 }}>{b.label}</div>
+                              <div style={{ ...TYP.label, color: `${b.borderColor}88`, fontFamily: FM, marginBottom: 3 }}>{b.label}</div>
                               {i === 0 ? (
                                 <div style={{ fontSize: 13, fontWeight: 700, color: worstColor, lineHeight: 1.5 }}>
                                   <span style={{ fontFamily: FM, fontWeight: 700 }}>{execBrief.total}</span>{' active ' + modeLabel + ', '}<span style={{ fontFamily: FM, fontWeight: 700, color: worstColor }}>{execBrief.sevCounts.Critical > 0 ? execBrief.sevCounts.Critical : execBrief.sevCounts.High > 0 ? execBrief.sevCounts.High : 0}</span>{execBrief.sevCounts.Critical > 0 ? ' critical' : execBrief.sevCounts.High > 0 ? ' high severity' : ' — none critical'}
@@ -315,7 +464,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
                   {/* Regional breakdown */}
                   {Object.keys(execBrief.regions).length > 1 && (
                     <div style={{ background: S.base, border: `1px solid ${B.subtle}`, borderRadius: 8, padding: '14px 16px', marginTop: 12 }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: T.ghost, fontFamily: FM, marginBottom: 10 }}>Regional Breakdown</div>
+                      <div style={{ ...TYP.label, color: T.ghost, fontFamily: FM, marginBottom: 10 }}>Regional Breakdown</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {Object.entries(execBrief.regions).sort((a, b) => b[1] - a[1]).map(([region, count]) => {
                           const pct = Math.round((count / execBrief.total) * 100);
@@ -383,7 +532,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* Header with copy button */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, color: T.primary, textTransform: 'uppercase', letterSpacing: 1.5, fontFamily: FM }}>Weekly Brief</span>
+                  <span style={{ ...TYP.label, color: T.primary, fontFamily: FM }}>Weekly Brief</span>
                   <button
                     onClick={() => copyToClipboard(weeklyBriefText, 'weekly-all')}
                     style={{ background: S[1], border: `1px solid ${B.subtle}`, borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600, fontFamily: FM, color: copiedId === 'weekly-all' ? ACCENT.green : T.tertiary, cursor: 'pointer', transition: 'color .15s' }}
@@ -393,7 +542,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
                 </div>
 
                 {/* Headline */}
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, lineHeight: 1.5 }}>
+                <div style={{ ...TYP.headline, color: T.primary }}>
                   {weeklySummary.headline}
                 </div>
 
@@ -481,7 +630,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
                 {/* Top regions */}
                 {weeklySummary.top_regions.length > 0 && (
                   <div style={{ background: S.base, border: `1px solid ${B.subtle}`, borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: T.ghost, fontFamily: FM, marginBottom: 8 }}>Top Regions</div>
+                    <div style={{ ...TYP.label, color: T.ghost, fontFamily: FM, marginBottom: 8 }}>Top Regions</div>
                     {weeklySummary.top_regions.slice(0, 5).map((r, i) => {
                       const maxCount = weeklySummary.top_regions[0]?.event_count || 1;
                       const pct = Math.round((r.event_count / maxCount) * 100);
@@ -580,7 +729,7 @@ export function LeftPanel({ dis, open, onToggle }: LeftPanelProps) {
 function WeeklySection({ title, borderColor, tint, children }: { title: string; borderColor: string; tint?: string; children: React.ReactNode }) {
   return (
     <div style={{ background: tint || S.base, border: `1px solid ${B.subtle}`, borderRadius: 8, padding: '10px 12px' }}>
-      <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: borderColor, fontFamily: FM, marginBottom: 8 }}>{title}</div>
+      <div style={{ ...TYP.label, color: borderColor, fontFamily: FM, marginBottom: 8 }}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {children}
       </div>
