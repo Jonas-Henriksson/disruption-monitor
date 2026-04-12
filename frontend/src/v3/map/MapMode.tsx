@@ -342,14 +342,14 @@ export function MapMode({
             );
           })}
 
-          {/* Routing overlay — rendered as a layer, visibility controlled by zoom */}
+          {/* Route lines only — rendered early so they're behind everything */}
           <RoutingOverlay
             svgRef={svgRef}
             projection={proj}
             events={events}
             zoomLevel={zoomLevel}
             routes={ROUTES}
-            chokepoints={CHOKEPOINTS}
+            chokepoints={[]}
           />
 
           {/* Supplier country bubbles — render behind sites and events */}
@@ -481,6 +481,16 @@ export function MapMode({
               </g>
             );
           })}
+
+          {/* Chokepoints — rendered above sites so they're clickable */}
+          <RoutingOverlay
+            svgRef={svgRef}
+            projection={proj}
+            events={events}
+            zoomLevel={zoomLevel}
+            routes={[]}
+            chokepoints={CHOKEPOINTS}
+          />
 
           {/* Event markers — large dots with severity coloring */}
           {events.map((evt, i) => {

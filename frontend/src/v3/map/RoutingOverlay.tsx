@@ -263,13 +263,14 @@ export function RoutingOverlay({
         );
       })}
 
-      {/* Chokepoints */}
+      {/* Chokepoints — rendered last for highest z-order */}
       {showChokepoints && chokepoints.map((cp, i) => {
         const p = pt(cp.la, cp.ln);
         if (!p) return null;
         const count = chokeCounts.get(cp.n) || 0;
         const isAffected = count > 0;
         const cs = Math.max(3, 6 * inv);
+        const hitR = Math.max(6, 14 * inv);
         const fillColor = isAffected ? MAP.chokeAffected + '33' : MAP.chokeFill;
         const strokeColor = isAffected ? MAP.chokeAffected : MAP.chokeStroke;
 
@@ -281,6 +282,14 @@ export function RoutingOverlay({
             onMouseMove={(e) => handleChokepointHover(e, cp)}
             onMouseLeave={() => setTooltip(null)}
           >
+            {/* Invisible larger hit area for easy click/hover */}
+            <circle
+              cx={p[0]}
+              cy={p[1]}
+              r={hitR}
+              fill="transparent"
+              pointerEvents="all"
+            />
             {/* Pulse glow for affected */}
             {isAffected && (
               <circle
@@ -292,6 +301,7 @@ export function RoutingOverlay({
                 stroke={MAP.chokeAffected}
                 strokeWidth={Math.max(0.3, 0.6 * inv)}
                 strokeOpacity={0.4}
+                pointerEvents="none"
               >
                 <animate
                   attributeName="r"
@@ -314,6 +324,7 @@ export function RoutingOverlay({
               stroke={strokeColor}
               strokeWidth={Math.max(0.2, 0.5 * inv)}
               opacity={0.9}
+              pointerEvents="none"
             />
             {/* Label */}
             <text
