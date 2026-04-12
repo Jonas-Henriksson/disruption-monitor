@@ -38,6 +38,7 @@ import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 import { useViewport } from "./hooks/useMediaQuery";
 import { TYP } from "./tokens";
 import { SectionErrorBoundary } from "./components/ui";
+import { VersionToggle } from "./v2/VersionToggle";
 
 export default function App() {
   const map = useMapState();
@@ -753,6 +754,9 @@ export default function App() {
           </MobileBottomSheet>
         )}
       </div>
+
+      {/* Version toggle — switch to v2 */}
+      <VersionToggle version="v1" />
 
       {/* Keyboard shortcut help button — hidden on mobile */}
       <button
