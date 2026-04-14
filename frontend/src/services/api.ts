@@ -5,7 +5,7 @@
  * All functions gracefully return null on failure so callers can fall back to sample data.
  */
 
-import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary } from "../types";
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult } from "../types";
 import { getToken, getGraphToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
@@ -441,6 +441,44 @@ export async function triggerScan(mode: ScanMode): Promise<ScanResponse | null> 
     });
     if (!resp.ok) return null;
     return (await resp.json()) as ScanResponse;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch BU-level exposure summary from the backend.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchBuExposure(): Promise<BuExposure[] | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/exposure/bu-summary`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as BuExposure[];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run a what-if scenario analysis on the backend.
+ * Returns null if the backend is unreachable or returns an error.
+ */
+export async function fetchWhatIf(scenario: WhatIfScenario): Promise<WhatIfResult | null> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/exposure/what-if`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(scenario),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as WhatIfResult;
   } catch {
     return null;
   }

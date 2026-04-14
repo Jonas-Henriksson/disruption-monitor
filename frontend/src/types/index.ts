@@ -243,6 +243,55 @@ export interface ExposureThreat {
   supplier: boolean;
 }
 
+export interface BuExposure {
+  bu: string;
+  exposed_spend_pct: number;
+  factory_count: number;
+  sole_source_count: number;
+  top_threats: Array<{ id: string; title: string; severity: string }>;
+}
+
+export interface WhatIfScenario {
+  scenario_type: 'region_disruption' | 'chokepoint_closure';
+  target: string;
+  duration_weeks: number;
+}
+
+export interface WhatIfFactory {
+  factory: string;
+  bu: string;
+  affected_countries: string[];
+  affected_inputs: Array<{ name: string; tier: number; sole_source: boolean; criticality: string }>;
+  t1_count: number;
+  sole_source: boolean;
+}
+
+export interface WhatIfBuImpact {
+  bu: string;
+  factory_count: number;
+  t1_inputs_at_risk: number;
+  sole_source_count: number;
+  exposed_spend_pct: number;
+}
+
+export interface WhatIfResult {
+  scenario_type: string;
+  target: string;
+  duration_weeks: number;
+  affected_factories: WhatIfFactory[];
+  bu_impact: WhatIfBuImpact[];
+  sole_source_risks: Array<{ factory: string; bu: string; input: string; supplier_country: string }>;
+  total_factories_affected: number;
+}
+
+export interface DownstreamExposure {
+  factory: string;
+  bu: string;
+  shared_country: string;
+  shared_inputs: string[];
+  hop: number;
+}
+
 export interface EventRegistryEntry {
   status: 'active' | 'watching' | 'archived';
   firstSeen: string;
