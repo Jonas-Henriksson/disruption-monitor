@@ -113,6 +113,7 @@ export interface EnrichedExposure {
   affected_sites: Array<{ name: string; type: string; distance_km: number }>;
   input_details: SupplyGraphInput[];
   routing_context: string[];
+  downstream_exposure: Array<{ factory: string; bu: string; shared_country: string; shared_inputs: string[]; hop: number }>;
 }
 
 export function enrichExposureData(item: ScanItem): EnrichedExposure {
@@ -126,6 +127,7 @@ export function enrichExposureData(item: ScanItem): EnrichedExposure {
       affected_sites: (rec.affected_sites as EnrichedExposure['affected_sites']).slice(0, 8),
       input_details: (rec.input_details as SupplyGraphInput[]).slice(0, 15),
       routing_context: Array.isArray(rec.routing_context) ? (rec.routing_context as string[]).slice(0, 10) : [],
+      downstream_exposure: Array.isArray(rec.downstream_exposure) ? (rec.downstream_exposure as EnrichedExposure['downstream_exposure']).slice(0, 20) : [],
     };
   }
 
@@ -196,9 +198,42 @@ export function enrichExposureData(item: ScanItem): EnrichedExposure {
     inputDetails.sort((a, b) => (a.tier - b.tier) || ((b.sole_source ? 1 : 0) - (a.sole_source ? 1 : 0)));
   }
 
+  // Hop 2: downstream exposure — factories sharing supplier countries with hop-1 factories
+  const downstream: EnrichedExposure['downstream_exposure'] = [];
+  if ((rec.downstream_exposure as unknown[])?.length > 0) {
+    // Use backend-provided downstream
+    downstream.push(...(rec.downstream_exposure as EnrichedExposure['downstream_exposure']).slice(0, 20));
+  } else {
+    const hop1Names = new Set(affectedSites.map(s => s.name));
+    const seenDownstream = new Set<string>();
+    for (const site of affectedSites) {
+      const graph = SUPPLY_GRAPH[site.name];
+      if (!graph) continue;
+      for (const supCountry of graph.sup) {
+        for (const [peerName, peerGraph] of Object.entries(SUPPLY_GRAPH)) {
+          if (hop1Names.has(peerName) || seenDownstream.has(peerName)) continue;
+          if (peerGraph.sup.includes(supCountry)) {
+            seenDownstream.add(peerName);
+            downstream.push({
+              factory: peerName,
+              bu: peerGraph.bu,
+              shared_country: supCountry,
+              shared_inputs: peerGraph.inputs,
+              hop: 2,
+            });
+          }
+          if (downstream.length >= 20) break;
+        }
+        if (downstream.length >= 20) break;
+      }
+      if (downstream.length >= 20) break;
+    }
+  }
+
   return {
     affected_sites: affectedSites,
     input_details: inputDetails.slice(0, 15),
     routing_context: routingContext.slice(0, 10),
+    downstream_exposure: downstream.slice(0, 20),
   };
 }

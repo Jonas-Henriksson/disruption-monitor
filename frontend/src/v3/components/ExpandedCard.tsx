@@ -371,6 +371,21 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
     });
   }
 
+  // Step 5: Downstream exposure (hop 2) — max 6
+  const downstreamFactories = enriched.downstream_exposure || [];
+  if (downstreamFactories.length > 0) {
+    chainSteps.push({
+      label: `Downstream Risk (${downstreamFactories.length} factories)`,
+      items: downstreamFactories.slice(0, 6).map(d => ({
+        text: d.factory,
+        badge: `via ${d.shared_country}`,
+        badgeColor: V3.accent.cyan,
+      })),
+      color: V3.accent.cyan,
+      icon: '\uD83D\uDD04',
+    });
+  }
+
   const _sectionHeader = sectionHeaderStyle(V3);
 
   // Empty state
