@@ -9,7 +9,7 @@ import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
 import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -313,6 +313,14 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
   }, [event]);
   const corridors = impact?.corridors || [];
 
+  // BU exposure data (fetched once)
+  const [buExposure, setBuExposure] = useState<Array<{ bu: string; exposed_spend_pct: number }> | null>(null);
+  useEffect(() => {
+    fetchBuExposure().then(data => {
+      if (data) setBuExposure(data);
+    });
+  }, []);
+
   // Supplier alternatives
   const [altData, setAltData] = useState<SupplierAlternativesResponse | null>(null);
   const [altLoading, setAltLoading] = useState(false);
@@ -428,6 +436,17 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
             {'\u26A0'} {soleSourceCount} sole-source
           </span>
         )}
+        {buExposure && buExposure.filter(b => b.exposed_spend_pct > 0).slice(0, 3).map((b, bi) => (
+          <span key={`bu-${bi}`} style={{
+            fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+            color: b.exposed_spend_pct >= 30 ? V3.accent.red : b.exposed_spend_pct >= 15 ? V3.accent.amber : V3.accent.green,
+            background: (b.exposed_spend_pct >= 30 ? V3.accent.red : b.exposed_spend_pct >= 15 ? V3.accent.amber : V3.accent.green) + '18',
+            padding: '2px 8px', borderRadius: 4,
+            border: `1px solid ${(b.exposed_spend_pct >= 30 ? V3.accent.red : b.exposed_spend_pct >= 15 ? V3.accent.amber : V3.accent.green)}33`,
+          }}>
+            {b.bu}: {b.exposed_spend_pct}% spend at risk
+          </span>
+        ))}
         {totalInputs > 0 && t1Inputs.length === 0 && (
           <span style={{
             fontSize: 10, fontWeight: 600, fontFamily: V3_FONT_MONO,
