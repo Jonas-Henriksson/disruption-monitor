@@ -170,6 +170,19 @@ SUPPLY_GRAPH: dict[str, dict] = {
     "Stockholm": {"sup": ["Sweden", "Finland", "Germany", "Italy"], "inputs": ["Steel", "Precision parts", "Components"], "bu": "Industrial", "input_details": [{"name": "Steel", "tier": 1, "sole_source": False, "criticality": "critical"}, {"name": "Precision parts", "tier": 1, "sole_source": False, "criticality": "critical"}, {"name": "Components", "tier": 2, "sole_source": False, "criticality": "important"}]},
 }
 
+# ── Reverse Graph: country → factories that source from it ─────
+# Built from SUPPLY_GRAPH at import time.
+REVERSE_GRAPH: dict[str, list[dict]] = {}
+for _factory_name, _graph_entry in SUPPLY_GRAPH.items():
+    for _country in _graph_entry.get("sup", []):
+        if _country not in REVERSE_GRAPH:
+            REVERSE_GRAPH[_country] = []
+        REVERSE_GRAPH[_country].append({
+            "factory": _factory_name,
+            "bu": _graph_entry.get("bu", ""),
+            "inputs": [inp.get("name", "") for inp in _graph_entry.get("input_details", [])],
+        })
+
 
 def load_sites() -> list[dict]:
     """Load sites as dicts matching the Site schema."""

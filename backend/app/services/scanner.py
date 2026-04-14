@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from ..config import settings
 from .metrics import emit_count, emit_metric
-from ..data import load_disruptions, load_geopolitical, load_sites, load_trade, SUPPLY_GRAPH
+from ..data import load_disruptions, load_geopolitical, load_sites, load_trade, SUPPLY_GRAPH, REVERSE_GRAPH
 from ..services.dedup import tag_duplicates
 from ..services.serper import fetch_search_context
 from ..services.severity import compute_severity_score
@@ -406,6 +406,36 @@ def _enrich_supply_chain_data(item: dict) -> None:
                         routing_reasons.append(
                             f"{factory_name} ({bu}) sources from {event_country or event_region}"
                         )
+
+    # ── 3. Hop 2: Downstream exposure ──────────────────────────────
+    downstream: list[dict] = []
+    seen_downstream: set[str] = set()
+    hop1_factories = {inp.get("factory") for inp in all_inputs if inp.get("factory")}
+
+    for factory_name in hop1_factories:
+        graph_entry = SUPPLY_GRAPH.get(factory_name)
+        if not graph_entry:
+            continue
+        for sup_country in graph_entry.get("sup", []):
+            for peer in REVERSE_GRAPH.get(sup_country, []):
+                peer_name = peer["factory"]
+                if peer_name in hop1_factories or peer_name in seen_downstream:
+                    continue
+                seen_downstream.add(peer_name)
+                downstream.append({
+                    "factory": peer_name,
+                    "bu": peer["bu"],
+                    "shared_country": sup_country,
+                    "shared_inputs": peer["inputs"],
+                    "hop": 2,
+                })
+            if len(downstream) >= 20:
+                break
+        if len(downstream) >= 20:
+            break
+
+    if downstream:
+        item["downstream_exposure"] = downstream[:20]
 
     if all_inputs:
         # Sort: T1 sole-source first, then by tier

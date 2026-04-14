@@ -408,6 +408,37 @@ def _enrich_supply_chain_if_missing(event: dict) -> None:
                             f"{factory_name} ({bu}) sources from {event_country or event_region}"
                         )
 
+    # ── Hop 2: Downstream exposure ──────────────────────────────
+    from ..data import REVERSE_GRAPH
+    downstream: list[dict] = []
+    seen_downstream: set[str] = set()
+    hop1_factories = {inp.get("factory") for inp in all_inputs if inp.get("factory")}
+
+    for factory_name in hop1_factories:
+        graph_entry = _supply_graph_cache.get(factory_name)
+        if not graph_entry:
+            continue
+        for sup_country in graph_entry.get("sup", []):
+            for peer in REVERSE_GRAPH.get(sup_country, []):
+                peer_name = peer["factory"]
+                if peer_name in hop1_factories or peer_name in seen_downstream:
+                    continue
+                seen_downstream.add(peer_name)
+                downstream.append({
+                    "factory": peer_name,
+                    "bu": peer["bu"],
+                    "shared_country": sup_country,
+                    "shared_inputs": peer["inputs"],
+                    "hop": 2,
+                })
+            if len(downstream) >= 20:
+                break
+        if len(downstream) >= 20:
+            break
+
+    if downstream:
+        event["downstream_exposure"] = downstream[:20]
+
     if all_inputs:
         all_inputs.sort(key=lambda x: (x.get("tier", 3), not x.get("sole_source", False)))
         event["input_details"] = all_inputs[:15]  # Cap at 15
