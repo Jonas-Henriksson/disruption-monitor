@@ -1,0 +1,47 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: frontend
+        run: npx vite build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Deploy to S3
+        working-directory: frontend
+        run: aws s3 sync dist/ s3://sc-monitor-frontend-317683112105/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: aws cloudfront create-invalidation --distribution-id E2XQOK89HTZGBN --paths "/*"
