@@ -23,6 +23,7 @@ import { DeltaBanner } from './components/DeltaBanner';
 import { FeedList } from './components/FeedList';
 import { RiskSummary } from './components/RiskSummary';
 import { WeeklyBriefing } from './components/WeeklyBriefing';
+import { WhatIfPanel } from './components/WhatIfPanel';
 import { VersionToggle } from './VersionToggle';
 
 // Map components (created by map agent — using direct imports)
@@ -59,6 +60,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
   const [showWeeklyBriefing, setShowWeeklyBriefing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [buFilter, setBuFilter] = useState<string | null>(null);
+  const [showWhatIf, setShowWhatIf] = useState(false);
 
   // Inject CSS
   const cssInjected = useRef(false);
@@ -221,6 +223,8 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         onScanNow={handleScanNow}
         mapMode={mapMode}
         onToggleMap={() => setMapMode(true)}
+        onToggleWhatIf={() => setShowWhatIf(prev => !prev)}
+        whatIfOpen={showWhatIf}
       />
 
       {/* Scan progress bar */}
@@ -310,6 +314,9 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         open={showWeeklyBriefing}
         onClose={() => setShowWeeklyBriefing(false)}
       />
+
+      {/* What-If scenario drawer */}
+      <WhatIfPanel open={showWhatIf} onClose={() => setShowWhatIf(false)} />
 
       {/* Version toggle */}
       <VersionToggle version={version} onVersionChange={onVersionChange} />

@@ -22,6 +22,8 @@ export interface TopBarProps {
   onScanNow: () => void;
   mapMode: boolean;
   onToggleMap: () => void;
+  onToggleWhatIf?: () => void;
+  whatIfOpen?: boolean;
 }
 
 const MODES: { key: ScanMode; label: string }[] = [
@@ -71,6 +73,8 @@ export function TopBar({
   onScanNow,
   mapMode,
   onToggleMap,
+  onToggleWhatIf,
+  whatIfOpen,
 }: TopBarProps) {
   const { theme: V3, mode: themeMode, toggleTheme } = useV3Theme();
   const [buOpen, setBuOpen] = useState(false);
@@ -272,6 +276,20 @@ export function TopBar({
           </div>
         )}
       </div>
+
+      {/* What-If toggle */}
+      {onToggleWhatIf && (
+        <button onClick={onToggleWhatIf} style={{
+          padding: '5px 10px', borderRadius: 6,
+          border: `1px solid ${whatIfOpen ? V3.accent.purple : V3.border.subtle}`,
+          background: whatIfOpen ? V3.accent.purple + '22' : V3.bg.card,
+          color: whatIfOpen ? V3.accent.purple : V3.text.secondary,
+          fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+          cursor: 'pointer', textTransform: 'uppercase' as const,
+        }}>
+          What-If
+        </button>
+      )}
 
       {/* Map toggle */}
       <button
