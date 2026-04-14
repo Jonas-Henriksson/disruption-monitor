@@ -1810,3 +1810,155 @@ def get_bu_exposure_summary() -> list[dict]:
     # Sort by exposed_spend_pct descending
     results.sort(key=lambda x: -x["exposed_spend_pct"])
     return results
+
+
+# ── What-If Simulation ─────────────────────────────────────────
+
+_CHOKEPOINT_REGIONS: dict[str, list[str]] = {
+    "Suez Canal": ["Egypt", "Saudi Arabia", "India", "China", "Japan", "South Korea"],
+    "Panama Canal": ["United States", "Mexico", "Canada", "Brazil", "Argentina"],
+    "Strait of Malacca": ["Malaysia", "China", "Japan", "South Korea", "India"],
+    "Bosporus": ["Turkey", "Bulgaria", "Romania", "Ukraine"],
+    "Strait of Hormuz": ["Saudi Arabia", "India", "Japan", "South Korea", "China"],
+    "Cape of Good Hope": ["South Africa", "Morocco"],
+}
+
+
+def simulate_what_if(scenario_type: str, target: str, duration_weeks: int = 2) -> dict:
+    """Simulate a supply chain disruption scenario.
+
+    scenario_type: 'region_disruption' or 'chokepoint_closure'
+    target: country name or chokepoint name
+    duration_weeks: how long the disruption lasts
+
+    Returns impact analysis. Never returns raw spend — only percentages.
+    """
+    global _supply_graph_cache
+    if _supply_graph_cache is None:
+        from ..data import SUPPLY_GRAPH
+        _supply_graph_cache = SUPPLY_GRAPH
+
+    # Determine affected countries
+    if scenario_type == "chokepoint_closure":
+        affected_countries = set(_CHOKEPOINT_REGIONS.get(target, []))
+    else:
+        # region_disruption — target IS the country
+        affected_countries = {target}
+
+    # If no countries to check, return empty result
+    if not affected_countries:
+        return {
+            "scenario_type": scenario_type,
+            "target": target,
+            "duration_weeks": duration_weeks,
+            "affected_factories": [],
+            "bu_impact": {},
+            "sole_source_risks": [],
+            "total_factories_affected": 0,
+        }
+
+    # Walk the supply graph and find affected factories
+    affected_factories: list[dict] = []
+    sole_source_risks: list[dict] = []
+    from collections import defaultdict
+    bu_agg: dict[str, dict] = defaultdict(lambda: {
+        "factory_count": 0,
+        "t1_inputs_at_risk": 0,
+        "sole_source_count": 0,
+    })
+
+    for factory_name, graph_entry in _supply_graph_cache.items():
+        sup_countries = set(graph_entry.get("sup", []))
+        overlap = sup_countries & affected_countries
+        if not overlap:
+            continue
+
+        bu = graph_entry.get("bu", "Unknown")
+        affected_inputs: list[str] = []
+        t1_count = 0
+        has_sole_source = False
+
+        for inp in graph_entry.get("input_details", []):
+            affected_inputs.append(inp.get("name", ""))
+            if inp.get("tier") == 1:
+                t1_count += 1
+            if inp.get("sole_source", False):
+                has_sole_source = True
+                sole_source_risks.append({
+                    "factory": factory_name,
+                    "bu": bu,
+                    "input": inp.get("name", ""),
+                    "affected_countries": sorted(overlap),
+                })
+
+        affected_factories.append({
+            "factory": factory_name,
+            "bu": bu,
+            "affected_countries": sorted(overlap),
+            "affected_inputs": affected_inputs,
+            "t1_count": t1_count,
+            "sole_source": has_sole_source,
+        })
+
+        bu_agg[bu]["factory_count"] += 1
+        bu_agg[bu]["t1_inputs_at_risk"] += t1_count
+        if has_sole_source:
+            bu_agg[bu]["sole_source_count"] += 1
+
+    # Compute exposed_spend_pct per BU from supplier_relationships
+    with get_db() as conn:
+        # Total spend per site
+        site_totals = conn.execute(
+            "SELECT site_id, SUM(spend_sek) AS total_spend FROM supplier_relationships GROUP BY site_id"
+        ).fetchall()
+        site_total_map = {r["site_id"]: r["total_spend"] or 0 for r in site_totals}
+
+        # Exposed spend per site (suppliers in affected countries)
+        country_list = list(affected_countries)
+        if country_list:
+            placeholders = ",".join("?" * len(country_list))
+            exposed_rows = conn.execute(
+                f"""SELECT site_id, SUM(spend_sek) AS exposed_spend
+                    FROM supplier_relationships
+                    WHERE supplier_country IN ({placeholders})
+                    GROUP BY site_id""",
+                country_list,
+            ).fetchall()
+            site_exposed_map = {r["site_id"]: r["exposed_spend"] or 0 for r in exposed_rows}
+        else:
+            site_exposed_map = {}
+
+    # Enrich bu_agg with exposed_spend_pct
+    bu_impact: dict[str, dict] = {}
+    for bu, agg in bu_agg.items():
+        # Sum exposed/total spend across factories in this BU
+        bu_exposed = 0.0
+        bu_total = 0.0
+        for af in affected_factories:
+            if af["bu"] != bu:
+                continue
+            site_code = resolve_site_code(af["factory"])
+            if site_code:
+                bu_exposed += site_exposed_map.get(site_code, 0)
+                bu_total += site_total_map.get(site_code, 0)
+
+        exposed_spend_pct = round((bu_exposed / bu_total) * 100, 2) if bu_total > 0 else 0.0
+
+        bu_impact[bu] = {
+            **agg,
+            "exposed_spend_pct": exposed_spend_pct,
+        }
+
+    # Cap lists
+    affected_factories = affected_factories[:30]
+    sole_source_risks = sole_source_risks[:15]
+
+    return {
+        "scenario_type": scenario_type,
+        "target": target,
+        "duration_weeks": duration_weeks,
+        "affected_factories": affected_factories,
+        "bu_impact": bu_impact,
+        "sole_source_risks": sole_source_risks,
+        "total_factories_affected": len(affected_factories),
+    }
