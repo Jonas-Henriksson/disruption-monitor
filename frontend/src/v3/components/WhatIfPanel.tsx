@@ -414,3 +414,4 @@ export function WhatIfPanel({ open, onClose }: WhatIfPanelProps) {
     </div>
   );
 }
+# auto-deploy
