@@ -1659,3 +1659,154 @@ def get_itsm_sync_log_entry(log_id: int) -> dict | None:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM itsm_sync_log WHERE id = ?", (log_id,)).fetchone()
         return dict(row) if row else None
+
+
+# ── BU Exposure Summary ─────────────────────────────────────────
+
+
+def get_bu_exposure_summary() -> list[dict]:
+    """Compute per-BU exposure summary from active disruptions.
+
+    For each business unit in SUPPLY_GRAPH:
+    - Identifies factories whose supplier countries overlap with disrupted regions
+    - Counts sole-source inputs at risk
+    - Computes exposed_spend_pct from supplier_relationships (percentage, never raw)
+    - Collects top threat event titles
+
+    Returns list sorted by exposed_spend_pct descending.
+    Never returns raw spend figures — only percentages.
+    """
+    global _supply_graph_cache
+    if _supply_graph_cache is None:
+        from ..data import SUPPLY_GRAPH
+        _supply_graph_cache = SUPPLY_GRAPH
+
+    # Get active events and their disrupted regions/countries
+    with get_db() as conn:
+        event_rows = conn.execute(
+            "SELECT id, event_title, severity, region, payload FROM events WHERE status = 'active'"
+        ).fetchall()
+
+    if not event_rows:
+        return []
+
+    # Build set of disrupted countries/regions and threat info
+    disrupted_regions: set[str] = set()
+    threats: list[dict] = []
+    for row in event_rows:
+        region = row["region"] or ""
+        if region:
+            disrupted_regions.add(region)
+        # Also extract country from payload if available
+        payload = json.loads(row["payload"])
+        country = payload.get("country", "")
+        if country:
+            disrupted_regions.add(country)
+        threats.append({
+            "event_id": row["id"],
+            "title": row["event_title"],
+            "severity": row["severity"],
+            "region": region,
+        })
+
+    if not disrupted_regions:
+        return []
+
+    # Aggregate by BU
+    from collections import defaultdict
+    bu_data: dict[str, dict] = defaultdict(lambda: {
+        "factories": set(),
+        "sole_source_count": 0,
+        "threat_ids": set(),
+        "exposed_site_ids": set(),
+    })
+
+    for factory_name, graph_entry in _supply_graph_cache.items():
+        bu = graph_entry.get("bu", "Unknown")
+        sup_countries = set(graph_entry.get("sup", []))
+
+        # Check if any supplier country is in a disrupted region
+        overlap = sup_countries & disrupted_regions
+        if not overlap:
+            continue
+
+        bu_data[bu]["factories"].add(factory_name)
+
+        # Count sole-source inputs at this factory
+        for inp in graph_entry.get("input_details", []):
+            if inp.get("sole_source", False):
+                bu_data[bu]["sole_source_count"] += 1
+
+        # Track which threats affect this BU
+        for threat in threats:
+            threat_region = threat["region"]
+            if threat_region in sup_countries:
+                bu_data[bu]["threat_ids"].add(threat["event_id"])
+
+    # Compute exposed_spend_pct per BU from supplier_relationships
+    # For each BU, find sites in disrupted countries and compute % of BU total spend
+    with get_db() as conn:
+        # Get total spend per site (for percentage calc)
+        site_totals = conn.execute(
+            "SELECT site_id, SUM(spend_sek) AS total_spend FROM supplier_relationships GROUP BY site_id"
+        ).fetchall()
+        site_total_map = {r["site_id"]: r["total_spend"] or 0 for r in site_totals}
+
+        # Get spend exposed to disrupted regions per site
+        disrupted_list = list(disrupted_regions)
+        if disrupted_list:
+            placeholders = ",".join("?" * len(disrupted_list))
+            exposed_rows = conn.execute(
+                f"""SELECT site_id, SUM(spend_sek) AS exposed_spend
+                    FROM supplier_relationships
+                    WHERE supplier_country IN ({placeholders})
+                    GROUP BY site_id""",
+                disrupted_list,
+            ).fetchall()
+            site_exposed_map = {r["site_id"]: r["exposed_spend"] or 0 for r in exposed_rows}
+        else:
+            site_exposed_map = {}
+
+    # Map factories to site_ids via resolve_site_code (best-effort)
+    # Also compute global total for BU-level percentage
+    global_total_spend = sum(site_total_map.values())
+
+    results = []
+    for bu, data in bu_data.items():
+        # Sum exposed spend across all factories in this BU
+        bu_exposed_spend = 0.0
+        bu_total_spend = 0.0
+
+        for factory_name in data["factories"]:
+            # Try to resolve factory name to a site_id in supplier_relationships
+            site_code = resolve_site_code(factory_name)
+            if site_code and site_code in site_exposed_map:
+                bu_exposed_spend += site_exposed_map[site_code]
+                bu_total_spend += site_total_map.get(site_code, 0)
+
+        # Compute as % of BU total spend (not global)
+        if bu_total_spend > 0:
+            exposed_spend_pct = round((bu_exposed_spend / bu_total_spend) * 100, 2)
+        elif global_total_spend > 0:
+            exposed_spend_pct = round((bu_exposed_spend / global_total_spend) * 100, 2)
+        else:
+            exposed_spend_pct = 0.0
+
+        # Collect top threats for this BU
+        bu_threats = [t for t in threats if t["event_id"] in data["threat_ids"]]
+        top_threats = [
+            {"title": t["title"], "severity": t["severity"], "region": t["region"]}
+            for t in bu_threats[:5]
+        ]
+
+        results.append({
+            "bu": bu,
+            "exposed_spend_pct": exposed_spend_pct,
+            "factory_count": len(data["factories"]),
+            "sole_source_count": data["sole_source_count"],
+            "top_threats": top_threats,
+        })
+
+    # Sort by exposed_spend_pct descending
+    results.sort(key=lambda x: -x["exposed_spend_pct"])
+    return results
