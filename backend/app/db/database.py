@@ -340,6 +340,80 @@ def get_scan_history(mode: str | None = None, limit: int = 50) -> list[dict]:
 
 # ── Events ─────────────────────────────────────────────────────
 
+_supply_graph_cache: dict | None = None
+
+
+def _enrich_supply_chain_if_missing(event: dict) -> None:
+    """Lazily enrich event with supplier input_details from SUPPLY_GRAPH.
+
+    Only runs if the event has affected_sites but no input_details yet.
+    Uses lazy import to avoid circular dependency with scanner module.
+    """
+    if event.get("input_details") and event.get("routing_context"):
+        return
+
+    affected_sites = event.get("affected_sites", [])
+    if not affected_sites:
+        return
+
+    global _supply_graph_cache
+    if _supply_graph_cache is None:
+        from ..data import SUPPLY_GRAPH
+        _supply_graph_cache = SUPPLY_GRAPH
+
+    all_inputs: list[dict] = []
+    routing_reasons: list[str] = []
+    seen_inputs: set[str] = set()
+
+    for site in affected_sites:
+        site_name = site.get("name", "")
+        graph_entry = _supply_graph_cache.get(site_name)
+        if not graph_entry:
+            continue
+        bu = graph_entry.get("bu", "")
+        for inp in graph_entry.get("input_details", []):
+            key = f"{site_name}|{inp.get('name', '')}"
+            if key not in seen_inputs:
+                seen_inputs.add(key)
+                all_inputs.append({**inp, "factory": site_name, "bu": bu})
+        sup_countries = graph_entry.get("sup", [])
+        if sup_countries:
+            routing_reasons.append(
+                f"{site_name} ({bu}) sources from {', '.join(sup_countries[:4])}"
+                + (f" +{len(sup_countries) - 4} more" if len(sup_countries) > 4 else "")
+            )
+
+    # Region/country fallback if no direct site matches in graph
+    # Skip for broad/vague regions to avoid matching every factory.
+    BROAD_REGIONS = {"Europe", "Americas", "Global", "Middle East", "Africa", "Asia", "APAC"}
+
+    if not all_inputs:
+        event_region = event.get("region", "")
+        event_country = event.get("country", "") or event_region
+
+        # Only do supplier-country matching for specific countries
+        is_broad = event_region in BROAD_REGIONS and (event_country in BROAD_REGIONS or not event_country)
+        if not is_broad:
+            for factory_name, graph_entry in _supply_graph_cache.items():
+                sup_countries = graph_entry.get("sup", [])
+                if event_country in sup_countries or event_region in sup_countries:
+                    bu = graph_entry.get("bu", "")
+                    for inp in graph_entry.get("input_details", []):
+                        key = f"{factory_name}|{inp.get('name', '')}"
+                        if key not in seen_inputs:
+                            seen_inputs.add(key)
+                            all_inputs.append({**inp, "factory": factory_name, "bu": bu})
+                    if sup_countries:
+                        routing_reasons.append(
+                            f"{factory_name} ({bu}) sources from {event_country or event_region}"
+                        )
+
+    if all_inputs:
+        all_inputs.sort(key=lambda x: (x.get("tier", 3), not x.get("sole_source", False)))
+        event["input_details"] = all_inputs[:15]  # Cap at 15
+    if routing_reasons:
+        event["routing_context"] = routing_reasons[:10]  # Cap at 10
+
 
 def _extract_title(payload: dict, mode: str) -> str:
     """Extract the display title from an event payload."""
@@ -428,6 +502,7 @@ def get_events(
             event["first_seen"] = row["first_seen"]
             event["last_seen"] = row["last_seen"]
             event["scan_count"] = row["scan_count"]
+            _enrich_supply_chain_if_missing(event)
             results.append(event)
         return results
 
@@ -443,6 +518,7 @@ def get_event(event_id: str) -> dict | None:
         event["first_seen"] = row["first_seen"]
         event["last_seen"] = row["last_seen"]
         event["scan_count"] = row["scan_count"]
+        _enrich_supply_chain_if_missing(event)
         return event
 
 

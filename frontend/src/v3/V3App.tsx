@@ -154,6 +154,29 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
     }
   }, [dis]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Handle status changes from ExpandedCard (watch/archive)
+  const handleStatusChange = useCallback((_eventId: string, newStatus: string) => {
+    if (newStatus === 'archived') {
+      // Remove archived item from the list and deselect
+      if (dis.items && dis.sel !== null) {
+        const updated = [...dis.items];
+        updated.splice(dis.sel, 1);
+        dis.setItems(updated);
+      }
+      setSelectedEventId(null);
+      dis.setSel(null);
+    } else {
+      // For 'watching' or 'active', update status on the item in-place
+      if (dis.items && dis.sel !== null) {
+        const updated = [...dis.items];
+        const item = { ...updated[dis.sel] } as Record<string, unknown>;
+        item.status = newStatus;
+        updated[dis.sel] = item as typeof updated[0];
+        dis.setItems(updated);
+      }
+    }
+  }, [dis.items, dis.sel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Full-screen map mode
   if (mapMode) {
     return (
@@ -166,6 +189,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
           onSelectEvent={handleMapSelectEvent}
           onCloseMap={() => setMapMode(false)}
           filters={{}}
+          onStatusChange={handleStatusChange}
         />
         <VersionToggle version={version} onVersionChange={onVersionChange} />
       </div>
@@ -251,6 +275,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
             selectedIndex={selectedIndex}
             onSelectIndex={handleSelectIndex}
             onHoverIndex={handleHoverIndex}
+            onStatusChange={handleStatusChange}
           />
         </div>
 

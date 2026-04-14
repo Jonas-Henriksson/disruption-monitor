@@ -61,6 +61,7 @@ export interface MapModeProps {
   onSelectEvent: (id: string | null) => void;
   onCloseMap: () => void;
   filters: Record<string, unknown>;
+  onStatusChange?: (eventId: string, newStatus: string) => void;
 }
 
 /** Generate a stable ID for a scan item */
@@ -79,6 +80,7 @@ export function MapMode({
   onSelectEvent,
   onCloseMap,
   filters: _filters,
+  onStatusChange,
 }: MapModeProps) {
   const { theme: V3T, mode: themeMode } = useV3Theme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -750,6 +752,7 @@ export function MapMode({
             event={selectedEvent as unknown as DisruptionEvent}
             placement="map"
             onClose={handleDeselectEvent}
+            onStatusChange={onStatusChange}
           />
         </div>
       )}

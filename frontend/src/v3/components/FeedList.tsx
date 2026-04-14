@@ -18,6 +18,7 @@ export interface FeedListProps {
   selectedIndex: number | null;
   onSelectIndex: (idx: number | null) => void;
   onHoverIndex: (idx: number | null) => void;
+  onStatusChange?: (eventId: string, newStatus: string) => void;
 }
 
 const SEV_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
@@ -31,6 +32,7 @@ export function FeedList({
   selectedIndex,
   onSelectIndex,
   onHoverIndex,
+  onStatusChange,
 }: FeedListProps) {
   const { theme: V3 } = useV3Theme();
   const [showMyItems, setShowMyItems] = useState(false);
@@ -231,6 +233,7 @@ export function FeedList({
               expanded={selectedIndex === origIdx}
               onSelect={onSelectIndex}
               onHover={onHoverIndex}
+              onStatusChange={onStatusChange}
             />
           );
         })}

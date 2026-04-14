@@ -4,12 +4,15 @@
  * Three tabs: Summary | Exposure | Act
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
-import type { Severity } from '../../types';
+import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives } from '../../services/api';
+import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
+import { ROUTES, SUPPLY_GRAPH } from '../../data';
+import type { ScanItem, SupplyGraphInput } from '../../types';
 import { V3_FONT, V3_FONT_MONO, sevColor, type V3Theme } from '../theme';
 import { useV3Theme } from '../ThemeContext';
 
@@ -23,6 +26,7 @@ export interface ExpandedCardProps {
   placement: 'feed' | 'map';
   onClose: () => void;
   onHoverSite?: (siteId: string | null) => void;
+  onStatusChange?: (eventId: string, newStatus: string) => void;
 }
 
 /* ─────────────────────────────────────────────
@@ -60,7 +64,7 @@ function badgeStyle(bg: string, fg: string): React.CSSProperties {
 /* ─────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────── */
-export function ExpandedCard({ event, placement, onClose, onHoverSite }: ExpandedCardProps) {
+export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusChange }: ExpandedCardProps) {
   const { theme: V3 } = useV3Theme();
   const [tab, setTab] = useState<Tab>(() => {
     try { return (sessionStorage.getItem(TAB_KEY) as Tab) || 'summary'; }
@@ -136,7 +140,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite }: Expande
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} />}
         {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
-        {tab === 'act'      && <ActTab event={event} theme={V3} />}
+        {tab === 'act'      && <ActTab event={event} theme={V3} onStatusChange={onStatusChange} />}
       </div>
     </div>
   );
@@ -289,110 +293,252 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
   onHoverSite?: (id: string | null) => void;
   theme: V3Theme;
 }) {
-  const sites = event.affected_sites || [];
-  const suppliersByTier = useSuppliersByTier(event);
+  const enriched = useMemo(() => enrichExposureData(event as unknown as ScanItem), [event]);
+  const allSites = (event.affected_sites?.length ? event.affected_sites : enriched.affected_sites) || [];
+  const suppliersByTier = useSuppliersByTier(event, enriched.input_details);
   const routes: Array<string | { description?: string; route?: string }> =
-    (event.routing_context || event.affected_routes || []) as Array<string | { description?: string; route?: string }>;
+    ((event.routing_context?.length ? event.routing_context : enriched.routing_context.length ? enriched.routing_context : event.affected_routes) || []) as Array<string | { description?: string; route?: string }>;
 
-  const sectionHeader = sectionHeaderStyle(V3);
+  // Compute impact chain data
+  const region = event.region || 'Global';
+  const mfgSites = allSites.filter(s => (s.type || '').toLowerCase() === 'mfg');
+  const t1Inputs = suppliersByTier.find(t => t.tier === 1)?.items || [];
+  const soleSourceCount = suppliersByTier.flatMap(t => t.items).filter(s => s.sole_source).length;
+  const totalInputs = suppliersByTier.reduce((sum, t) => sum + t.items.length, 0);
+
+  // Compute corridors from impact utility
+  const impact = useMemo(() => {
+    try { return computeImpactWithGraph(event as unknown as ScanItem, ROUTES, SUPPLY_GRAPH); }
+    catch { return null; }
+  }, [event]);
+  const corridors = impact?.corridors || [];
+
+  // Supplier alternatives
+  const [altData, setAltData] = useState<SupplierAlternativesResponse | null>(null);
+  const [altLoading, setAltLoading] = useState(false);
+  const altFetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!region || region === 'Global' || altFetchedRef.current === region) return;
+    altFetchedRef.current = region;
+    setAltLoading(true);
+    fetchSupplierAlternatives(region).then(res => {
+      if (res) setAltData(res);
+      setAltLoading(false);
+    });
+  }, [region]);
+
+  // Build impact chain steps (skip empty steps)
+  const chainSteps: Array<{ label: string; items: Array<{ text: string; badge?: string; badgeColor?: string }>; color: string; icon: string }> = [];
+
+  // Step 1: Region
+  chainSteps.push({ label: 'Disruption Region', items: [{ text: region }], color: V3.accent.red, icon: '\uD83C\uDF0D' });
+
+  // Step 2: Corridors (skip if none)
+  if (corridors.length > 0) {
+    chainSteps.push({
+      label: 'Affected Corridors',
+      items: corridors.slice(0, 6).map(c => ({ text: c })),
+      color: V3.accent.amber,
+      icon: '\uD83D\uDEA2',
+    });
+  }
+
+  // Step 3: Exposed Factories (MFG only, max 6)
+  if (mfgSites.length > 0) {
+    chainSteps.push({
+      label: 'Exposed Factories',
+      items: mfgSites.slice(0, 6).map(s => {
+        const bu = BU_MAP[s.name] || '';
+        const buLabel = buDisplay(bu);
+        return { text: s.name, badge: buLabel || undefined, badgeColor: V3.accent.purple };
+      }),
+      color: V3.accent.blue,
+      icon: '\uD83C\uDFED',
+    });
+  }
+
+  // Step 4: At-Risk Inputs (T1 critical, max 8, with sole-source indicator)
+  if (t1Inputs.length > 0) {
+    chainSteps.push({
+      label: 'Critical Inputs (T1)',
+      items: t1Inputs.slice(0, 8).map(inp => ({
+        text: inp.name,
+        badge: inp.sole_source ? '\u26A0 Sole Source' : undefined,
+        badgeColor: inp.sole_source ? V3.accent.red : undefined,
+      })),
+      color: V3.accent.purple,
+      icon: '\uD83D\uDCE6',
+    });
+  }
+
+  const _sectionHeader = sectionHeaderStyle(V3);
+
+  // Empty state
+  if (allSites.length === 0 && suppliersByTier.length === 0 && corridors.length === 0) {
+    return <EmptyRow label="No exposure data available for this event" theme={V3} />;
+  }
 
   return (
     <div>
-      {/* Affected Sites */}
-      <div style={sectionHeader}>Affected Sites</div>
-      {sites.length === 0 && <EmptyRow label="No affected sites identified" theme={V3} />}
-      {sites.map((s, i) => {
-        const bu = BU_MAP[s.name] || '';
-        const typeLabel = (s.type || '').toUpperCase();
-        const typeBg = typeLabel === 'MFG' ? V3.accent.red
-          : typeLabel === 'LOG' ? V3.accent.amber
-          : typeLabel === 'SALES' ? V3.accent.blue
-          : V3.accent.purple;
-        const buLabel = buDisplay(bu);
+      {/* -- Risk Summary Bar -- */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12,
+        padding: '8px 10px', background: V3.bg.card, borderRadius: 8,
+        border: `1px solid ${V3.border.subtle}`,
+      }}>
+        {mfgSites.length > 0 && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+            color: V3.accent.red, background: V3.accent.red + '18',
+            padding: '2px 8px', borderRadius: 4, border: `1px solid ${V3.accent.red}33`,
+          }}>
+            {mfgSites.length} MFG site{mfgSites.length !== 1 ? 's' : ''} exposed
+          </span>
+        )}
+        {t1Inputs.length > 0 && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+            color: V3.accent.amber, background: V3.accent.amber + '18',
+            padding: '2px 8px', borderRadius: 4, border: `1px solid ${V3.accent.amber}33`,
+          }}>
+            {t1Inputs.length} T1 input{t1Inputs.length !== 1 ? 's' : ''} at risk
+          </span>
+        )}
+        {soleSourceCount > 0 && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+            color: V3.accent.red, background: V3.accent.red + '18',
+            padding: '2px 8px', borderRadius: 4, border: `1px solid ${V3.accent.red}33`,
+          }}>
+            {'\u26A0'} {soleSourceCount} sole-source
+          </span>
+        )}
+        {totalInputs > 0 && t1Inputs.length === 0 && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, fontFamily: V3_FONT_MONO,
+            color: V3.text.muted, background: V3.bg.base,
+            padding: '2px 8px', borderRadius: 4,
+          }}>
+            {totalInputs} supplier input{totalInputs !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
 
-        return (
-          <div
-            key={i}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '5px 0', borderBottom: `1px solid ${V3.border.subtle}`,
-              cursor: onHoverSite ? 'pointer' : 'default',
-            }}
-            onMouseEnter={() => onHoverSite?.(s.name)}
-            onMouseLeave={() => onHoverSite?.(null)}
-          >
-            <span style={{
-              flex: 1, fontSize: 12, color: V3.text.secondary, fontFamily: V3_FONT,
-              minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {s.name}
-            </span>
-            <span style={badgeStyle(typeBg, typeBg)}>{typeLabel || 'OTHER'}</span>
-            {buLabel && <span style={badgeStyle(V3.accent.purple, V3.accent.purple)}>{buLabel}</span>}
-            <span style={{
-              fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO, whiteSpace: 'nowrap',
-            }}>
-              {s.distance_km != null ? `${Math.round(s.distance_km)} km` : ''}
-            </span>
-          </div>
-        );
-      })}
-
-      {/* Supplier Impact */}
-      <div style={sectionHeader}>Supplier Impact</div>
-      {suppliersByTier.length === 0 && <EmptyRow label="No supplier data available" theme={V3} />}
-      {suppliersByTier.map(tierGroup => (
-        <div key={tierGroup.tier} style={{ marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{
-              fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
-              color: tierGroup.tier === 1 ? V3.accent.red
-                : tierGroup.tier === 2 ? V3.accent.amber : V3.accent.blue,
-            }}>
-              T{tierGroup.tier}
-            </span>
-            <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
-              {tierGroup.items.length} supplier{tierGroup.items.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          {tierGroup.items.map((sup, si) => (
-            <div key={si} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '3px 0 3px 16px',
-              borderBottom: `1px solid ${V3.border.subtle}`,
-            }}>
-              <span style={{ flex: 1, fontSize: 11, color: V3.text.secondary, fontFamily: V3_FONT }}>
-                {sup.name}
-              </span>
-              {sup.sole_source && (
-                <span style={badgeStyle(V3.accent.red, V3.accent.red)}>
-                  {'\u26A0'} Sole Source
-                </span>
-              )}
+      {/* -- Impact Chain -- */}
+      <div style={{
+        background: V3.bg.card, borderRadius: 8, padding: '10px 12px', marginBottom: 12,
+        border: `1px solid ${V3.border.subtle}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 10 }}>
+          <span style={{ fontSize: 11 }}>{'\uD83D\uDD17'}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO, color: V3.text.muted, textTransform: 'uppercase' as const, letterSpacing: 1.2 }}>Impact Chain</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 0 }}>
+          {chainSteps.map((step, si) => (
+            <div key={si}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flexShrink: 0, width: 22 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 11,
+                    background: step.color + '22', border: `1.5px solid ${step.color}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, lineHeight: 1,
+                  }}>{step.icon}</div>
+                  {si < chainSteps.length - 1 && <div style={{
+                    width: 1.5, height: 14, background: step.color, opacity: 0.35,
+                    marginTop: 2, marginBottom: 2,
+                  }} />}
+                </div>
+                <div style={{ flex: 1, paddingTop: 2, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO,
+                    color: step.color, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: 0.8,
+                  }}>
+                    {step.label}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4, marginBottom: si < chainSteps.length - 1 ? 4 : 0 }}>
+                    {step.items.map((item, ii) => (
+                      <span key={ii} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{
+                          background: step.color + '18', color: step.color,
+                          padding: '2px 7px', borderRadius: 4, fontSize: 10,
+                          fontFamily: V3_FONT_MONO, fontWeight: 500, border: `1px solid ${step.color}22`,
+                          whiteSpace: 'nowrap' as const,
+                        }}>{item.text}</span>
+                        {item.badge && (
+                          <span style={{
+                            fontSize: 8, fontWeight: 700, fontFamily: V3_FONT_MONO,
+                            color: item.badgeColor || V3.text.muted,
+                            background: (item.badgeColor || V3.text.muted) + '18',
+                            padding: '1px 5px', borderRadius: 3,
+                            border: `1px solid ${(item.badgeColor || V3.text.muted)}33`,
+                            whiteSpace: 'nowrap' as const,
+                          }}>{item.badge}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-      ))}
+      </div>
 
-      {/* Routing Dependencies */}
+      {/* -- Backup Regions -- */}
+      {(altLoading || altData) && (
+        <div style={{
+          background: V3.bg.card, borderRadius: 8, padding: '10px 12px', marginBottom: 12,
+          border: `1px solid ${V3.border.subtle}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: altData ? 8 : 4 }}>
+            <span style={{ fontSize: 11 }}>{'\u26A1'}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO, color: V3.text.muted, textTransform: 'uppercase' as const, letterSpacing: 1.2 }}>Backup Regions</span>
+            {altData && <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO, color: V3.text.muted, marginLeft: 'auto' }}>{altData.alternatives.length} options</span>}
+          </div>
+          {altLoading && !altData && (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+              {[0, 1, 2].map(i => <div key={i} className="sc-skel" style={{ height: 24, borderRadius: 4 }} />)}
+            </div>
+          )}
+          {altData && (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+              {altData.alternatives.slice(0, 5).map((alt, ai) => {
+                const overlapColor = alt.overlap_pct >= 70 ? V3.accent.green
+                  : alt.overlap_pct >= 40 ? V3.accent.amber : V3.accent.red;
+                return (
+                  <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: V3.text.secondary, minWidth: 70, fontFamily: V3_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{alt.country}</span>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 2, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: V3_FONT_MONO, fontSize: 10, color: V3.text.muted }}>{alt.supplier_count} suppliers</span>
+                        <span style={{ fontFamily: V3_FONT_MONO, fontSize: 10, color: overlapColor, fontWeight: 700 }}>{Math.round(alt.overlap_pct)}%</span>
+                      </div>
+                      <div style={{ height: 3, background: V3.bg.base, borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(100, alt.overlap_pct)}%`, height: '100%', background: overlapColor, borderRadius: 2, transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* -- Routing Context (compact, max 3) -- */}
       {routes.length > 0 && (
-        <>
-          <div style={sectionHeader}>Routing Dependencies</div>
-          {routes.map((r, ri) => {
-            const text = typeof r === 'string'
-              ? r
-              : (r.description || r.route || JSON.stringify(r));
+        <div style={{ marginTop: 4 }}>
+          {routes.slice(0, 3).map((r, ri) => {
+            const text = typeof r === 'string' ? r : (r.description || r.route || JSON.stringify(r));
             return (
               <div key={ri} style={{
-                padding: '5px 0',
-                borderBottom: `1px solid ${V3.border.subtle}`,
-                fontSize: 11, color: V3.text.secondary, lineHeight: 1.5,
-              }}>
-                {text}
-              </div>
+                padding: '4px 0', borderBottom: `1px solid ${V3.border.subtle}`,
+                fontSize: 10, color: V3.text.muted, lineHeight: 1.5, fontFamily: V3_FONT,
+              }}>{text}</div>
             );
           })}
-        </>
+        </div>
       )}
     </div>
   );
@@ -402,11 +548,12 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
 interface SupplierEntry { name: string; tier: number; sole_source: boolean }
 interface TierGroup { tier: number; items: SupplierEntry[] }
 
-function useSuppliersByTier(event: DisruptionEvent): TierGroup[] {
+function useSuppliersByTier(event: DisruptionEvent, fallbackDetails?: SupplyGraphInput[]): TierGroup[] {
   return useMemo(() => {
     const details: Array<{ name?: string; tier?: number; sole_source?: boolean }> =
       (event.payload?.input_details as Array<{ name?: string; tier?: number; sole_source?: boolean }> | undefined)
       || event.input_details
+      || fallbackDetails
       || [];
     if (!Array.isArray(details) || details.length === 0) return [];
 
@@ -423,7 +570,7 @@ function useSuppliersByTier(event: DisruptionEvent): TierGroup[] {
     return [1, 2, 3]
       .filter(t => grouped[t]?.length)
       .map(t => ({ tier: t, items: grouped[t] }));
-  }, [event]);
+  }, [event, fallbackDetails]);
 }
 
 /* ══════════════════════════════════════════════
@@ -447,7 +594,7 @@ function parseActionsFromString(text: string): ActionItemShape[] {
   }));
 }
 
-function ActTab({ event, theme: V3 }: { event: DisruptionEvent; theme: V3Theme }) {
+function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; theme: V3Theme; onStatusChange?: (eventId: string, newStatus: string) => void }) {
   const [actions, setActions] = useState<ActionItemShape[]>(() => {
     const recs = event.recommendations?.actions;
     if (Array.isArray(recs) && recs.length > 0) return recs;
@@ -476,12 +623,26 @@ function ActTab({ event, theme: V3 }: { event: DisruptionEvent; theme: V3Theme }
     ));
   }, []);
 
+  // Build event ID: prefer backend id, fall back to slug|region (matches backend _make_disruption_id)
+  const resolvedId = useMemo(() => {
+    if (event.id) return event.id;
+    const name = (event.event || event.risk || 'unknown').toLowerCase().slice(0, 40).replace(/\s+/g, '-');
+    const region = (event.region || 'unknown').toLowerCase().replace(/\s+/g, '-');
+    return `${name}|${region}`;
+  }, [event.id, event.event, event.risk, event.region]);
+
+  const [statusLoading, setStatusLoading] = useState(false);
+
   const handleStatusChange = useCallback(async (newStatus: string) => {
-    const eid = event.id || '';
-    if (!eid) return;
-    const ok = await updateEventStatus(eid, newStatus);
-    if (ok) setStatus(newStatus as typeof status);
-  }, [event.id]);
+    if (!resolvedId) return;
+    setStatusLoading(true);
+    const ok = await updateEventStatus(resolvedId, newStatus);
+    setStatusLoading(false);
+    if (ok) {
+      setStatus(newStatus as typeof status);
+      onStatusChange?.(resolvedId, newStatus);
+    }
+  }, [resolvedId, onStatusChange]);
 
   const eventTitle = event.event || event.risk || 'Disruption Event';
   const eventDesc = event.description
@@ -512,12 +673,14 @@ function ActTab({ event, theme: V3 }: { event: DisruptionEvent; theme: V3Theme }
         <LifecycleBtn
           label="Watch" icon={'\uD83D\uDC41'}
           active={status === 'watching'}
+          loading={statusLoading}
           onClick={() => handleStatusChange(status === 'watching' ? 'active' : 'watching')}
           theme={V3}
         />
         <LifecycleBtn
           label="Archive" icon={'\uD83D\uDCE6'}
           active={status === 'archived'}
+          loading={statusLoading}
           onClick={() => handleStatusChange(status === 'archived' ? 'active' : 'archived')}
           theme={V3}
         />
@@ -584,20 +747,22 @@ function ActTab({ event, theme: V3 }: { event: DisruptionEvent; theme: V3Theme }
 }
 
 /* ── Lifecycle button ── */
-function LifecycleBtn({ label, icon, active, onClick, theme: V3 }: {
-  label: string; icon: string; active: boolean; onClick: () => void; theme: V3Theme;
+function LifecycleBtn({ label, icon, active, loading, onClick, theme: V3 }: {
+  label: string; icon: string; active: boolean; loading?: boolean; onClick: () => void; theme: V3Theme;
 }) {
   return (
     <button
+      disabled={loading}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+        padding: '5px 10px', borderRadius: 6, cursor: loading ? 'wait' : 'pointer',
         fontSize: 11, fontWeight: 600, fontFamily: V3_FONT,
         background: active ? V3.accent.blue + '22' : V3.bg.base,
         color: active ? V3.accent.blue : V3.text.muted,
         border: `1px solid ${active ? V3.accent.blue + '44' : V3.border.subtle}`,
         transition: 'all 150ms ease',
+        opacity: loading ? 0.6 : 1,
       }}
     >
       <span style={{ fontSize: 13 }}>{icon}</span>

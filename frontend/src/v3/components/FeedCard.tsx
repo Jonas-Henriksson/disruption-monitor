@@ -16,9 +16,10 @@ export interface FeedCardProps {
   expanded: boolean;
   onSelect: (index: number | null) => void;
   onHover: (index: number | null) => void;
+  onStatusChange?: (eventId: string, newStatus: string) => void;
 }
 
-export function FeedCard({ item, index, expanded, onSelect, onHover }: FeedCardProps) {
+export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusChange }: FeedCardProps) {
   const { theme: V3 } = useV3Theme();
   const sev = getSev(item);
   const title = getEvent(item);
@@ -128,6 +129,7 @@ export function FeedCard({ item, index, expanded, onSelect, onHover }: FeedCardP
             event={item as unknown as import('./expandedcard_types').DisruptionEvent}
             placement="feed"
             onClose={() => onSelect(null)}
+            onStatusChange={onStatusChange}
           />
         </div>
       )}

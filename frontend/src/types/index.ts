@@ -106,6 +106,8 @@ export interface Disruption {
   scan_count?: number;
   computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
+  input_details?: SupplyGraphInput[];
+  routing_context?: string[];
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
@@ -132,6 +134,8 @@ export interface GeopoliticalRisk {
   scan_count?: number;
   computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
+  input_details?: SupplyGraphInput[];
+  routing_context?: string[];
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
@@ -160,6 +164,8 @@ export interface TradeEvent {
   scan_count?: number;
   computed_severity?: ComputedSeverity;
   affected_sites?: Array<{ name: string; type: string; distance_km: number }>;
+  input_details?: SupplyGraphInput[];
+  routing_context?: string[];
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;

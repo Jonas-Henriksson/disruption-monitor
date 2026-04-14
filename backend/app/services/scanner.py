@@ -334,6 +334,88 @@ def _match_affected_sites(item: dict, mode: str) -> list[dict]:
     return combined
 
 
+def _enrich_supply_chain_data(item: dict) -> None:
+    """Enrich an event with supplier input_details and routing_context from SUPPLY_GRAPH.
+
+    For each affected site that exists in SUPPLY_GRAPH, collects the input_details
+    (tier, sole_source, criticality) and builds routing context descriptions.
+    Also enriches based on event region/country matching supplier countries.
+    """
+    if item.get("input_details") and item.get("routing_context"):
+        return  # Already enriched
+
+    affected_sites = item.get("affected_sites", [])
+    all_inputs: list[dict] = []
+    routing_reasons: list[str] = []
+    seen_inputs: set[str] = set()
+
+    # ── 1. Direct site matches: sites in affected_sites that are in SUPPLY_GRAPH ──
+    for site in affected_sites:
+        site_name = site.get("name", "")
+        graph_entry = SUPPLY_GRAPH.get(site_name)
+        if not graph_entry:
+            continue
+
+        bu = graph_entry.get("bu", "")
+        for inp in graph_entry.get("input_details", []):
+            key = f"{site_name}|{inp.get('name', '')}"
+            if key not in seen_inputs:
+                seen_inputs.add(key)
+                all_inputs.append({
+                    **inp,
+                    "factory": site_name,
+                    "bu": bu,
+                })
+
+        # Build routing context
+        sup_countries = graph_entry.get("sup", [])
+        if sup_countries:
+            routing_reasons.append(
+                f"{site_name} ({bu}) sources from {', '.join(sup_countries[:4])}"
+                + (f" +{len(sup_countries) - 4} more" if len(sup_countries) > 4 else "")
+            )
+
+    # ── 2. Region/country-based enrichment for events not near factories ──
+    #    If no direct site matches found in SUPPLY_GRAPH, check if the event's
+    #    region/country affects supplier countries in the graph.
+    #    Skip for broad/vague regions to avoid matching every factory.
+    BROAD_REGIONS = {"Europe", "Americas", "Global", "Middle East", "Africa", "Asia", "APAC"}
+
+    if not all_inputs:
+        event_region = item.get("region", "")
+        event_country = item.get("country", "") or event_region
+
+        # Only do supplier-country matching for specific countries
+        is_broad = event_region in BROAD_REGIONS and (event_country in BROAD_REGIONS or not event_country)
+        if not is_broad:
+            for factory_name, graph_entry in SUPPLY_GRAPH.items():
+                sup_countries = graph_entry.get("sup", [])
+                # Check if event region/country matches a supplier country
+                if event_country in sup_countries or event_region in sup_countries:
+                    bu = graph_entry.get("bu", "")
+                    for inp in graph_entry.get("input_details", []):
+                        key = f"{factory_name}|{inp.get('name', '')}"
+                        if key not in seen_inputs:
+                            seen_inputs.add(key)
+                            all_inputs.append({
+                                **inp,
+                                "factory": factory_name,
+                                "bu": bu,
+                            })
+                    if sup_countries:
+                        routing_reasons.append(
+                            f"{factory_name} ({bu}) sources from {event_country or event_region}"
+                        )
+
+    if all_inputs:
+        # Sort: T1 sole-source first, then by tier
+        all_inputs.sort(key=lambda x: (x.get("tier", 3), not x.get("sole_source", False)))
+        item["input_details"] = all_inputs[:15]  # Cap at 15
+
+    if routing_reasons:
+        item["routing_context"] = routing_reasons[:10]  # Cap at 10
+
+
 # ── Core scanning logic ─────────────────────────────────────────
 
 
@@ -436,8 +518,9 @@ def _build_sample_result(
     """Build a scan result from sample data."""
     data = _get_sample_data(mode)
 
-    # Compute algorithmic severity scores for sample data
+    # Enrich with supplier data and compute severity
     for item in data:
+        _enrich_supply_chain_data(item)
         item["computed_severity"] = compute_severity_score(item)
 
     # Tag potential duplicates
@@ -545,6 +628,9 @@ async def _run_live_scan(
             nearby = _match_affected_sites(item, mode)
             if nearby:
                 item["affected_sites"] = nearby
+
+        # Enrich with supplier input_details and routing context from SUPPLY_GRAPH
+        _enrich_supply_chain_data(item)
 
     # Compute algorithmic severity scores (keeps AI severity intact)
     for item in items:

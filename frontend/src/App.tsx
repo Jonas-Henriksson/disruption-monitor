@@ -755,7 +755,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Version toggle — switch to v2 */}
+      {/* Version toggle — switch between v1/v2/v3 */}
       <VersionToggle version="v1" />
 
       {/* Keyboard shortcut help button — hidden on mobile */}
