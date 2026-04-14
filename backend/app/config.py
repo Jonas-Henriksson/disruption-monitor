@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     # Daily email digest
     digest_enabled: bool = os.environ.get("DIGEST_ENABLED", "false").lower() in ("1", "true", "yes")
     digest_recipients: str = os.environ.get("DIGEST_RECIPIENTS", "")  # comma-separated emails
+    digest_schedule_hour: int = 7  # UTC hour for daily digest (default: 07:00 UTC)
 
     # ITSM integration (ServiceNow / Jira bridge)
     itsm_provider: str = os.environ.get("TARS_ITSM_PROVIDER", "") or os.environ.get("ITSM_PROVIDER", "") or "none"  # none | servicenow | jira

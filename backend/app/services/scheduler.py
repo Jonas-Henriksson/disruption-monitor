@@ -230,6 +230,53 @@ async def stop_scheduler() -> None:
     _scan_status.clear()
 
 
+_digest_task: asyncio.Task | None = None
+
+
+async def _digest_loop() -> None:
+    """Run daily digest at the configured hour (UTC)."""
+    from .digest import build_daily_digest, format_digest_html
+
+    while True:
+        now = datetime.now(timezone.utc)
+        target_hour = settings.digest_schedule_hour
+        next_run = now.replace(hour=target_hour, minute=0, second=0, microsecond=0)
+        if now >= next_run:
+            next_run += timedelta(days=1)
+
+        wait_seconds = (next_run - now).total_seconds()
+        logger.info("Daily digest scheduled for %s (in %.0f seconds)", next_run.isoformat(), wait_seconds)
+        await asyncio.sleep(wait_seconds)
+
+        try:
+            digest = build_daily_digest()
+            html = format_digest_html(digest)
+            logger.info("Daily digest built: %s", digest.get("headline", ""))
+            if settings.digest_enabled and settings.digest_recipients:
+                logger.info("Digest ready for %d recipients", len(settings.digest_recipients.split(",")))
+            else:
+                logger.info("Digest built but email delivery not configured (set DIGEST_ENABLED=true)")
+        except Exception:
+            logger.exception("Failed to build daily digest")
+
+
+def start_digest_schedule() -> None:
+    """Start the daily digest background task."""
+    global _digest_task
+    if _digest_task is not None:
+        return
+    _digest_task = asyncio.create_task(_digest_loop())
+    logger.info("Daily digest scheduler started")
+
+
+def stop_digest_schedule() -> None:
+    """Stop the daily digest background task."""
+    global _digest_task
+    if _digest_task is not None:
+        _digest_task.cancel()
+        _digest_task = None
+
+
 def get_scheduler_status() -> dict:
     """Return the current status of the scheduler."""
     return {
