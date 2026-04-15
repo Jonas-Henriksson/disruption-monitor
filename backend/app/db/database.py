@@ -133,7 +133,9 @@ CREATE TABLE IF NOT EXISTS events (
     scan_count      INTEGER NOT NULL DEFAULT 1,
     payload         TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
+    archived_severity INTEGER,
+    resurfaced_at     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS event_snapshots (
@@ -244,6 +246,24 @@ CREATE TABLE IF NOT EXISTS itsm_sync_log (
 
 CREATE INDEX IF NOT EXISTS idx_itsm_sync_log_event ON itsm_sync_log(event_id);
 CREATE INDEX IF NOT EXISTS idx_itsm_sync_log_action ON itsm_sync_log(action);
+
+CREATE TABLE IF NOT EXISTS evolution_summaries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id        TEXT NOT NULL REFERENCES events(id),
+    period_type     TEXT NOT NULL CHECK (period_type IN ('daily', 'weekly', 'monthly')),
+    period_start    TEXT NOT NULL,
+    period_end      TEXT NOT NULL,
+    severity_values TEXT NOT NULL DEFAULT '[]',
+    phase_label     TEXT,
+    phase_number    INTEGER DEFAULT 1,
+    key_developments TEXT NOT NULL DEFAULT '[]',
+    exposure_delta  TEXT DEFAULT '',
+    forward_outlook TEXT DEFAULT '',
+    narrative       TEXT DEFAULT '',
+    generated_by    TEXT NOT NULL DEFAULT 'fallback',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+);
+CREATE INDEX IF NOT EXISTS idx_evolution_event ON evolution_summaries(event_id, period_type, period_start);
 """
 
 
@@ -260,6 +280,12 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE tickets ADD COLUMN due_date TEXT")
         if "priority" not in cols:
             conn.execute("ALTER TABLE tickets ADD COLUMN priority TEXT")
+        # Migrate existing DBs: add evolution columns to events if missing
+        event_cols = {row[1] for row in conn.execute("PRAGMA table_info(events)").fetchall()}
+        if "archived_severity" not in event_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN archived_severity INTEGER")
+        if "resurfaced_at" not in event_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN resurfaced_at TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -810,12 +836,93 @@ def cleanup_old_events(days: int = 90) -> int:
         conn.execute(f"DELETE FROM event_edits WHERE event_id IN ({placeholders})", event_ids)
         conn.execute(f"DELETE FROM alerted_events WHERE event_id IN ({placeholders})", event_ids)
         conn.execute(f"DELETE FROM itsm_sync_log WHERE event_id IN ({placeholders})", event_ids)
+        conn.execute(f"DELETE FROM evolution_summaries WHERE event_id IN ({placeholders})", event_ids)
 
         # Delete the events themselves
         conn.execute(f"DELETE FROM events WHERE id IN ({placeholders})", event_ids)
 
         logger.info("Cleaned up %d archived events older than %d days", len(event_ids), days)
         return len(event_ids)
+
+
+# ── Evolution summaries ──────────────────────────────────────────
+
+
+def save_evolution_summary(summary: dict) -> int:
+    """Insert an evolution summary. Returns the row ID."""
+    with get_db() as conn:
+        cursor = conn.execute(
+            """INSERT INTO evolution_summaries
+               (event_id, period_type, period_start, period_end, severity_values,
+                phase_label, phase_number, key_developments, exposure_delta,
+                forward_outlook, narrative, generated_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                summary["event_id"],
+                summary["period_type"],
+                summary["period_start"],
+                summary["period_end"],
+                summary["severity_values"],
+                summary.get("phase_label", ""),
+                summary.get("phase_number", 1),
+                summary["key_developments"],
+                summary.get("exposure_delta", ""),
+                summary.get("forward_outlook", ""),
+                summary.get("narrative", ""),
+                summary.get("generated_by", "fallback"),
+            ),
+        )
+        return cursor.lastrowid
+
+
+def get_evolution_summaries(
+    event_id: str, period_type: str | None = None, limit: int = 100
+) -> list[dict]:
+    """Get evolution summaries for an event, optionally filtered by period type."""
+    with get_db() as conn:
+        if period_type:
+            rows = conn.execute(
+                """SELECT * FROM evolution_summaries
+                   WHERE event_id = ? AND period_type = ?
+                   ORDER BY period_start ASC LIMIT ?""",
+                (event_id, period_type, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT * FROM evolution_summaries
+                   WHERE event_id = ?
+                   ORDER BY period_start ASC LIMIT ?""",
+                (event_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_latest_evolution_summary(event_id: str) -> dict | None:
+    """Get the most recent evolution summary for an event (any period type)."""
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT * FROM evolution_summaries
+               WHERE event_id = ?
+               ORDER BY id DESC LIMIT 1""",
+            (event_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def delete_evolution_summaries(event_id: str, period_type: str | None = None) -> int:
+    """Delete evolution summaries. Used by compression and cleanup."""
+    with get_db() as conn:
+        if period_type:
+            cursor = conn.execute(
+                "DELETE FROM evolution_summaries WHERE event_id = ? AND period_type = ?",
+                (event_id, period_type),
+            )
+        else:
+            cursor = conn.execute(
+                "DELETE FROM evolution_summaries WHERE event_id = ?",
+                (event_id,),
+            )
+        return cursor.rowcount
 
 
 # ── Stats ──────────────────────────────────────────────────────
