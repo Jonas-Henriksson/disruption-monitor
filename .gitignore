@@ -17,3 +17,6 @@ pload.zip
 /package-lock.json
 v .env.awsy
 .gstack/
+.claude/worktrees/
+ec2-connect.ps1
+docs/superpowers/
