@@ -1,5 +1,6 @@
 /**
  * FeedList — Scrollable list of FeedCard components with accordion behavior.
+ * Hides duplicates by default and collapses low-severity events for a compact feed.
  */
 
 import { useMemo, useState } from 'react';
@@ -36,7 +37,10 @@ export function FeedList({
 }: FeedListProps) {
   const { theme: V3 } = useV3Theme();
   const [showMyItems, setShowMyItems] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showLowerSeverity, setShowLowerSeverity] = useState(false);
 
+  // Step 1: Apply user filters (severity, search, my items)
   const filtered = useMemo(() => {
     if (!items) return [];
     let list = [...items];
@@ -75,6 +79,46 @@ export function FeedList({
 
     return list;
   }, [items, severityFilter, searchQuery, showMyItems]);
+
+  // Step 2: Separate duplicates and severity tiers from filtered list
+  const { primary, duplicates, highPriority, lowerPriority } = useMemo(() => {
+    const dupes: ScanItem[] = [];
+    const nonDupes: ScanItem[] = [];
+
+    for (const item of filtered) {
+      if (item.possible_duplicate_of) {
+        dupes.push(item);
+      } else {
+        nonDupes.push(item);
+      }
+    }
+
+    const high: ScanItem[] = [];
+    const lower: ScanItem[] = [];
+
+    for (const item of nonDupes) {
+      const sev = getSev(item);
+      if (sev === 'Critical' || sev === 'High') {
+        high.push(item);
+      } else {
+        lower.push(item);
+      }
+    }
+
+    return { primary: nonDupes, duplicates: dupes, highPriority: high, lowerPriority: lower };
+  }, [filtered]);
+
+  // What's actually visible
+  const visibleItems = useMemo(() => {
+    let visible = showLowerSeverity ? [...highPriority, ...lowerPriority] : [...highPriority];
+    if (showDuplicates) {
+      visible = [...visible, ...duplicates];
+    }
+    return visible;
+  }, [highPriority, lowerPriority, duplicates, showLowerSeverity, showDuplicates]);
+
+  const totalCount = filtered.length;
+  const visibleCount = visibleItems.length;
 
   // Loading skeleton
   if (loading && (!items || items.length === 0)) {
@@ -157,6 +201,21 @@ export function FeedList({
     );
   }
 
+  const toggleBtnStyle = (active: boolean): React.CSSProperties => ({
+    width: '100%',
+    padding: `${V3.spacing.sm}px ${V3.spacing.md}px`,
+    border: `1px dashed ${active ? V3.accent.blue + '55' : V3.border.subtle}`,
+    borderRadius: V3.radius.md,
+    background: active ? V3.accent.blueDim : 'transparent',
+    color: active ? V3.text.accent : V3.text.muted,
+    fontSize: 11,
+    fontWeight: 500,
+    fontFamily: V3_FONT,
+    cursor: 'pointer',
+    transition: 'all 150ms',
+    textAlign: 'center' as const,
+  });
+
   return (
     <div style={{
       flex: 1,
@@ -190,7 +249,7 @@ export function FeedList({
             padding: '1px 6px',
             borderRadius: V3.radius.sm,
           }}>
-            {filtered.length}
+            {visibleCount} of {totalCount}
           </span>
         </div>
 
@@ -222,8 +281,8 @@ export function FeedList({
         flexDirection: 'column',
         gap: V3.spacing.xs,
       }}>
-        {filtered.map((item) => {
-          // Map back to original index for selection
+        {/* High-priority items (Critical + High) — always shown */}
+        {highPriority.map((item) => {
           const origIdx = items!.indexOf(item);
           return (
             <FeedCard
@@ -237,6 +296,64 @@ export function FeedList({
             />
           );
         })}
+
+        {/* Show more toggle for Medium/Low */}
+        {lowerPriority.length > 0 && (
+          <>
+            <button
+              onClick={() => setShowLowerSeverity(!showLowerSeverity)}
+              style={toggleBtnStyle(showLowerSeverity)}
+            >
+              {showLowerSeverity
+                ? `Hide ${lowerPriority.length} Medium/Low events`
+                : `Show ${lowerPriority.length} more Medium/Low events`}
+            </button>
+
+            {showLowerSeverity && lowerPriority.map((item) => {
+              const origIdx = items!.indexOf(item);
+              return (
+                <FeedCard
+                  key={origIdx}
+                  item={item}
+                  index={origIdx}
+                  expanded={selectedIndex === origIdx}
+                  onSelect={onSelectIndex}
+                  onHover={onHoverIndex}
+                  onStatusChange={onStatusChange}
+                />
+              );
+            })}
+          </>
+        )}
+
+        {/* Show duplicates toggle */}
+        {duplicates.length > 0 && (
+          <>
+            <button
+              onClick={() => setShowDuplicates(!showDuplicates)}
+              style={toggleBtnStyle(showDuplicates)}
+            >
+              {showDuplicates
+                ? `Hide ${duplicates.length} duplicate events`
+                : `Show ${duplicates.length} duplicates`}
+            </button>
+
+            {showDuplicates && duplicates.map((item) => {
+              const origIdx = items!.indexOf(item);
+              return (
+                <FeedCard
+                  key={origIdx}
+                  item={item}
+                  index={origIdx}
+                  expanded={selectedIndex === origIdx}
+                  onSelect={onSelectIndex}
+                  onHover={onHoverIndex}
+                  onStatusChange={onStatusChange}
+                />
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );

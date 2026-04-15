@@ -25,10 +25,13 @@ _SEARCH_QUERIES: dict[str, list[str]] = {
     "disruptions": [
         "supply chain disruption news today",
         "factory fire flood earthquake port closure logistics delay",
+        "Strait of Hormuz Suez Canal Panama Canal shipping blockade closure",
+        "Red Sea Houthi shipping disruption port congestion",
     ],
     "geopolitical": [
         "geopolitical risk news today",
         "sanctions conflict trade war political instability",
+        "Iran Hormuz strait tensions Middle East shipping threat",
     ],
     "trade": [
         "trade policy tariff news today",

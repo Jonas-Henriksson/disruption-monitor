@@ -484,6 +484,78 @@ export async function fetchWhatIf(scenario: WhatIfScenario): Promise<WhatIfResul
   }
 }
 
+/**
+ * Fetch severity history for a specific event (for real sparkline).
+ * Returns array of {score, timestamp} or null.
+ */
+export async function fetchSeverityHistory(eventId: string): Promise<Array<{score: number; timestamp: string}> | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.severity_history || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch structured actions for an event from the backend.
+ */
+export async function fetchEventActions(eventId: string): Promise<Array<{id: number; action_type: string; title: string; description: string; assignee_hint: string; priority: string; status: string; due_date: string | null}> | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/actions`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update a specific action's status on the backend.
+ */
+export async function updateActionStatus(actionId: number, status: string): Promise<boolean> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/actions/${actionId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ status }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Generate actions for an event on the backend.
+ */
+export async function generateEventActions(eventId: string): Promise<Array<{id: number; action_type: string; title: string; description: string; assignee_hint: string; priority: string; status: string; due_date: string | null}> | null> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/actions/generate`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Graph API integration
 // ---------------------------------------------------------------------------

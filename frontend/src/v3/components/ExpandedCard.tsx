@@ -9,7 +9,7 @@ import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
 import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -137,7 +137,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
       </div>
 
       {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+      <div className="sc-s" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} />}
         {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
         {tab === 'act'      && <ActTab event={event} theme={V3} onStatusChange={onStatusChange} />}
@@ -161,19 +161,50 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
   const probability = cs?.probability;
 
   const velColor = velocity === 'immediate' || velocity === 'days'
-    ? V3.accent.red : V3.accent.blue;
+    ? V3.accent.red : velocity === 'weeks' ? V3.accent.amber : V3.accent.blue;
   const velLabel = velocity === 'immediate' ? 'Rapid' : velocity === 'days' ? 'Fast'
-    : velocity === 'weeks' ? 'Gradual' : velocity === 'months' ? 'Slow' : velocity || 'N/A';
+    : velocity === 'weeks' ? 'Gradual' : velocity === 'months' ? 'Slow' : velocity || null;
 
   const recColor = recovery === 'months' ? V3.accent.red : recovery === 'weeks'
     ? V3.accent.amber : V3.accent.green;
-  const recLabel = recovery || 'N/A';
+  const recLabel = recovery || null;
 
   const probPct = probability != null ? Math.round(probability * 100) : null;
   const probColor = (probability ?? 0) >= 0.7 ? V3.accent.red
     : (probability ?? 0) >= 0.4 ? V3.accent.amber : V3.accent.green;
 
+  // Derive extra context
+  const affectedSites = event.affected_sites || [];
+  const mfgCount = affectedSites.filter(s => (s.type || '').toLowerCase() === 'mfg').length;
+  const totalSites = affectedSites.length;
+  const confidence = event.confidence != null ? Math.round(event.confidence * 100) : null;
+  const scanCount = event.scan_count || 0;
+  const trend = event.trend || (event.payload?.trend as string | undefined) || '';
+  const category = (event as any).category || (event.payload?.category as string | undefined) || '';
+  const region = event.region || '';
+  const firstSeen = event.first_seen ? new Date(event.first_seen) : null;
+  const lastSeen = event.last_seen ? new Date(event.last_seen) : null;
+  const sources = event.sources || [];
+  const skfExposure = (event as any).skf_exposure
+    || (event.payload?.skf_exposure as string | undefined)
+    || (event as any).skf_relevance
+    || (event.payload?.skf_relevance as string | undefined)
+    || '';
+
   const sectionHeader = sectionHeaderStyle(V3);
+
+  // Infer velocity/recovery from severity if not provided
+  const inferredVelocity = velLabel || (sev === 'Critical' ? 'Rapid' : sev === 'High' ? 'Fast' : sev === 'Medium' ? 'Gradual' : 'Slow');
+  const inferredVelColor = !velLabel
+    ? (sev === 'Critical' || sev === 'High' ? V3.accent.red : sev === 'Medium' ? V3.accent.amber : V3.accent.blue)
+    : velColor;
+  const inferredRecovery = recLabel || (sev === 'Critical' ? 'months' : sev === 'High' ? 'weeks' : sev === 'Medium' ? 'weeks' : 'days');
+  const inferredRecColor = !recLabel
+    ? (sev === 'Critical' ? V3.accent.red : sev === 'High' ? V3.accent.amber : V3.accent.green)
+    : recColor;
+
+  const trendIcon = trend === 'Escalating' ? '\u2191' : trend === 'De-escalating' ? '\u2193' : trend === 'Stable' ? '\u2192' : '\u2022';
+  const trendColor = trend === 'Escalating' ? V3.accent.red : trend === 'De-escalating' ? V3.accent.green : V3.accent.amber;
 
   return (
     <div>
@@ -188,6 +219,34 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
         <span style={badgeStyle(sevCol, sevCol)}>{sev}</span>
       </div>
 
+      {/* Category + Region + Trend row */}
+      {(category || region || trend) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {category && (
+            <span style={{
+              fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO,
+              color: V3.text.muted, background: V3.bg.base,
+              padding: '2px 6px', borderRadius: 3, border: `1px solid ${V3.border.subtle}`,
+              textTransform: 'uppercase', letterSpacing: '0.05em',
+            }}>{category}</span>
+          )}
+          {region && (
+            <span style={{
+              fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO,
+              color: V3.accent.blue, background: V3.accent.blue + '12',
+              padding: '2px 6px', borderRadius: 3, border: `1px solid ${V3.accent.blue}22`,
+            }}>{region}</span>
+          )}
+          {trend && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, fontFamily: V3_FONT_MONO,
+              color: trendColor, background: trendColor + '12',
+              padding: '2px 6px', borderRadius: 3, border: `1px solid ${trendColor}22`,
+            }}>{trendIcon} {trend}</span>
+          )}
+        </div>
+      )}
+
       {/* Description */}
       {description && (
         <p style={{ color: V3.text.secondary, fontSize: 12, lineHeight: 1.6, margin: '0 0 10px' }}>
@@ -195,20 +254,66 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
         </p>
       )}
 
-      {/* Inline dimension badges */}
+      {/* SKF-specific exposure */}
+      {skfExposure && (
+        <div style={{
+          background: V3.accent.red + '08', borderRadius: 6, padding: '8px 10px',
+          border: `1px solid ${V3.accent.red}18`, marginBottom: 10,
+        }}>
+          <div style={{ fontSize: 9, fontWeight: 700, fontFamily: V3_FONT_MONO, color: V3.accent.red, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            SKF Exposure
+          </div>
+          <div style={{ fontSize: 11, color: V3.text.secondary, lineHeight: 1.5 }}>
+            {skfExposure}
+          </div>
+        </div>
+      )}
+
+      {/* Dimension badges: velocity, recovery, probability */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={badgeStyle(velColor, velColor)}>
-          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Velocity</span> {velLabel}
+        <span style={badgeStyle(inferredVelColor, inferredVelColor)}>
+          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Velocity</span> {inferredVelocity}
+          {!velLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
         </span>
-        <span style={badgeStyle(recColor, recColor)}>
-          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Recovery</span> {recLabel}
+        <span style={badgeStyle(inferredRecColor, inferredRecColor)}>
+          <span style={{ color: V3.text.muted, fontWeight: 500 }}>Recovery</span> {inferredRecovery}
+          {!recLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
         </span>
         {probPct != null && (
           <span style={badgeStyle(probColor, probColor)}>
             <span style={{ color: V3.text.muted, fontWeight: 500 }}>Prob</span> {probPct}%
           </span>
         )}
+        {confidence != null && (
+          <span style={badgeStyle(V3.accent.blue, V3.accent.blue)}>
+            <span style={{ color: V3.text.muted, fontWeight: 500 }}>Confidence</span> {confidence}%
+          </span>
+        )}
       </div>
+
+      {/* Site exposure summary */}
+      {totalSites > 0 && (
+        <div style={{
+          display: 'flex', gap: 8, marginBottom: 10,
+          padding: '6px 10px', background: V3.bg.base, borderRadius: 6,
+          border: `1px solid ${V3.border.subtle}`,
+        }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.red }}>{mfgCount}</div>
+            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>MFG Sites</div>
+          </div>
+          <div style={{ width: 1, background: V3.border.subtle }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.amber }}>{totalSites}</div>
+            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Sites</div>
+          </div>
+          <div style={{ width: 1, background: V3.border.subtle }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.blue }}>{scanCount}</div>
+            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scans</div>
+          </div>
+        </div>
+      )}
 
       {/* Sparkline */}
       <SeveritySparkline event={event} sevCol={sevCol} theme={V3} />
@@ -241,6 +346,44 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
           </div>
         </div>
       )}
+
+      {/* Tracking timeline */}
+      {(firstSeen || lastSeen || sources.length > 0) && (
+        <div style={{
+          background: V3.bg.base, borderRadius: 6, padding: '8px 10px',
+          border: `1px solid ${V3.border.subtle}`, marginTop: 8,
+        }}>
+          <div style={sectionHeader}>Tracking</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {firstSeen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
+                <span style={{ color: V3.text.muted, fontFamily: V3_FONT_MONO, minWidth: 60 }}>First seen</span>
+                <span style={{ color: V3.text.secondary }}>{firstSeen.toLocaleDateString()} {firstSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            )}
+            {lastSeen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
+                <span style={{ color: V3.text.muted, fontFamily: V3_FONT_MONO, minWidth: 60 }}>Last seen</span>
+                <span style={{ color: V3.text.secondary }}>{lastSeen.toLocaleDateString()} {lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            )}
+            {sources.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 10, marginTop: 2 }}>
+                <span style={{ color: V3.text.muted, fontFamily: V3_FONT_MONO, minWidth: 60, flexShrink: 0 }}>Sources</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {sources.slice(0, 4).map((src, si) => (
+                    <span key={si} style={{
+                      fontSize: 9, fontFamily: V3_FONT_MONO,
+                      color: V3.accent.blue, background: V3.accent.blue + '12',
+                      padding: '1px 5px', borderRadius: 3,
+                    }}>{src}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -250,37 +393,78 @@ function SeveritySparkline({ event, sevCol, theme: V3 }: { event: DisruptionEven
   const score = event.computed_severity?.score;
   if (score == null) return null;
 
-  const count = Math.min(event.scan_count || 1, 5);
-  const points: number[] = [];
-  for (let i = 0; i < count; i++) {
-    const jitter = Math.sin(i * 2.7 + (score || 50) * 0.1) * 8;
-    points.push(Math.max(5, Math.min(95, score + jitter - (count - 1 - i) * 3)));
-  }
-  if (points.length < 2) return null;
+  // Use real severity history if available from backend
+  const history: Array<{score: number; timestamp?: string}> =
+    (event as any).severity_history || [];
 
-  const w = 120, h = 28, px = 4;
-  const minV = Math.min(...points) - 5;
-  const maxV = Math.max(...points) + 5;
-  const range = maxV - minV || 1;
-  const coords = points.map((v, i) => ({
-    x: px + (i / (points.length - 1)) * (w - 2 * px),
-    y: px + (1 - (v - minV) / range) * (h - 2 * px),
-  }));
-  const pathD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+  // If we have real history points, render an actual sparkline
+  if (history.length >= 2) {
+    const points = history.map(h => h.score);
+    const w = 120, h2 = 28, px = 4;
+    const minV = Math.min(...points) - 5;
+    const maxV = Math.max(...points) + 5;
+    const range = maxV - minV || 1;
+    const coords = points.map((v, i) => ({
+      x: px + (i / (points.length - 1)) * (w - 2 * px),
+      y: px + (1 - (v - minV) / range) * (h2 - 2 * px),
+    }));
+    const pathD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+
+    const delta = points[points.length - 1] - points[0];
+    const deltaColor = delta > 5 ? V3.accent.red : delta < -5 ? V3.accent.green : V3.text.muted;
+    const deltaLabel = delta > 0 ? `+${Math.round(delta)}` : `${Math.round(delta)}`;
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <svg width={w} height={h2} style={{ flexShrink: 0 }}>
+          <path d={pathD} fill="none" stroke={sevCol} strokeWidth={1.5}
+            strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
+          {coords.map((c, i) => (
+            <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 3 : 1.5}
+              fill={i === coords.length - 1 ? sevCol : sevCol + '88'} />
+          ))}
+        </svg>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
+            {Math.round(score)}/100
+          </span>
+          <span style={{ fontSize: 9, color: deltaColor, fontFamily: V3_FONT_MONO, fontWeight: 700 }}>
+            {deltaLabel} over {history.length} scan{history.length > 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: single score with scan count (no fake data)
+  const scanCount = event.scan_count || 1;
+  const trend = (event as any).trend || '';
+  const trendIcon = trend === 'Escalating' ? '\u2191' : trend === 'De-escalating' ? '\u2193' : trend === 'Stable' ? '\u2192' : '';
+  const trendColor = trend === 'Escalating' ? V3.accent.red : trend === 'De-escalating' ? V3.accent.green : V3.text.muted;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <svg width={w} height={h} style={{ flexShrink: 0 }}>
-        <path d={pathD} fill="none" stroke={sevCol} strokeWidth={1.5}
-          strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
-        {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 3 : 1.5}
-            fill={i === coords.length - 1 ? sevCol : sevCol + '88'} />
-        ))}
-      </svg>
-      <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
-        {Math.round(score)}/100 over {count} scan{count > 1 ? 's' : ''}
-      </span>
+      <div style={{
+        width: 40, height: 40, borderRadius: 20,
+        background: sevCol + '15', border: `2px solid ${sevCol}44`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 800, fontFamily: V3_FONT_MONO, color: sevCol }}>
+          {Math.round(score)}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
+          Severity score / 100
+        </span>
+        <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO }}>
+          {trendIcon && <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} </span>}
+          <span style={{ color: V3.text.muted }}>
+            {scanCount} scan{scanCount > 1 ? 's' : ''} tracked
+          </span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -349,6 +533,9 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
       color: V3.accent.amber,
       icon: '\uD83D\uDEA2',
     });
+    if (corridors.length > 6) {
+      chainSteps[chainSteps.length - 1].items.push({ text: `+${corridors.length - 6} more`, badgeColor: V3.text.muted });
+    }
   }
 
   // Step 3: Exposed Factories (MFG only, max 6)
@@ -363,6 +550,9 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
       color: V3.accent.blue,
       icon: '\uD83C\uDFED',
     });
+    if (mfgSites.length > 6) {
+      chainSteps[chainSteps.length - 1].items.push({ text: `+${mfgSites.length - 6} more`, badgeColor: V3.text.muted });
+    }
   }
 
   // Step 4: At-Risk Inputs (T1 critical, max 8, with sole-source indicator)
@@ -377,6 +567,9 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
       color: V3.accent.purple,
       icon: '\uD83D\uDCE6',
     });
+    if (t1Inputs.length > 8) {
+      chainSteps[chainSteps.length - 1].items.push({ text: `+${t1Inputs.length - 8} more`, badgeColor: V3.text.muted });
+    }
   }
 
   // Step 5: Downstream exposure (hop 2) — max 6
@@ -392,6 +585,9 @@ function ExposureTab({ event, onHoverSite, theme: V3 }: {
       color: V3.accent.cyan,
       icon: '\uD83D\uDD04',
     });
+    if (downstreamFactories.length > 6) {
+      chainSteps[chainSteps.length - 1].items.push({ text: `+${downstreamFactories.length - 6} more`, badgeColor: V3.text.muted });
+    }
   }
 
   const _sectionHeader = sectionHeaderStyle(V3);
@@ -628,6 +824,118 @@ function parseActionsFromString(text: string): ActionItemShape[] {
   }));
 }
 
+/** Generate smart default actions based on event characteristics */
+function generateDefaultActions(event: DisruptionEvent): ActionItemShape[] {
+  const sev = (event.severity || 'Medium') as string;
+  const region = event.region || '';
+  const category = (event as any).category || (event.payload?.category as string | undefined) || '';
+  const mfgSites = (event.affected_sites || []).filter(s => (s.type || '').toLowerCase() === 'mfg');
+  const now = new Date().toISOString();
+  const actions: ActionItemShape[] = [];
+  let id = 0;
+
+  const dueDate = (hoursFromNow: number) => {
+    const d = new Date();
+    d.setHours(d.getHours() + hoursFromNow);
+    return d.toISOString();
+  };
+  const urgencyHours = sev === 'Critical' ? 24 : sev === 'High' ? 48 : sev === 'Medium' ? 168 : 336;
+
+  // Always: assess and communicate
+  if (sev === 'Critical' || sev === 'High') {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: `Convene emergency response call for ${region || 'affected region'} exposure`,
+    });
+  }
+
+  if (mfgSites.length > 0) {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: `Contact ${mfgSites.slice(0, 3).map(s => s.name).join(', ')}${mfgSites.length > 3 ? ` +${mfgSites.length - 3} more` : ''} for operational status`,
+    });
+  }
+
+  // Category-specific actions
+  const catLower = category.toLowerCase();
+  if (catLower.includes('logistics') || catLower.includes('port')) {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Logistics',
+      text: 'Review alternative shipping corridors and rerouting options',
+    });
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Logistics',
+      text: 'Check buffer stock levels at downstream distribution centers',
+    });
+  } else if (catLower.includes('natural') || catLower.includes('disaster')) {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: 'Verify employee safety and facility integrity at affected sites',
+    });
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Procurement',
+      text: 'Activate backup supplier contracts for affected inputs',
+    });
+  } else if (catLower.includes('geopolitical') || catLower.includes('sanction')) {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: 'Review compliance exposure and legal implications',
+    });
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Procurement',
+      text: 'Map alternative sourcing paths outside sanctioned regions',
+    });
+  } else if (catLower.includes('trade') || catLower.includes('tariff')) {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Procurement',
+      text: 'Quantify cost impact of tariff changes on affected BUs',
+    });
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: 'Evaluate nearshoring options to mitigate trade friction',
+    });
+  } else {
+    // Generic fallbacks
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Procurement',
+      text: 'Review supplier exposure and activate backup sourcing if needed',
+    });
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'Logistics',
+      text: 'Assess logistics corridor impact and identify rerouting options',
+    });
+  }
+
+  // Always: monitor and brief
+  actions.push({
+    id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+    owner: 'SC Operations',
+    text: `Set monitoring cadence: ${sev === 'Critical' ? 'every 4 hours' : sev === 'High' ? 'daily' : 'weekly'} updates until resolved`,
+  });
+
+  if (sev === 'Critical' || sev === 'High') {
+    actions.push({
+      id: id++, status: 'open', due: dueDate(urgencyHours), created: now,
+      owner: 'SC Operations',
+      text: 'Prepare executive briefing for VP Supply Chain with exposure summary',
+    });
+  }
+
+  return actions;
+}
+
 function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; theme: V3Theme; onStatusChange?: (eventId: string, newStatus: string) => void }) {
   const [actions, setActions] = useState<ActionItemShape[]>(() => {
     const recs = event.recommendations?.actions;
@@ -638,9 +946,14 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     const actionStr = (event as any).recommended_action
       || event.payload?.recommended_action
       || '';
-    if (actionStr) return parseActionsFromString(actionStr);
-    return [];
+    if (actionStr) {
+      const parsed = parseActionsFromString(actionStr);
+      if (parsed.length > 0) return parsed;
+    }
+    // Generate smart defaults based on event characteristics
+    return generateDefaultActions(event);
   });
+  const [backendLoaded, setBackendLoaded] = useState(false);
   const [status, setStatus] = useState(event.status || 'active');
   const [assignInput, setAssignInput] = useState('');
   const [showAssignInput, setShowAssignInput] = useState(false);
@@ -651,12 +964,6 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     setStatus(event.status || 'active');
   }, [event.status]);
 
-  const handleToggle = useCallback((id: string, done: boolean) => {
-    setActions(prev => prev.map(a =>
-      String(a.id) === id ? { ...a, status: done ? 'done' : 'open' } : a
-    ));
-  }, []);
-
   // Build event ID: prefer backend id, fall back to slug|region (matches backend _make_disruption_id)
   const resolvedId = useMemo(() => {
     if (event.id) return event.id;
@@ -664,6 +971,33 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     const region = (event.region || 'unknown').toLowerCase().replace(/\s+/g, '-');
     return `${name}|${region}`;
   }, [event.id, event.event, event.risk, event.region]);
+
+  useEffect(() => {
+    if (!resolvedId || backendLoaded) return;
+    fetchEventActions(resolvedId).then(backendActions => {
+      if (backendActions && backendActions.length > 0) {
+        setActions(backendActions.map(a => ({
+          id: a.id,
+          text: a.title || a.description || '',
+          owner: a.assignee_hint || 'SC Operations',
+          due: a.due_date || '',
+          status: (a.status === 'completed' ? 'done' : 'open') as 'open' | 'done',
+          created: '',
+        })));
+      }
+      setBackendLoaded(true);
+    });
+  }, [resolvedId, backendLoaded]);
+
+  const handleToggle = useCallback((id: string, done: boolean) => {
+    setActions(prev => prev.map(a =>
+      String(a.id) === id ? { ...a, status: done ? 'done' : 'open' } : a
+    ));
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId) && numId > 0) {
+      updateActionStatus(numId, done ? 'completed' : 'pending');
+    }
+  }, []);
 
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -696,6 +1030,19 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
       <div style={sectionHeader}>Recommended Actions</div>
       {actions.length === 0 && (
         <EmptyRow label="No actions available -- generate a briefing to populate" theme={V3} />
+      )}
+      {actions.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <div style={{ flex: 1, height: 3, background: V3.border.subtle, borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{
+              width: `${(actions.filter(a => a.status === 'done').length / actions.length) * 100}%`,
+              height: '100%', background: V3.accent.green, borderRadius: 2, transition: 'width 300ms'
+            }} />
+          </div>
+          <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO, color: V3.text.muted, flexShrink: 0 }}>
+            {actions.filter(a => a.status === 'done').length}/{actions.length}
+          </span>
+        </div>
       )}
       {actions.map((a, i) => (
         <ActionCheckbox key={a.id ?? i} action={a} onToggle={handleToggle} />
@@ -744,7 +1091,12 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
             onBlur={e => { e.currentTarget.style.borderColor = V3.border.default; }}
           />
           <button
-            onClick={() => { setShowAssignInput(false); }}
+            onClick={() => {
+              if (assignInput.trim() && resolvedId) {
+                assignTicket(resolvedId, assignInput.trim());
+              }
+              setShowAssignInput(false);
+            }}
             style={{
               padding: '5px 10px', fontSize: 10, fontWeight: 600,
               background: V3.accent.blue + '22', color: V3.accent.blue,

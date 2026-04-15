@@ -50,6 +50,8 @@ global operations. Focus on:
 - Natural disasters (earthquakes, floods, typhoons) near industrial regions
 - Geopolitical events (sanctions, conflicts, trade restrictions)
 - Logistics disruptions (port closures, shipping delays, canal blockages)
+- Maritime chokepoint threats (Strait of Hormuz, Suez Canal, Panama Canal, Strait of Malacca, Bosporus, Cape of Good Hope — these carry ~80% of global trade)
+- Red Sea / Houthi shipping attacks or rerouting via Cape of Good Hope
 - Labour actions (strikes, work stoppages) at major ports or industrial areas
 - Supplier risks (bankruptcies, factory fires, quality recalls)
 - Currency and economic shocks affecting manufacturing regions
@@ -81,6 +83,7 @@ chains and industrial manufacturing. Focus on:
 - US-China strategic competition and technology decoupling
 - Trade bloc formation and fragmentation
 - Sanctions regimes and compliance risks
+- Maritime chokepoint geopolitics (Strait of Hormuz/Iran tensions, Red Sea/Houthi, Taiwan Strait, Suez/Panama)
 - Political instability in manufacturing regions
 - Nearshoring/friendshoring trends
 

@@ -16,3 +16,4 @@ pload.zip
 /package.json
 /package-lock.json
 v .env.awsy
+.gstack/

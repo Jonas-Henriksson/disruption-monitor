@@ -37,6 +37,8 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
         transition: 'background 150ms, box-shadow 150ms',
         cursor: 'pointer',
         overflow: 'hidden',
+        flexShrink: 0,
+        minHeight: 68,
       }}
       onMouseEnter={(e) => {
         if (!expanded) e.currentTarget.style.background = V3.bg.cardHover;
@@ -119,6 +121,7 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
       {expanded && (
         <div
           onClick={e => e.stopPropagation()}
+          className="sc-s"
           style={{
             maxHeight: 420,
             overflow: 'auto',
