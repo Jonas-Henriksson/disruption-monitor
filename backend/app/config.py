@@ -45,7 +45,7 @@ class Settings(BaseSettings):
         if self.claude_model:
             return self.claude_model
         if self.use_bedrock:
-            return "eu.anthropic.claude-sonnet-4-6-v1"
+            return "eu.anthropic.claude-sonnet-4-6"
         return "claude-sonnet-4-20250514"
 
     @property
