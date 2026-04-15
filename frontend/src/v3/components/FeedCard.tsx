@@ -130,14 +130,11 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
         )}
       </div>
 
-      {/* Expanded content */}
+      {/* Expanded content — no inner scroll; feed list handles scrolling */}
       {expanded && (
         <div
           onClick={e => e.stopPropagation()}
-          className="sc-s"
           style={{
-            maxHeight: 420,
-            overflow: 'auto',
             borderTop: `1px solid ${V3.border.subtle}`,
           }}
         >

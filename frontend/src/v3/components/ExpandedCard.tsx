@@ -173,22 +173,20 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
   }, []);
 
   const isMap = placement === 'map';
-  const maxH = isMap ? '50vh' : '420px';
+  const isFeed = placement === 'feed';
   const sev = (event.severity || 'Medium') as Severity;
   const sevCol = sevColor(sev, V3);
 
   const containerStyle: React.CSSProperties = {
-    maxHeight: maxH,
-    overflow: 'hidden',
+    ...(isMap ? { maxHeight: '50vh', overflow: 'hidden' } : {}),
     display: 'flex', flexDirection: 'column',
     background: isMap ? V3.bg.base + 'ee' : V3.bg.card,
-    borderRadius: 8,
-    border: `1px solid ${V3.border.subtle}`,
+    borderRadius: isFeed ? 0 : 8,
+    border: isFeed ? 'none' : `1px solid ${V3.border.subtle}`,
     fontFamily: V3_FONT,
     padding: isMap ? '14px 16px' : '10px 12px',
     position: 'relative',
-    transition: 'max-height 300ms ease',
-    ...(isMap ? { backdropFilter: 'blur(8px)' } : {}),
+    ...(isMap ? { backdropFilter: 'blur(8px)', transition: 'max-height 300ms ease' } : {}),
   };
 
   return (
@@ -232,8 +230,8 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
         </button>
       </div>
 
-      {/* Scrollable content */}
-      <div className="sc-s" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+      {/* Content — scrolls internally only on map placement; feed relies on parent scroll */}
+      <div className={isFeed ? undefined : 'sc-s'} style={isFeed ? {} : { flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} />}
         {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
         {tab === 'act'      && <ActTab event={event} theme={V3} onStatusChange={onStatusChange} />}
