@@ -157,3 +157,45 @@ class TestArchiveResurrection:
         event = get_event("test-event|europe")
         assert event["status"] == "active"
         assert event.get("resurfaced_at") is None
+
+
+from backend.app.services.evolution import (
+    build_fallback_evolution_summary,
+    get_evolution_cadence_hours,
+)
+
+
+class TestEvolutionAnalyzer:
+    def test_fallback_summary_has_all_fields(self):
+        snapshots = [
+            {"severity": "High", "computed_severity": {"score": 65}, "event": "Test", "region": "EU"},
+            {"severity": "High", "computed_severity": {"score": 68}, "event": "Test", "region": "EU"},
+            {"severity": "High", "computed_severity": {"score": 66}, "event": "Test", "region": "EU"},
+        ]
+        result = build_fallback_evolution_summary(
+            event_id="test|eu",
+            snapshots=snapshots,
+            period_type="daily",
+            period_start="2026-04-15",
+            period_end="2026-04-15",
+            prior_phases=[],
+        )
+        assert result["event_id"] == "test|eu"
+        assert result["period_type"] == "daily"
+        assert result["generated_by"] == "fallback"
+        assert result["phase_number"] >= 1
+        assert result["narrative"] != ""
+        sev_vals = json.loads(result["severity_values"])
+        assert sev_vals == [65, 68, 66]
+
+    def test_cadence_critical_is_6h(self):
+        assert get_evolution_cadence_hours("Critical") == 6
+
+    def test_cadence_high_is_24h(self):
+        assert get_evolution_cadence_hours("High") == 24
+
+    def test_cadence_medium_is_weekly(self):
+        assert get_evolution_cadence_hours("Medium") == 168
+
+    def test_cadence_watching_overrides_to_daily(self):
+        assert get_evolution_cadence_hours("Medium", watching=True) == 24
