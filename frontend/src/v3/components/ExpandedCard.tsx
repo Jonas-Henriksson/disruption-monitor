@@ -61,6 +61,98 @@ function badgeStyle(bg: string, fg: string): React.CSSProperties {
   };
 }
 
+/* ── Glossary: hover-tooltip definitions for first-time users ── */
+
+const GLOSSARY: Record<string, { title: string; body: string }> = {
+  severity_critical: {
+    title: 'Critical (\u226575/100)',
+    body: 'Immediate threat to operations. Multiple manufacturing sites or sole-source suppliers directly affected. Requires emergency response within hours.',
+  },
+  severity_high: {
+    title: 'High (50\u201374/100)',
+    body: 'Significant operational risk. Key sites or supply routes are exposed but not yet disrupted. Action needed within days.',
+  },
+  severity_medium: {
+    title: 'Medium (25\u201349/100)',
+    body: 'Moderate risk with limited direct exposure. Primarily affects non-manufacturing sites or indirect supply paths. Monitor and prepare contingencies.',
+  },
+  severity_low: {
+    title: 'Low (<25/100)',
+    body: 'Minimal direct impact. Peripheral exposure through distant sites or commodity-tier suppliers. Track for escalation.',
+  },
+  velocity: {
+    title: 'Velocity \u2014 Speed of Onset',
+    body: 'How fast the disruption takes effect. Rapid = already happening or within hours (e.g. earthquake, port closure). Fast = materializes in days (e.g. strike announcement). Gradual = weeks to develop (e.g. tariff implementation). Slow = months (e.g. currency shift). Marked "est" when inferred from severity rather than event data.',
+  },
+  recovery: {
+    title: 'Recovery \u2014 Time to Normalize',
+    body: 'Estimated time for supply chain operations to return to normal. Days = minor, localized impact. Weeks = regional logistics rerouting needed. Months = structural change requiring new suppliers or routes. Based on event category and severity.',
+  },
+  probability: {
+    title: 'Probability \u2014 Likelihood of Impact',
+    body: 'How likely this event is to materially affect SKF operations (0\u2013100%). Combines event category base rate (e.g. active natural disaster = 90%, trade negotiation = 40%) with trend direction (escalating events score higher). Not a prediction \u2014 a risk-weighted assessment.',
+  },
+  confidence: {
+    title: 'Confidence \u2014 Data Quality',
+    body: 'How much corroborating evidence supports this event (0\u2013100%). Based on number of independent sources detected, scan frequency, and cross-mode confirmation (e.g. same event appearing in both disruption and geopolitical scans). Higher confidence = more sources agree.',
+  },
+  trend: {
+    title: 'Trend \u2014 Direction of Change',
+    body: '\u2191 Escalating = getting worse across recent scans. \u2192 Stable = severity holding steady. \u2193 De-escalating = situation improving. Based on severity score movement over consecutive scans.',
+  },
+  mfg_sites: {
+    title: 'MFG Sites',
+    body: 'Number of SKF manufacturing facilities within the disruption\'s impact radius. These are the highest-priority sites \u2014 they produce bearings, seals, or components.',
+  },
+  total_sites: {
+    title: 'Total Sites',
+    body: 'All SKF facilities affected (manufacturing, logistics, sales, admin). Includes sites within 3,000 km of the event, weighted by proximity.',
+  },
+  scans: {
+    title: 'Scans Tracked',
+    body: 'Number of automated scan cycles where this event was detected. More scans = longer-tracked event. The system scans disruptions every 15 min, geopolitical every 30 min, trade every 60 min.',
+  },
+};
+
+function InfoBadge({ glossaryKey, badgeBg, badgeFg, children, theme: V3 }: {
+  glossaryKey: string;
+  badgeBg: string;
+  badgeFg: string;
+  children: React.ReactNode;
+  theme: V3Theme;
+}) {
+  const [show, setShow] = useState(false);
+  const entry = GLOSSARY[glossaryKey];
+  return (
+    <span
+      style={{ ...badgeStyle(badgeBg, badgeFg), position: 'relative', cursor: entry ? 'help' : 'default' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && entry && (
+        <span
+          style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 50,
+            marginTop: 4, padding: '6px 8px', borderRadius: 4, width: 220,
+            background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)', whiteSpace: 'normal',
+            cursor: 'default',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: V3.text.primary, marginBottom: 3 }}>
+            {entry.title}
+          </span>
+          <span style={{ display: 'block', fontSize: 9, color: V3.text.muted, lineHeight: 1.5, fontWeight: 400 }}>
+            {entry.body}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 /* ─────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────── */
@@ -216,7 +308,7 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
         }}>
           {title}
         </span>
-        <span style={badgeStyle(sevCol, sevCol)}>{sev}</span>
+        <InfoBadge glossaryKey={`severity_${sev.toLowerCase()}`} badgeBg={sevCol} badgeFg={sevCol} theme={V3}>{sev}</InfoBadge>
       </div>
 
       {/* Category + Region + Trend row */}
@@ -238,11 +330,9 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
             }}>{region}</span>
           )}
           {trend && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, fontFamily: V3_FONT_MONO,
-              color: trendColor, background: trendColor + '12',
-              padding: '2px 6px', borderRadius: 3, border: `1px solid ${trendColor}22`,
-            }}>{trendIcon} {trend}</span>
+            <InfoBadge glossaryKey="trend" badgeBg={trendColor} badgeFg={trendColor} theme={V3}>
+              {trendIcon} {trend}
+            </InfoBadge>
           )}
         </div>
       )}
@@ -271,23 +361,23 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
 
       {/* Dimension badges: velocity, recovery, probability */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={badgeStyle(inferredVelColor, inferredVelColor)}>
+        <InfoBadge glossaryKey="velocity" badgeBg={inferredVelColor} badgeFg={inferredVelColor} theme={V3}>
           <span style={{ color: V3.text.muted, fontWeight: 500 }}>Velocity</span> {inferredVelocity}
           {!velLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
-        </span>
-        <span style={badgeStyle(inferredRecColor, inferredRecColor)}>
+        </InfoBadge>
+        <InfoBadge glossaryKey="recovery" badgeBg={inferredRecColor} badgeFg={inferredRecColor} theme={V3}>
           <span style={{ color: V3.text.muted, fontWeight: 500 }}>Recovery</span> {inferredRecovery}
           {!recLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
-        </span>
+        </InfoBadge>
         {probPct != null && (
-          <span style={badgeStyle(probColor, probColor)}>
+          <InfoBadge glossaryKey="probability" badgeBg={probColor} badgeFg={probColor} theme={V3}>
             <span style={{ color: V3.text.muted, fontWeight: 500 }}>Prob</span> {probPct}%
-          </span>
+          </InfoBadge>
         )}
         {confidence != null && (
-          <span style={badgeStyle(V3.accent.blue, V3.accent.blue)}>
+          <InfoBadge glossaryKey="confidence" badgeBg={V3.accent.blue} badgeFg={V3.accent.blue} theme={V3}>
             <span style={{ color: V3.text.muted, fontWeight: 500 }}>Confidence</span> {confidence}%
-          </span>
+          </InfoBadge>
         )}
       </div>
 
@@ -298,20 +388,13 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
           padding: '6px 10px', background: V3.bg.base, borderRadius: 6,
           border: `1px solid ${V3.border.subtle}`,
         }}>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.red }}>{mfgCount}</div>
-            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>MFG Sites</div>
-          </div>
-          <div style={{ width: 1, background: V3.border.subtle }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.amber }}>{totalSites}</div>
-            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Sites</div>
-          </div>
-          <div style={{ width: 1, background: V3.border.subtle }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color: V3.accent.blue }}>{scanCount}</div>
-            <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scans</div>
-          </div>
+          {[
+            { value: mfgCount, label: 'MFG Sites', color: V3.accent.red, key: 'mfg_sites' },
+            { value: totalSites, label: 'Total Sites', color: V3.accent.amber, key: 'total_sites' },
+            { value: scanCount, label: 'Scans', color: V3.accent.blue, key: 'scans' },
+          ].map((col, ci) => (
+            <SiteStatCell key={col.key} glossaryKey={col.key} value={col.value} label={col.label} color={col.color} theme={V3} isLast={ci === 2} />
+          ))}
         </div>
       )}
 
@@ -319,33 +402,7 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
       <SeveritySparkline event={event} sevCol={sevCol} theme={V3} />
 
       {/* Score breakdown */}
-      {cs?.components && (
-        <div style={{
-          background: V3.bg.base, borderRadius: 6, padding: '8px 10px',
-          border: `1px solid ${V3.border.subtle}`, marginTop: 8,
-        }}>
-          <div style={sectionHeader}>Score Breakdown</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {Object.entries(cs.components).map(([key, val]) => {
-              const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-              const v = typeof val === 'number' ? val : 0;
-              return (
-                <div key={key} style={{ flex: '1 0 80px', minWidth: 80 }}>
-                  <div style={{ fontSize: 9, color: V3.text.muted, fontFamily: V3_FONT_MONO, marginBottom: 2 }}>{label}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ flex: 1, height: 4, background: V3.border.subtle, borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(100, v)}%`, height: '100%', background: sevCol, borderRadius: 2 }} />
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: V3.text.secondary, fontFamily: V3_FONT_MONO }}>
-                      {Math.round(v)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {cs?.components && <ScoreBreakdown components={cs.components} score={cs.score} sevCol={sevCol} theme={V3} />}
 
       {/* Tracking timeline */}
       {(firstSeen || lastSeen || sources.length > 0) && (
@@ -384,6 +441,173 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Site stat cell with glossary tooltip ── */
+function SiteStatCell({ glossaryKey, value, label, color, theme: V3, isLast }: {
+  glossaryKey: string; value: number; label: string; color: string; theme: V3Theme; isLast: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  const entry = GLOSSARY[glossaryKey];
+  return (
+    <>
+      <div
+        style={{ flex: 1, textAlign: 'center', position: 'relative', cursor: entry ? 'help' : 'default' }}
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V3_FONT_MONO, color }}>{value}</div>
+        <div style={{ fontSize: 8, fontWeight: 600, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+        {show && entry && (
+          <div style={{
+            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 50, marginTop: 4, padding: '6px 8px', borderRadius: 4, width: 200,
+            background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)', textAlign: 'left',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: V3.text.primary, marginBottom: 3 }}>{entry.title}</div>
+            <div style={{ fontSize: 9, color: V3.text.muted, lineHeight: 1.5 }}>{entry.body}</div>
+          </div>
+        )}
+      </div>
+      {!isLast && <div style={{ width: 1, background: V3.border.subtle }} />}
+    </>
+  );
+}
+
+/* ── Score Breakdown with methodology ── */
+
+const SCORE_META: Record<string, { weight: string; short: string; detail: string }> = {
+  magnitude: {
+    weight: '30%',
+    short: 'How severe is this type of event?',
+    detail: 'Based on event category (Natural Disaster 90, Geopolitical 80, Logistics 70, Trade 50, Currency 40) blended 60/40 with AI-assessed severity. Escalating trend adds +15%.',
+  },
+  proximity: {
+    weight: '25%',
+    short: 'How close is it to our sites?',
+    detail: 'Haversine distance from the event to each of 245 SKF sites within a 3,000 km radius, using square-root decay. If a shipping route or chokepoint passes through the disruption zone, routing dependency overrides distance (70% routing / 30% haversine).',
+  },
+  asset_criticality: {
+    weight: '25%',
+    short: 'How important are the affected sites?',
+    detail: 'Site type weight (MFG 100, VA 80, Logistics 70, Sales 30, Admin 10) multiplied by business unit weight (Industrial/Aerospace 100, Seals 80, Lube 70, Magnetics 60). Takes worst-case across all affected sites.',
+  },
+  supply_chain_impact: {
+    weight: '20%',
+    short: 'How deep is the supply chain exposure?',
+    detail: 'Logarithmic scaling on affected site count (1 site = 30, 5 = 70, 10+ = 90) with MFG bonus (+10 each, max +30). Amplified by supplier tier: Tier 1 sole-source 1.5x, Tier 1 1.2x, Tier 2 1.0x, Tier 3 0.8x.',
+  },
+};
+
+function ScoreBreakdown({ components, score, sevCol, theme: V3 }: {
+  components: Record<string, number>;
+  score?: number;
+  sevCol: string;
+  theme: V3Theme;
+}) {
+  const [showInfo, setShowInfo] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const sectionHeader = sectionHeaderStyle(V3);
+
+  return (
+    <div style={{
+      background: V3.bg.base, borderRadius: 6, padding: '8px 10px',
+      border: `1px solid ${V3.border.subtle}`, marginTop: 8,
+    }}>
+      {/* Header with info toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={sectionHeader}>Score Breakdown</div>
+        <button
+          onClick={() => setShowInfo(p => !p)}
+          style={{
+            background: showInfo ? V3.accent.blue + '22' : 'transparent',
+            border: `1px solid ${showInfo ? V3.accent.blue + '44' : V3.border.subtle}`,
+            borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
+            fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO,
+            color: showInfo ? V3.accent.blue : V3.text.muted,
+            transition: 'all 150ms',
+          }}
+        >?</button>
+      </div>
+
+      {/* Methodology panel */}
+      {showInfo && (
+        <div style={{
+          background: V3.accent.blue + '08', borderRadius: 4, padding: '8px 10px',
+          border: `1px solid ${V3.accent.blue}18`, marginBottom: 8, marginTop: 4,
+        }}>
+          <div style={{ fontSize: 10, color: V3.text.secondary, lineHeight: 1.6, marginBottom: 6 }}>
+            Severity is scored 0–100 from four weighted components. The score is <strong style={{ color: V3.text.primary }}>deterministic</strong> — no AI in the scoring loop.
+          </div>
+          <div style={{ fontSize: 10, color: V3.text.secondary, lineHeight: 1.6, marginBottom: 6 }}>
+            <strong style={{ color: V3.text.primary }}>Formula:</strong>{' '}
+            <span style={{ fontFamily: V3_FONT_MONO, fontSize: 9 }}>
+              Magnitude{'\u00D7'}30% + Proximity{'\u00D7'}25% + Criticality{'\u00D7'}25% + SC Impact{'\u00D7'}20%
+            </span>
+          </div>
+          <div style={{ fontSize: 10, color: V3.text.secondary, lineHeight: 1.5 }}>
+            <strong style={{ color: V3.text.primary }}>Labels:</strong>{' '}
+            <span style={{ fontFamily: V3_FONT_MONO, fontSize: 9 }}>{'\u2265'}75 Critical, {'\u2265'}50 High, {'\u2265'}25 Medium, {'<'}25 Low</span>
+          </div>
+          <div style={{ fontSize: 9, color: V3.text.muted, marginTop: 6, fontStyle: 'italic' }}>
+            Hover each component below for details.
+          </div>
+        </div>
+      )}
+
+      {/* Component bars */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {Object.entries(components).map(([key, val]) => {
+          const meta = SCORE_META[key];
+          const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const raw = typeof val === 'number' ? val : 0;
+          const pct = raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
+          const isHovered = hoveredKey === key;
+          return (
+            <div
+              key={key}
+              style={{ flex: '1 0 80px', minWidth: 80, position: 'relative' }}
+              onMouseEnter={() => setHoveredKey(key)}
+              onMouseLeave={() => setHoveredKey(null)}
+            >
+              <div style={{
+                fontSize: 9, color: V3.text.muted, fontFamily: V3_FONT_MONO, marginBottom: 2,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}>
+                {label}
+                {meta && <span style={{ fontSize: 8, color: V3.text.muted, opacity: 0.6 }}>{meta.weight}</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ flex: 1, height: 4, background: V3.border.subtle, borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: sevCol, borderRadius: 2 }} />
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: V3.text.secondary, fontFamily: V3_FONT_MONO }}>
+                  {pct}
+                </span>
+              </div>
+              {/* Tooltip on hover */}
+              {isHovered && meta && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                  marginTop: 4, padding: '6px 8px', borderRadius: 4,
+                  background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: V3.text.primary, marginBottom: 3 }}>
+                    {meta.short}
+                  </div>
+                  <div style={{ fontSize: 9, color: V3.text.muted, lineHeight: 1.5 }}>
+                    {meta.detail}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

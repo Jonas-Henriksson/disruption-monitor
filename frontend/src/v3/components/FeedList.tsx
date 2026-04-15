@@ -273,7 +273,7 @@ export function FeedList({
       </div>
 
       {/* Scrollable feed */}
-      <div style={{
+      <div className="sc-s" style={{
         flex: 1,
         overflow: 'auto',
         padding: `0 ${V3.spacing.lg}px ${V3.spacing.lg}px`,

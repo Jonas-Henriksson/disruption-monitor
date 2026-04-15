@@ -19,7 +19,7 @@ export const GLOBAL_CSS = `
 .sc-ce{animation:sfu 300ms cubic-bezier(.16,1,.3,1) both}
 .sc-sh{background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);background-size:200% 100%;animation:shim 2s ease infinite}
 .sc-bar{transform-origin:left;animation:scb 45s linear}
-.sc-s::-webkit-scrollbar{width:4px}.sc-s::-webkit-scrollbar-track{background:transparent}.sc-s::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px}
+.sc-s{scrollbar-width:thin;scrollbar-color:#1e293b transparent}.sc-s::-webkit-scrollbar{width:4px}.sc-s::-webkit-scrollbar-track{background:transparent}.sc-s::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px}
 .sc-live-dot{animation:sc-pulse-dot 2s ease-in-out infinite}
 .sc-live-badge{animation:sc-pulse-live 2.5s ease-in-out infinite}
 .sc-spin{animation:sc-spin .8s linear infinite}
