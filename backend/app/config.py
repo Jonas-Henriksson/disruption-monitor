@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     telegram_chat_ids: str = os.environ.get("TARS_TELEGRAM_ALLOWED_USER_IDS", "") or os.environ.get("TELEGRAM_ALLOWED_USER_IDS", "")
     telegram_min_severity: str = "High"  # Minimum severity to send alerts: Critical, High, Medium, Low
 
+    # Teams channel notifications (Incoming Webhook)
+    teams_webhook_url: str = os.environ.get("TEAMS_WEBHOOK_URL", "")
+    teams_min_severity: str = os.environ.get("TEAMS_MIN_SEVERITY", "High")
+    teams_digest_enabled: bool = os.environ.get("TEAMS_DIGEST_ENABLED", "false").lower() in ("1", "true", "yes")
+
     # Outbound webhooks / event bus
     webhook_urls: str = os.environ.get("WEBHOOK_URLS", "")  # comma-separated HTTP(S) endpoints
     sns_topic_arn: str = os.environ.get("SNS_TOPIC_ARN", "")  # AWS SNS topic ARN
@@ -129,6 +134,11 @@ class Settings(BaseSettings):
     def has_telegram(self) -> bool:
         """True when Telegram bot token and at least one chat ID are configured."""
         return bool(self.telegram_bot_token and self.telegram_chat_ids)
+
+    @property
+    def has_teams_channel(self) -> bool:
+        """True when a Teams Incoming Webhook URL is configured."""
+        return bool(self.teams_webhook_url)
 
 
 settings = Settings()
