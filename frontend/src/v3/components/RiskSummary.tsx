@@ -104,6 +104,13 @@ function Sparkline({ data, theme }: { data: TimelineDataPoint[]; theme: ReturnTy
   );
 }
 
+const SEV_TIPS: Record<string, string> = {
+  Critical: 'Score \u226575/100. Immediate threat — multiple MFG sites or sole-source suppliers directly affected. Requires emergency response.',
+  High: 'Score 50–74/100. Significant operational risk — key sites or supply routes exposed. Action needed within days.',
+  Medium: 'Score 25–49/100. Moderate risk with limited direct exposure. Monitor and prepare contingencies.',
+  Low: 'Score <25/100. Minimal direct impact — peripheral exposure. Track for escalation.',
+};
+
 export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
   const { theme: V3 } = useV3Theme();
   const [timeline, setTimeline] = useState<TimelineDataPoint[] | null>(null);
@@ -134,6 +141,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
           {sevCounts.map(s => (
             <div
               key={s.severity}
+              title={SEV_TIPS[s.severity]}
               style={{
                 padding: V3.spacing.md,
                 borderRadius: V3.radius.md,
@@ -142,6 +150,7 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
                 display: 'flex',
                 alignItems: 'baseline',
                 gap: V3.spacing.xs,
+                cursor: 'help',
               }}
             >
               <span style={{
@@ -234,12 +243,16 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
               <span style={{ color: V3.severity.critical }}>Critical</span>
             </span>
           </div>
-          <div style={{
-            padding: V3.spacing.sm,
-            background: V3.bg.card,
-            borderRadius: V3.radius.md,
-            border: `1px solid ${V3.border.subtle}`,
-          }}>
+          <div
+            title="Daily event counts over the last 30 days. Blue line = total active events per day. Red dashed line = critical-severity events only. Rising trends may indicate escalating regional instability or new disruption clusters. Data sourced from scan snapshots stored in the event database."
+            style={{
+              padding: V3.spacing.sm,
+              background: V3.bg.card,
+              borderRadius: V3.radius.md,
+              border: `1px solid ${V3.border.subtle}`,
+              cursor: 'help',
+            }}
+          >
             <Sparkline data={timeline} theme={V3} />
           </div>
         </div>

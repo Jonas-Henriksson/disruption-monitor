@@ -10,6 +10,13 @@ import { getSev, getEvent, getRegion } from '../../utils/scan';
 import { relTime } from '../../utils/format';
 import { ExpandedCard } from './ExpandedCard';
 
+const SEV_HINTS: Record<string, string> = {
+  Critical: 'Critical (\u226575/100) — Immediate threat to operations. Emergency response needed.',
+  High: 'High (50–74/100) — Significant risk to key sites or routes. Action needed within days.',
+  Medium: 'Medium (25–49/100) — Moderate risk, limited direct exposure. Monitor and prepare.',
+  Low: 'Low (<25/100) — Minimal impact. Track for escalation.',
+};
+
 export interface FeedCardProps {
   item: ScanItem;
   index: number;
@@ -59,19 +66,22 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
         minHeight: 68,
       }}>
         {/* Severity badge */}
-        <span style={{
-          flexShrink: 0,
-          padding: `2px ${V3.spacing.sm}px`,
-          borderRadius: V3.radius.full,
-          background: sevBg(sev, V3),
-          border: `1px solid ${sevBorder(sev, V3)}`,
-          color: color,
-          fontSize: 10,
-          fontWeight: 600,
-          fontFamily: V3_FONT,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-        }}>
+        <span
+          title={SEV_HINTS[sev] || sev}
+          style={{
+            flexShrink: 0,
+            padding: `2px ${V3.spacing.sm}px`,
+            borderRadius: V3.radius.full,
+            background: sevBg(sev, V3),
+            border: `1px solid ${sevBorder(sev, V3)}`,
+            color: color,
+            fontSize: 10,
+            fontWeight: 600,
+            fontFamily: V3_FONT,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}
+        >
           {sev}
         </span>
 
@@ -105,13 +115,16 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
 
         {/* Impact score */}
         {score != null && (
-          <div style={{
-            flexShrink: 0,
-            ...TYPE.impact,
-            fontFamily: V3_FONT_MONO,
-            color: color,
-            textAlign: 'right',
-          }}>
+          <div
+            title="Severity score (0–100): Magnitude×30% + Proximity×25% + Criticality×25% + SC Impact×20%"
+            style={{
+              flexShrink: 0,
+              ...TYPE.impact,
+              fontFamily: V3_FONT_MONO,
+              color: color,
+              textAlign: 'right',
+            }}
+          >
             {score}
           </div>
         )}
