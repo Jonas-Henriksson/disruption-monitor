@@ -231,6 +231,22 @@ export async function saveNarrativeEdit(eventId: string, narrative: string): Pro
   }
 }
 
+/** Fetch AI-generated risk dimension assessment (velocity, recovery, probability, trend). */
+export async function fetchAssessment(eventId: string): Promise<{ assessment: string; generated_by: string } | null> {
+  try {
+    const headers = await authHeaders({ "Content-Type": "application/json" });
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/assessment`, {
+      method: "POST",
+      headers,
+      signal: AbortSignal.timeout(90000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Event edit entry from backend */
 export interface EventEdit {
   id: number;

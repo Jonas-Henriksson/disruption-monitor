@@ -197,6 +197,99 @@ def talking_points_to_narrative(tp: TalkingPoints) -> str:
     return "\n".join(parts).strip()
 
 
+# ── Risk dimension assessment ──────────────────────────────────────
+
+
+_ASSESSMENT_PROMPT = """\
+You are a supply chain risk analyst at SKF Group. Given the disruption event data below, \
+write a SHORT plain-text assessment (3–5 sentences, no bullet points, no headers) that \
+explains the following dimensions in human terms:
+
+1. **Velocity** — why is the onset {velocity}? What about this event drives that speed?
+2. **Recovery** — why is recovery estimated at {recovery}? What factors determine the timeline?
+3. **Probability** — why is the probability of SKF impact {probability}%? What exposure drives it?
+4. **Trend** — why is the trend {trend}? What evidence from recent developments supports this direction?
+
+Write for a senior operations leader. Be specific to THIS event — name regions, sites, \
+chokepoints, or suppliers where relevant. No hedging, no preamble, no sign-off. \
+Start directly with the first sentence.
+
+Event data:
+{event_json}
+"""
+
+
+async def generate_assessment(event: dict) -> str:
+    """Generate a short AI assessment of the risk dimensions for an event."""
+    from .scanner import _get_claude_client
+
+    client = _get_claude_client()
+
+    cs = event.get("computed_severity", {}) or {}
+    severity = event.get("severity") or event.get("risk_level", "Medium")
+
+    velocity_raw = cs.get("velocity")
+    vel_map = {"immediate": "rapid", "days": "fast", "weeks": "gradual", "months": "slow"}
+    velocity = vel_map.get(velocity_raw, velocity_raw) or (
+        "rapid" if severity == "Critical" else "fast" if severity == "High"
+        else "gradual" if severity == "Medium" else "slow"
+    )
+
+    recovery = cs.get("recovery_estimate") or (
+        "months" if severity == "Critical" else "weeks" if severity in ("High", "Medium") else "days"
+    )
+
+    probability = cs.get("probability")
+    prob_str = f"{round(probability * 100)}" if probability is not None else "unknown"
+
+    trend = event.get("trend") or event.get("payload", {}).get("trend", "Stable")
+
+    event_subset = {
+        k: v for k, v in event.items()
+        if k not in ("first_seen", "last_seen", "scan_count", "status", "lat", "lng", "trend_arrow")
+    }
+    event_json = json.dumps(event_subset, indent=2, default=str)
+
+    prompt = _ASSESSMENT_PROMPT.format(
+        velocity=velocity, recovery=recovery, probability=prob_str,
+        trend=trend, event_json=event_json,
+    )
+
+    response = await client.messages.create(
+        model=settings.resolved_model,
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    for block in response.content:
+        if hasattr(block, "text"):
+            return block.text.strip()
+
+    return build_fallback_assessment(event)
+
+
+def build_fallback_assessment(event: dict) -> str:
+    """Template-based fallback when Claude API is unavailable."""
+    title = event.get("event") or event.get("risk", "this event")
+    severity = event.get("severity") or "Medium"
+    cs = event.get("computed_severity", {}) or {}
+    trend = event.get("trend") or "Stable"
+    region = event.get("region", "the affected region")
+    recovery = cs.get("recovery_estimate") or "weeks"
+    probability = cs.get("probability")
+    prob_str = f"{round(probability * 100)}%" if probability is not None else "moderate"
+
+    return (
+        f"The onset is driven by the nature of {title} in {region}, "
+        f"which is characteristic of {severity.lower()}-severity disruptions. "
+        f"Recovery is estimated at {recovery} based on historical patterns for this event category "
+        f"and the current logistics infrastructure in the region. "
+        f"There is a {prob_str} probability of direct SKF impact given the proximity of operations "
+        f"to the disruption zone. "
+        f"The trend remains {trend.lower()} based on severity movement across recent scan cycles."
+    )
+
+
 # ── Fallback narrative builder ──────────────────────────────────────
 
 

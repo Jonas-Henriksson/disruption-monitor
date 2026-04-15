@@ -9,7 +9,7 @@ import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
 import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -244,6 +244,21 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
    TAB 1: Summary
    ══════════════════════════════════════════════ */
 function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent; sev: Severity; sevCol: string; theme: V3Theme }) {
+  const [assessment, setAssessment] = useState<string | null>(null);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const assessmentFetched = useRef(false);
+
+  useEffect(() => {
+    if (assessmentFetched.current) return;
+    assessmentFetched.current = true;
+    setAssessmentLoading(true);
+    const eventId = (event as any).id || (event as any).event_id || '';
+    if (!eventId) { setAssessmentLoading(false); return; }
+    fetchAssessment(eventId)
+      .then(res => { if (res?.assessment) setAssessment(res.assessment); })
+      .finally(() => setAssessmentLoading(false));
+  }, [event]);
+
   const cs = event.computed_severity;
   const title = event.event || event.risk || '';
   const description = event.description
@@ -382,6 +397,37 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
           </InfoBadge>
         )}
       </div>
+
+      {/* AI risk assessment */}
+      {assessmentLoading && (
+        <div style={{
+          padding: '8px 10px', borderRadius: 6, marginBottom: 10,
+          background: V3.bg.base, border: `1px solid ${V3.border.subtle}`,
+        }}>
+          <div style={{ fontSize: 11, color: V3.text.muted, fontStyle: 'italic' }}>
+            Generating risk assessment...
+          </div>
+        </div>
+      )}
+      {assessment && !assessmentLoading && (
+        <div style={{
+          padding: '8px 10px', borderRadius: 6, marginBottom: 10,
+          background: V3.bg.base, border: `1px solid ${V3.border.subtle}`,
+        }}>
+          <div style={{
+            fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO,
+            color: V3.text.muted, textTransform: 'uppercase',
+            letterSpacing: '0.08em', marginBottom: 4,
+          }}>
+            Risk Assessment
+          </div>
+          <div style={{
+            fontSize: 11, color: V3.text.secondary, lineHeight: 1.6,
+          }}>
+            {assessment}
+          </div>
+        </div>
+      )}
 
       {/* Site exposure summary */}
       {totalSites > 0 && (
