@@ -9,6 +9,7 @@ from ..config import settings
 from ..db.database import get_db_stats
 from ..services.scanner import check_claude_api_status
 from ..services.scheduler import get_scheduler_status
+from ..services.teams_channel import get_teams_channel_status
 from ..services.telegram import get_telegram_status, send_telegram_message
 from .scans import get_scan_cooldowns
 
@@ -27,6 +28,7 @@ async def health():
         "database": get_db_stats(),
         "scheduler": get_scheduler_status(),
         "telegram": get_telegram_status(),
+        "teams_channel": get_teams_channel_status(),
         "scan_cooldowns": get_scan_cooldowns(),
     }
 

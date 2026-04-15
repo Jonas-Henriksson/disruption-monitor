@@ -21,6 +21,7 @@ from ..db.database import (
 from ..models.schemas import ScanRequest
 from ..services.action_engine import generate_actions_for_event
 from ..services.scanner import ScanMode, run_scan
+from ..services.teams_channel import send_scan_channel_alerts
 from ..services.telegram import send_scan_alerts
 from ..services.webhooks import publish_scan_complete
 
@@ -139,6 +140,7 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
     # Send Telegram alerts for Critical/High events
     if result.get("source") == "live":
         await send_scan_alerts(items, request.mode)
+        await send_scan_channel_alerts(items, request.mode)
 
     # Publish outbound webhooks / SNS notifications
     try:

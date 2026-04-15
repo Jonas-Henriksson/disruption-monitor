@@ -20,6 +20,7 @@ from ..db.database import create_action, get_active_events_all_modes, save_scan_
 from .action_engine import generate_actions_for_event
 from .dedup import find_cross_mode_related
 from .scanner import ScanMode, run_scan
+from .teams_channel import send_scan_channel_alerts as send_teams_alerts
 from .telegram import send_scan_alerts
 from .webhooks import publish_scan_complete
 
@@ -150,6 +151,9 @@ async def _scan_loop(mode: ScanMode) -> None:
                 alerts_sent = await send_scan_alerts(items, mode)
                 if alerts_sent:
                     logger.info("Scheduler: sent %d Telegram alerts for %s", alerts_sent, mode)
+                teams_sent = await send_teams_alerts(items, mode)
+                if teams_sent:
+                    logger.info("Scheduler: sent %d Teams alerts for %s", teams_sent, mode)
 
             # Publish outbound webhooks / SNS notifications
             try:
