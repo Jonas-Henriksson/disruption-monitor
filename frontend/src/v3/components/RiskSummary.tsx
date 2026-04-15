@@ -3,7 +3,7 @@
  */
 
 import { useMemo, useEffect, useState } from 'react';
-import { TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg } from '../theme';
+import { TYPE, V3_FONT, V3_FONT_MONO, sevColor, sevBg, type V3Theme } from '../theme';
 import { useV3Theme } from '../ThemeContext';
 import type { ScanItem, Severity } from '../../types';
 import { getSev, getRegion } from '../../utils/scan';
@@ -104,12 +104,66 @@ function Sparkline({ data, theme }: { data: TimelineDataPoint[]; theme: ReturnTy
   );
 }
 
-const SEV_TIPS: Record<string, string> = {
-  Critical: 'Score \u226575/100. Immediate threat — multiple MFG sites or sole-source suppliers directly affected. Requires emergency response.',
-  High: 'Score 50–74/100. Significant operational risk — key sites or supply routes exposed. Action needed within days.',
-  Medium: 'Score 25–49/100. Moderate risk with limited direct exposure. Monitor and prepare contingencies.',
-  Low: 'Score <25/100. Minimal direct impact — peripheral exposure. Track for escalation.',
+const SEV_TIPS: Record<string, { title: string; body: string }> = {
+  Critical: {
+    title: 'Critical (\u226575/100)',
+    body: 'Immediate threat to operations. Multiple manufacturing sites or sole-source suppliers directly affected. Requires emergency response within hours.',
+  },
+  High: {
+    title: 'High (50\u201374/100)',
+    body: 'Significant operational risk. Key sites or supply routes are exposed but not yet disrupted. Action needed within days.',
+  },
+  Medium: {
+    title: 'Medium (25\u201349/100)',
+    body: 'Moderate risk with limited direct exposure. Primarily affects non-manufacturing sites or indirect supply paths. Monitor and prepare contingencies.',
+  },
+  Low: {
+    title: 'Low (<25/100)',
+    body: 'Minimal direct impact. Peripheral exposure through distant sites or commodity-tier suppliers. Track for escalation.',
+  },
 };
+
+const TREND_TIP = {
+  title: '30-Day Trend',
+  body: 'Daily event counts over the last 30 days. Blue line = total active events per day. Red dashed line = critical-severity events only. Rising trends may indicate escalating regional instability or new disruption clusters.',
+};
+
+/** Reusable hover tooltip wrapper for the right-hand panel */
+function HoverTip({ tip, theme: V3, children, style }: {
+  tip: { title: string; body: string };
+  theme: V3Theme;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      style={{ position: 'relative', cursor: 'help', ...style }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div
+          style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 50,
+            marginTop: 4, padding: '6px 8px', borderRadius: 4, width: 220,
+            background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)', whiteSpace: 'normal',
+            cursor: 'default',
+          }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, color: V3.text.primary, marginBottom: 3 }}>
+            {tip.title}
+          </div>
+          <div style={{ fontSize: 9, color: V3.text.muted, lineHeight: 1.5, fontWeight: 400, fontFamily: V3_FONT }}>
+            {tip.body}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
   const { theme: V3 } = useV3Theme();
@@ -139,47 +193,46 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: V3.spacing.sm }}>
           {sevCounts.map(s => (
-            <div
-              key={s.severity}
-              title={SEV_TIPS[s.severity]}
-              style={{
-                padding: V3.spacing.md,
-                borderRadius: V3.radius.md,
-                background: sevBg(s.severity, V3),
-                border: `1px solid ${sevColor(s.severity, V3)}22`,
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: V3.spacing.xs,
-                cursor: 'help',
-              }}
-            >
-              <span style={{
-                ...(hasCritical && s.severity === 'Critical' ? TYPE.hero : TYPE.heroSm),
-                color: sevColor(s.severity, V3),
-              }}>
-                {s.count}
-              </span>
-              <div>
-                <div style={{
-                  fontSize: 10,
-                  fontWeight: 600,
+            <HoverTip key={s.severity} tip={SEV_TIPS[s.severity]} theme={V3}>
+              <div
+                style={{
+                  padding: V3.spacing.md,
+                  borderRadius: V3.radius.md,
+                  background: sevBg(s.severity, V3),
+                  border: `1px solid ${sevColor(s.severity, V3)}22`,
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: V3.spacing.xs,
+                }}
+              >
+                <span style={{
+                  ...(hasCritical && s.severity === 'Critical' ? TYPE.hero : TYPE.heroSm),
                   color: sevColor(s.severity, V3),
-                  textTransform: 'uppercase',
                 }}>
-                  {s.severity}
-                </div>
-                {s.delta !== 0 && (
+                  {s.count}
+                </span>
+                <div>
                   <div style={{
-                    ...TYPE.mono,
-                    fontFamily: V3_FONT_MONO,
-                    fontSize: 9,
-                    color: s.delta > 0 ? V3.severity.critical : V3.accent.green,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: sevColor(s.severity, V3),
+                    textTransform: 'uppercase',
                   }}>
-                    {s.delta > 0 ? '+' : ''}{s.delta}
+                    {s.severity}
                   </div>
-                )}
+                  {s.delta !== 0 && (
+                    <div style={{
+                      ...TYPE.mono,
+                      fontFamily: V3_FONT_MONO,
+                      fontSize: 9,
+                      color: s.delta > 0 ? V3.severity.critical : V3.accent.green,
+                    }}>
+                      {s.delta > 0 ? '+' : ''}{s.delta}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </HoverTip>
           ))}
         </div>
       </div>
@@ -243,18 +296,18 @@ export function RiskSummary({ items, previousItems }: RiskSummaryProps) {
               <span style={{ color: V3.severity.critical }}>Critical</span>
             </span>
           </div>
-          <div
-            title="Daily event counts over the last 30 days. Blue line = total active events per day. Red dashed line = critical-severity events only. Rising trends may indicate escalating regional instability or new disruption clusters. Data sourced from scan snapshots stored in the event database."
-            style={{
-              padding: V3.spacing.sm,
-              background: V3.bg.card,
-              borderRadius: V3.radius.md,
-              border: `1px solid ${V3.border.subtle}`,
-              cursor: 'help',
-            }}
-          >
-            <Sparkline data={timeline} theme={V3} />
-          </div>
+          <HoverTip tip={TREND_TIP} theme={V3}>
+            <div
+              style={{
+                padding: V3.spacing.sm,
+                background: V3.bg.card,
+                borderRadius: V3.radius.md,
+                border: `1px solid ${V3.border.subtle}`,
+              }}
+            >
+              <Sparkline data={timeline} theme={V3} />
+            </div>
+          </HoverTip>
         </div>
       )}
     </div>
