@@ -84,7 +84,7 @@ async def generate_claude_narrative(event: dict) -> str:
     event_json = json.dumps(event_subset, indent=2, default=str)
 
     response = await client.messages.create(
-        model=settings.resolved_model,
+        model=settings.analysis_model,
         max_tokens=1024,
         messages=[
             {
@@ -256,7 +256,7 @@ async def generate_assessment(event: dict) -> str:
     )
 
     response = await client.messages.create(
-        model=settings.resolved_model,
+        model=settings.analysis_model,
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )

@@ -34,19 +34,33 @@ class Settings(BaseSettings):
     )
     aws_region: str = os.environ.get("AWS_REGION", "eu-west-1")
 
-    # Claude model for scanning
-    # Direct API: claude-sonnet-4-20250514
-    # Bedrock:    eu.anthropic.claude-sonnet-4-6
+    # Claude models — split by workload:
+    #   scan_model:     high-volume scheduled scans (Sonnet — cheaper, fast, good at structured extraction)
+    #   analysis_model: on-demand narratives/assessments (Opus — better reasoning over complex context)
     claude_model: str = os.environ.get("TARS_CLAUDE_MODEL", "") or os.environ.get("CLAUDE_MODEL", "") or ""
 
     @property
-    def resolved_model(self) -> str:
-        """Return the correct model ID for the active backend (direct API vs Bedrock)."""
+    def scan_model(self) -> str:
+        """Model for high-volume scanning (Sonnet — ~5x cheaper than Opus)."""
+        if self.claude_model:
+            return self.claude_model
+        if self.use_bedrock:
+            return "eu.anthropic.claude-sonnet-4-6-v1"
+        return "claude-sonnet-4-20250514"
+
+    @property
+    def analysis_model(self) -> str:
+        """Model for on-demand narratives and assessments (Opus — deeper reasoning)."""
         if self.claude_model:
             return self.claude_model
         if self.use_bedrock:
             return "eu.anthropic.claude-opus-4-6-v1"
         return "claude-sonnet-4-20250514"
+
+    @property
+    def resolved_model(self) -> str:
+        """Default model — alias for scan_model for backward compatibility."""
+        return self.scan_model
 
     # Database — on Lambda, use /tmp/ (writable, persists across warm invocations)
     db_path: str = os.environ.get("TARS_DB_PATH", "") or (
