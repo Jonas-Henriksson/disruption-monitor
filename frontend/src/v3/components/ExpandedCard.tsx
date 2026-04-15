@@ -112,6 +112,10 @@ const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Scans Tracked',
     body: 'Number of automated scan cycles where this event was detected. More scans = longer-tracked event. The system scans disruptions every 15 min, geopolitical every 30 min, trade every 60 min.',
   },
+  severity_score: {
+    title: 'Severity Score (0\u2013100)',
+    body: 'Algorithmic risk score combining four weighted factors: event magnitude (30%), proximity to SKF sites (25%), asset criticality of affected sites (25%), and supply chain depth (20%). Fully deterministic \u2014 no AI in the scoring. The score drives the severity label: \u226575 = Critical, \u226550 = High, \u226525 = Medium, <25 = Low. See the Score Breakdown section below for component details.',
+  },
 };
 
 function InfoBadge({ glossaryKey, badgeBg, badgeFg, children, theme: V3 }: {
@@ -612,6 +616,32 @@ function ScoreBreakdown({ components, score, sevCol, theme: V3 }: {
   );
 }
 
+/* ── Score tooltip wrapper ── */
+function ScoreTooltipWrap({ theme: V3, children }: { theme: V3Theme; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  const entry = GLOSSARY.severity_score;
+  return (
+    <div
+      style={{ position: 'relative', cursor: 'help' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && entry && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 50,
+          marginTop: 4, padding: '6px 8px', borderRadius: 4, width: 240,
+          background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: V3.text.primary, marginBottom: 3 }}>{entry.title}</div>
+          <div style={{ fontSize: 9, color: V3.text.muted, lineHeight: 1.5 }}>{entry.body}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Sparkline sub-component ── */
 function SeveritySparkline({ event, sevCol, theme: V3 }: { event: DisruptionEvent; sevCol: string; theme: V3Theme }) {
   const score = event.computed_severity?.score;
@@ -639,24 +669,26 @@ function SeveritySparkline({ event, sevCol, theme: V3 }: { event: DisruptionEven
     const deltaLabel = delta > 0 ? `+${Math.round(delta)}` : `${Math.round(delta)}`;
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width={w} height={h2} style={{ flexShrink: 0 }}>
-          <path d={pathD} fill="none" stroke={sevCol} strokeWidth={1.5}
-            strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
-          {coords.map((c, i) => (
-            <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 3 : 1.5}
-              fill={i === coords.length - 1 ? sevCol : sevCol + '88'} />
-          ))}
-        </svg>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
-            {Math.round(score)}/100
-          </span>
-          <span style={{ fontSize: 9, color: deltaColor, fontFamily: V3_FONT_MONO, fontWeight: 700 }}>
-            {deltaLabel} over {history.length} scan{history.length > 1 ? 's' : ''}
-          </span>
+      <ScoreTooltipWrap theme={V3}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width={w} height={h2} style={{ flexShrink: 0 }}>
+            <path d={pathD} fill="none" stroke={sevCol} strokeWidth={1.5}
+              strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
+            {coords.map((c, i) => (
+              <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 3 : 1.5}
+                fill={i === coords.length - 1 ? sevCol : sevCol + '88'} />
+            ))}
+          </svg>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
+              {Math.round(score)}/100
+            </span>
+            <span style={{ fontSize: 9, color: deltaColor, fontFamily: V3_FONT_MONO, fontWeight: 700 }}>
+              {deltaLabel} over {history.length} scan{history.length > 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
-      </div>
+      </ScoreTooltipWrap>
     );
   }
 
@@ -667,29 +699,31 @@ function SeveritySparkline({ event, sevCol, theme: V3 }: { event: DisruptionEven
   const trendColor = trend === 'Escalating' ? V3.accent.red : trend === 'De-escalating' ? V3.accent.green : V3.text.muted;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: 20,
-        background: sevCol + '15', border: `2px solid ${sevCol}44`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 14, fontWeight: 800, fontFamily: V3_FONT_MONO, color: sevCol }}>
-          {Math.round(score)}
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
-          Severity score / 100
-        </span>
-        <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO }}>
-          {trendIcon && <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} </span>}
-          <span style={{ color: V3.text.muted }}>
-            {scanCount} scan{scanCount > 1 ? 's' : ''} tracked
+    <ScoreTooltipWrap theme={V3}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 20,
+          background: sevCol + '15', border: `2px solid ${sevCol}44`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 800, fontFamily: V3_FONT_MONO, color: sevCol }}>
+            {Math.round(score)}
           </span>
-        </span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: 10, color: V3.text.muted, fontFamily: V3_FONT_MONO }}>
+            Severity score / 100
+          </span>
+          <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO }}>
+            {trendIcon && <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} </span>}
+            <span style={{ color: V3.text.muted }}>
+              {scanCount} scan{scanCount > 1 ? 's' : ''} tracked
+            </span>
+          </span>
+        </div>
       </div>
-    </div>
+    </ScoreTooltipWrap>
   );
 }
 
