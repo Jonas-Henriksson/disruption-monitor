@@ -463,12 +463,21 @@ def _get_sample_data(mode: ScanMode) -> list[dict]:
 
 
 def _get_claude_client():
-    """Create the appropriate async Anthropic client (direct API or Bedrock)."""
+    """Create the appropriate async Anthropic client (Bedrock preferred, direct API fallback).
+
+    Bedrock keeps all data within the AWS account boundary — no prompt/response
+    data is sent to Anthropic. Direct API is only used when explicitly configured
+    with an API key and Bedrock is disabled.
+    """
     import anthropic
 
     if settings.use_bedrock:
+        logger.info("Using Bedrock client (region=%s) — data stays in AWS", settings.aws_region)
         return anthropic.AsyncAnthropicBedrock(aws_region=settings.aws_region)
-    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    if settings.anthropic_api_key:
+        logger.warning("Using direct Anthropic API — data leaves AWS boundary")
+        return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    raise RuntimeError("No Claude API configured: set USE_BEDROCK=true or ANTHROPIC_API_KEY")
 
 
 async def check_claude_api_status() -> dict[str, str]:

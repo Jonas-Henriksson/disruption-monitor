@@ -238,8 +238,8 @@ class TestNarrativeEndpoint:
         # New: generated_at timestamp
         assert "generated_at" in data
         assert data["generated_at"] is not None
-        # generated_by should be fallback (no API key in tests)
-        assert data["generated_by"] == "fallback"
+        # generated_by depends on environment: "claude" on AWS (Bedrock), "fallback" otherwise
+        assert data["generated_by"] in ("fallback", "claude")
 
     def test_narrative_backward_compat_fields(self, seeded_db):
         """The response should still have event_id and generated_by for backward compat."""

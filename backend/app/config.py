@@ -21,8 +21,17 @@ class Settings(BaseSettings):
     # Accepts TARS_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY
     anthropic_api_key: str = os.environ.get("TARS_ANTHROPIC_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
 
-    # AWS Bedrock -- alternative to direct Anthropic API
-    use_bedrock: bool = os.environ.get("USE_BEDROCK", "").lower() in ("1", "true", "yes")
+    # AWS Bedrock -- preferred path (data stays in AWS boundary)
+    # Auto-enabled on EC2/Lambda/ECS unless USE_BEDROCK=false
+    use_bedrock: bool = os.environ.get("USE_BEDROCK", "").lower() not in ("0", "false", "no") if os.environ.get("USE_BEDROCK") else (
+        # Auto-detect: enable Bedrock if running on AWS infrastructure
+        bool(
+            os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+            or os.environ.get("AWS_EXECUTION_ENV")
+            or os.environ.get("ECS_CONTAINER_METADATA_URI")
+            or os.path.exists("/sys/devices/virtual/dmi/id/board_asset_tag")  # EC2 instance
+        )
+    )
     aws_region: str = os.environ.get("AWS_REGION", "eu-west-1")
 
     # Claude model for scanning
@@ -99,8 +108,8 @@ class Settings(BaseSettings):
 
     @property
     def has_claude_api(self) -> bool:
-        """True when Claude is available (direct API key OR Bedrock via IAM)."""
-        return bool(self.anthropic_api_key) or self.use_bedrock
+        """True when Claude is available (Bedrock via IAM preferred, or direct API key)."""
+        return self.use_bedrock or bool(self.anthropic_api_key)
 
     @property
     def has_telegram(self) -> bool:
