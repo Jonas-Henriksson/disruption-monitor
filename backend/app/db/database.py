@@ -486,7 +486,11 @@ def _extract_severity(payload: dict, mode: str) -> str:
 
 
 def upsert_event(event_id: str, mode: str, payload: dict, scan_id: str) -> bool:
-    """Insert or update an event. Returns True if new, False if updated."""
+    """Insert or update an event. Returns True if new, False if updated.
+
+    If the event is archived and the new severity score exceeds
+    archived_severity, the event is resurrected to 'active'.
+    """
     now = datetime.now(timezone.utc).isoformat()
     title = _extract_title(payload, mode)
     severity = _extract_severity(payload, mode)
@@ -495,18 +499,43 @@ def upsert_event(event_id: str, mode: str, payload: dict, scan_id: str) -> bool:
     lng = payload.get("lng", 0.0)
     payload_json = json.dumps(payload, default=str)
 
+    # Extract severity score for resurrection comparison
+    cs = payload.get("computed_severity") or {}
+    new_score = cs.get("score", 0) if isinstance(cs, dict) else 0
+
     with get_db() as conn:
-        existing = conn.execute("SELECT id, scan_count FROM events WHERE id = ?", (event_id,)).fetchone()
+        existing = conn.execute(
+            "SELECT id, scan_count, status, archived_severity FROM events WHERE id = ?",
+            (event_id,),
+        ).fetchone()
 
         if existing:
-            conn.execute(
-                """UPDATE events
-                   SET event_title = ?, severity = ?, region = ?, lat = ?, lng = ?,
-                       last_seen = ?, scan_count = scan_count + 1,
-                       payload = ?, updated_at = ?
-                   WHERE id = ?""",
-                (title, severity, region, lat, lng, now, payload_json, now, event_id),
-            )
+            # Check for archive resurrection
+            resurrect = False
+            if existing["status"] == "archived":
+                archived_sev = existing["archived_severity"] or 0
+                if new_score > archived_sev:
+                    resurrect = True
+
+            if resurrect:
+                conn.execute(
+                    """UPDATE events
+                       SET event_title = ?, severity = ?, region = ?, lat = ?, lng = ?,
+                           last_seen = ?, scan_count = scan_count + 1,
+                           payload = ?, updated_at = ?,
+                           status = 'active', resurfaced_at = ?
+                       WHERE id = ?""",
+                    (title, severity, region, lat, lng, now, payload_json, now, now, event_id),
+                )
+            else:
+                conn.execute(
+                    """UPDATE events
+                       SET event_title = ?, severity = ?, region = ?, lat = ?, lng = ?,
+                           last_seen = ?, scan_count = scan_count + 1,
+                           payload = ?, updated_at = ?
+                       WHERE id = ?""",
+                    (title, severity, region, lat, lng, now, payload_json, now, event_id),
+                )
             # Save snapshot
             conn.execute(
                 "INSERT INTO event_snapshots (event_id, scan_id, payload) VALUES (?, ?, ?)",
@@ -559,6 +588,8 @@ def get_events(
             event["first_seen"] = row["first_seen"]
             event["last_seen"] = row["last_seen"]
             event["scan_count"] = row["scan_count"]
+            event["archived_severity"] = row["archived_severity"] if "archived_severity" in row.keys() else None
+            event["resurfaced_at"] = row["resurfaced_at"] if "resurfaced_at" in row.keys() else None
             _enrich_supply_chain_if_missing(event)
             results.append(event)
         return results
@@ -575,6 +606,8 @@ def get_event(event_id: str) -> dict | None:
         event["first_seen"] = row["first_seen"]
         event["last_seen"] = row["last_seen"]
         event["scan_count"] = row["scan_count"]
+        event["archived_severity"] = row["archived_severity"] if "archived_severity" in row.keys() else None
+        event["resurfaced_at"] = row["resurfaced_at"] if "resurfaced_at" in row.keys() else None
         _enrich_supply_chain_if_missing(event)
         return event
 

@@ -4,6 +4,7 @@ import json
 import pytest
 from backend.app.db.database import (
     get_db,
+    get_event,
     upsert_event,
     get_evolution_summaries,
     save_evolution_summary,
@@ -91,3 +92,68 @@ class TestEvolutionSummariesTable:
         latest = get_latest_evolution_summary("test-event|europe")
         assert latest is not None
         assert latest["phase_label"] == "Phase B"
+
+
+class TestArchiveResurrection:
+    def test_archived_event_resurfaces_on_higher_severity(self):
+        """Archived at score 50, re-detected at 70 → should resurface."""
+        _seed_event(score=50)
+        # Archive it — simulate storing archived_severity
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE events SET status = 'archived', archived_severity = 50 WHERE id = ?",
+                ("test-event|europe",),
+            )
+        # Re-detect at higher severity
+        payload = {
+            "id": "test-event|europe",
+            "event": "Test Event",
+            "region": "Europe",
+            "severity": "High",
+            "computed_severity": {"score": 70},
+            "lat": 52.0,
+            "lng": 13.0,
+        }
+        result = upsert_event("test-event|europe", "disruptions", payload, "scan-002")
+        event = get_event("test-event|europe")
+        assert event["status"] == "active"
+        assert event.get("resurfaced_at") is not None
+
+    def test_archived_event_stays_archived_on_same_severity(self):
+        """Archived at score 50, re-detected at 45 → should stay archived."""
+        _seed_event(score=50)
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE events SET status = 'archived', archived_severity = 50 WHERE id = ?",
+                ("test-event|europe",),
+            )
+        payload = {
+            "id": "test-event|europe",
+            "event": "Test Event",
+            "region": "Europe",
+            "severity": "Medium",
+            "computed_severity": {"score": 45},
+            "lat": 52.0,
+            "lng": 13.0,
+        }
+        upsert_event("test-event|europe", "disruptions", payload, "scan-002")
+        event = get_event("test-event|europe")
+        assert event["status"] == "archived"
+        assert event.get("resurfaced_at") is None
+
+    def test_active_event_not_affected_by_resurrection_logic(self):
+        """Active events should not get resurfaced_at set."""
+        _seed_event(score=50)
+        payload = {
+            "id": "test-event|europe",
+            "event": "Test Event Updated",
+            "region": "Europe",
+            "severity": "Critical",
+            "computed_severity": {"score": 80},
+            "lat": 52.0,
+            "lng": 13.0,
+        }
+        upsert_event("test-event|europe", "disruptions", payload, "scan-002")
+        event = get_event("test-event|europe")
+        assert event["status"] == "active"
+        assert event.get("resurfaced_at") is None
