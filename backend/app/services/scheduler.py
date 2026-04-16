@@ -16,8 +16,23 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
-from ..db.database import create_action, get_active_events_all_modes, save_scan_record, update_event_related_events, upsert_event
+from ..db.database import (
+    create_action,
+    get_active_events_all_modes,
+    get_events,
+    get_latest_evolution_summary,
+    save_evolution_summary,
+    save_scan_record,
+    update_event_related_events,
+    upsert_event,
+)
 from .action_engine import generate_actions_for_event
+from .evolution import (
+    compress_daily_to_weekly,
+    compress_weekly_to_monthly,
+    generate_evolution_summary,
+    get_evolution_cadence_hours,
+)
 from .dedup import find_cross_mode_related
 from .scanner import ScanMode, run_scan
 from .teams_channel import send_scan_channel_alerts as send_teams_alerts
@@ -195,6 +210,106 @@ async def _scan_loop(mode: ScanMode) -> None:
             return
 
 
+async def _evolution_loop() -> None:
+    """Periodic evolution analysis for active/watching events."""
+    logger.info("Scheduler: evolution analysis loop starting (checks every 30 min)")
+    await asyncio.sleep(120)  # initial delay — let first scans complete
+
+    while _running:
+        try:
+            now = datetime.now(timezone.utc)
+            today = now.strftime("%Y-%m-%d")
+
+            # Get active + watching events
+            active = get_events(status="active", limit=500)
+            watching = get_events(status="watching", limit=500)
+            all_events = active + watching
+            watching_ids = {e.get("id") for e in watching}
+
+            for event in all_events:
+                eid = event.get("id", "")
+                severity = event.get("severity", "Medium")
+                is_watching = eid in watching_ids
+                cadence_h = get_evolution_cadence_hours(severity, watching=is_watching)
+
+                # Check if analysis is due
+                latest = get_latest_evolution_summary(eid)
+                if latest:
+                    created = latest["created_at"]
+                    if isinstance(created, str) and "T" not in created:
+                        created = created.replace(" ", "T") + "+00:00"
+                    elif isinstance(created, str) and not created.endswith("+00:00") and not created.endswith("Z"):
+                        created += "+00:00"
+                    last_time = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    if (now - last_time).total_seconds() < cadence_h * 3600:
+                        continue
+
+                logger.info("Evolution analysis: running daily for %s (severity=%s)", eid, severity)
+                try:
+                    summary = await generate_evolution_summary(
+                        eid, "daily", today, today,
+                    )
+                    save_evolution_summary(summary)
+
+                    # Check for phase transition → Teams alert
+                    if latest and summary.get("phase_label") and summary["phase_label"] != latest.get("phase_label"):
+                        from .teams_channel import send_phase_transition_alert
+                        title = event.get("event") or event.get("risk", "Unknown")
+                        region = event.get("region", "")
+                        await send_phase_transition_alert(
+                            title, region,
+                            latest.get("phase_label", ""),
+                            summary["phase_label"],
+                            summary.get("phase_number", 1),
+                        )
+                except Exception as exc:
+                    logger.error("Evolution analysis failed for %s: %s", eid, exc)
+
+        except Exception as exc:
+            logger.error("Evolution loop error: %s", exc)
+
+        await asyncio.sleep(1800)  # check every 30 minutes
+
+
+async def _compression_loop() -> None:
+    """Weekly/monthly compression of evolution summaries."""
+    logger.info("Scheduler: compression loop starting (checks daily)")
+    await asyncio.sleep(300)  # initial delay
+
+    while _running:
+        try:
+            now = datetime.now(timezone.utc)
+
+            # Weekly compression on Sundays
+            if now.weekday() == 6:  # Sunday
+                week_end = now.strftime("%Y-%m-%d")
+                week_start = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+                active = get_events(status="active", limit=500)
+                for event in active:
+                    eid = event.get("id", "")
+                    try:
+                        compress_daily_to_weekly(eid, week_start, week_end)
+                    except Exception as exc:
+                        logger.error("Weekly compression failed for %s: %s", eid, exc)
+
+            # Monthly compression on 1st of month
+            if now.day == 1:
+                month_end = now.strftime("%Y-%m-%d")
+                month_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+                active = get_events(status="active", limit=500)
+                for event in active:
+                    eid = event.get("id", "")
+                    try:
+                        compress_weekly_to_monthly(eid, month_start, month_end)
+                    except Exception as exc:
+                        logger.error("Monthly compression failed for %s: %s", eid, exc)
+
+        except Exception as exc:
+            logger.error("Compression loop error: %s", exc)
+
+        await asyncio.sleep(86400)  # check daily
+
+
 def start_scheduler() -> None:
     """Start background scan tasks for all modes."""
     global _running
@@ -214,6 +329,15 @@ def start_scheduler() -> None:
         task = loop.create_task(_scan_loop(mode), name=f"scan-{mode}")
         _tasks[mode] = task
         logger.info("Scheduler: started %s task", mode)
+
+    # Evolution analysis + compression
+    evo_task = loop.create_task(_evolution_loop(), name="evolution-analysis")
+    _tasks["evolution"] = evo_task
+    logger.info("Scheduler: started evolution analysis task")
+
+    comp_task = loop.create_task(_compression_loop(), name="evolution-compression")
+    _tasks["compression"] = comp_task
+    logger.info("Scheduler: started evolution compression task")
 
 
 async def stop_scheduler() -> None:
