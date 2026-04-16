@@ -32,11 +32,10 @@ export interface ExpandedCardProps {
 /* ─────────────────────────────────────────────
    Tab types
    ───────────────────────────────────────────── */
-type Tab = 'summary' | 'exposure' | 'evolution' | 'act';
+type Tab = 'summary' | 'evolution' | 'act';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'summary',   label: 'Summary' },
-  { key: 'exposure',  label: 'Exposure' },
   { key: 'evolution', label: 'Evolution' },
   { key: 'act',       label: 'Act' },
 ];
@@ -275,7 +274,6 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
       {/* Content — scrolls internally only on map placement; feed relies on parent scroll */}
       <div className={isFeed ? undefined : 'sc-s'} style={isFeed ? {} : { flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} handleTab={handleTab} />}
-        {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
         {tab === 'evolution' && <EvolutionTab event={event} sevCol={sevCol} theme={V3} />}
         {tab === 'act'      && <ActTab event={event} theme={V3} onStatusChange={onStatusChange} />}
       </div>
