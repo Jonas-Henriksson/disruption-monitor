@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_trade
-from ..db.database import get_event, get_event_edits, get_event_feedback, get_event_severity_history, get_events, get_feedback_stats, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
+from ..db.database import get_db, get_event, get_event_edits, get_event_feedback, get_event_severity_history, get_events, get_evolution_summaries, get_feedback_stats, get_latest_evolution_summary, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
 from ..models.schemas import EventFeedbackCreate, EventRecommendationsResponse, FeedbackStats
 from ..services.narrative import (
     TalkingPoints,
@@ -145,9 +145,24 @@ async def get_event_recommendations(event_id: str, user: dict[str, Any] = Depend
 
 @router.patch("/{event_id}/status")
 async def patch_event_status(event_id: str, body: StatusUpdate, user: dict[str, Any] = Depends(get_current_user)):
-    """Update event lifecycle status (active, watching, archived)."""
+    """Update event lifecycle status (active, watching, archived).
+
+    When archiving, stores current severity score for resurrection comparison.
+    """
     if body.status not in ("active", "watching", "archived"):
         raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
+
+    # If archiving, store current severity for resurrection comparison
+    if body.status == "archived":
+        event = _find_event(event_id)
+        if event:
+            score = (event.get("computed_severity") or {}).get("score", 0)
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE events SET archived_severity = ? WHERE id = ?",
+                    (score, event_id),
+                )
+
     updated = update_event_status(event_id, body.status)
     if not updated:
         raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
@@ -330,3 +345,26 @@ async def get_assessment(event_id: str, user: dict[str, Any] = Depends(get_curre
             assessment=build_fallback_assessment(event),
             generated_by="fallback",
         )
+
+
+# ── Evolution summaries ──────────────────────────────────────────
+
+
+@router.get("/{event_id}/evolution")
+async def get_event_evolution(event_id: str, period_type: str | None = None, user: dict[str, Any] = Depends(get_current_user)):
+    """Get all evolution summaries for an event, optionally filtered by period type."""
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+    summaries = get_evolution_summaries(event_id, period_type=period_type)
+    return {"event_id": event_id, "summaries": summaries}
+
+
+@router.get("/{event_id}/evolution/latest")
+async def get_event_evolution_latest(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
+    """Get the most recent evolution summary for an event."""
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+    latest = get_latest_evolution_summary(event_id)
+    return {"event_id": event_id, "summary": latest}
