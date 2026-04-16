@@ -167,6 +167,27 @@ export function FeedCard({ item, index, expanded, onSelect, onHover, onStatusCha
             {item.possible_duplicate_of && (
               <span style={{ color: V3.accent.amber, marginLeft: 6, fontSize: 10 }}>DUP</span>
             )}
+            {item.resurfaced_at && (() => {
+              const resurfacedTime = new Date(item.resurfaced_at as string);
+              const hoursSince = (Date.now() - resurfacedTime.getTime()) / (1000 * 60 * 60);
+              if (hoursSince > 48) return null;
+              const oldScore = (item as any).archived_severity || 0;
+              const newScore = item.computed_severity?.score || 0;
+              const delta = newScore - oldScore;
+              return (
+                <CardTip
+                  tip={{
+                    title: 'Resurfaced Event',
+                    body: 'This event was previously archived but has resurfaced because its severity increased beyond the level at which it was dismissed.',
+                  }}
+                  theme={V3}
+                >
+                  <span style={{ color: V3.accent.amber, marginLeft: 6, fontSize: 10, fontWeight: 600 }}>
+                    ↑ RESURFACED{delta > 0 ? ` +${delta}` : ''}
+                  </span>
+                </CardTip>
+              );
+            })()}
           </div>
         </div>
 
