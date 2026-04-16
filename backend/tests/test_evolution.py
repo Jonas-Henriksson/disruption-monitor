@@ -199,3 +199,63 @@ class TestEvolutionAnalyzer:
 
     def test_cadence_watching_overrides_to_daily(self):
         assert get_evolution_cadence_hours("Medium", watching=True) == 24
+
+
+class TestResurrectionIntegration:
+    def test_full_resurrection_flow(self):
+        """Seed → archive → re-detect at higher score → verify resurrection."""
+        # 1. Create event
+        _seed_event(score=50)
+        event = get_event("test-event|europe")
+        assert event["status"] == "active"
+
+        # 2. Archive with severity stored
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE events SET status = 'archived', archived_severity = 50 WHERE id = ?",
+                ("test-event|europe",),
+            )
+        event = get_event("test-event|europe")
+        assert event["status"] == "archived"
+
+        # 3. Re-detect at higher severity
+        payload = {
+            "id": "test-event|europe",
+            "event": "Test Event Escalated",
+            "region": "Europe",
+            "severity": "Critical",
+            "computed_severity": {"score": 78},
+            "lat": 52.0,
+            "lng": 13.0,
+        }
+        upsert_event("test-event|europe", "disruptions", payload, "scan-003")
+
+        # 4. Verify resurrection
+        event = get_event("test-event|europe")
+        assert event["status"] == "active"
+        assert event["resurfaced_at"] is not None
+
+    def test_evolution_summary_persists_through_lifecycle(self):
+        """Summaries should persist even after archival."""
+        _seed_event()
+        save_evolution_summary({
+            "event_id": "test-event|europe",
+            "period_type": "daily",
+            "period_start": "2026-04-15",
+            "period_end": "2026-04-15",
+            "severity_values": "[65]",
+            "phase_label": "Initial",
+            "phase_number": 1,
+            "key_developments": "[]",
+            "exposure_delta": "",
+            "forward_outlook": "",
+            "narrative": "Test",
+            "generated_by": "fallback",
+        })
+        # Archive
+        with get_db() as conn:
+            conn.execute("UPDATE events SET status = 'archived' WHERE id = ?", ("test-event|europe",))
+
+        # Summaries should still be accessible
+        summaries = get_evolution_summaries("test-event|europe")
+        assert len(summaries) == 1
