@@ -247,6 +247,37 @@ export async function fetchAssessment(eventId: string): Promise<{ assessment: st
   }
 }
 
+/** Fetch all evolution summaries for an event. */
+export async function fetchEvolution(eventId: string, periodType?: string): Promise<{ summaries: any[] } | null> {
+  try {
+    const headers = await authHeaders();
+    const params = periodType ? `?period_type=${periodType}` : '';
+    const resp = await fetch(
+      `${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/evolution${params}`,
+      { headers, signal: AbortSignal.timeout(10000) },
+    );
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch the latest evolution summary for an event. */
+export async function fetchEvolutionLatest(eventId: string): Promise<{ summary: any | null } | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(
+      `${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/evolution/latest`,
+      { headers, signal: AbortSignal.timeout(10000) },
+    );
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Event edit entry from backend */
 export interface EventEdit {
   id: number;

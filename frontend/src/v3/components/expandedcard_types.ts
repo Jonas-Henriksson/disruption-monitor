@@ -29,6 +29,8 @@ export interface DisruptionEvent {
   severity?: Severity | string;
   trend?: string;
   status?: 'active' | 'watching' | 'archived';
+  resurfaced_at?: string;
+  archived_severity?: number;
 
   // Enrichment
   computed_severity?: ComputedSeverity;
@@ -55,4 +57,21 @@ export interface DisruptionEvent {
 
   // Allow additional fields
   [key: string]: unknown;
+}
+
+export interface EvolutionSummary {
+  id: number;
+  event_id: string;
+  period_type: 'daily' | 'weekly' | 'monthly';
+  period_start: string;
+  period_end: string;
+  severity_values: string; // JSON array of numbers
+  phase_label: string;
+  phase_number: number;
+  key_developments: string; // JSON array of {date, description}
+  exposure_delta: string;
+  forward_outlook: string;
+  narrative: string;
+  generated_by: string;
+  created_at: string;
 }
