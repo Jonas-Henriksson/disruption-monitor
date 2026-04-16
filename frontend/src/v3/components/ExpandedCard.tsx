@@ -9,7 +9,7 @@ import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
 import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment, fetchEvolutionLatest } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -32,12 +32,13 @@ export interface ExpandedCardProps {
 /* ─────────────────────────────────────────────
    Tab types
    ───────────────────────────────────────────── */
-type Tab = 'summary' | 'exposure' | 'act';
+type Tab = 'summary' | 'exposure' | 'evolution' | 'act';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'summary',  label: 'Summary' },
-  { key: 'exposure', label: 'Exposure' },
-  { key: 'act',      label: 'Act' },
+  { key: 'summary',   label: 'Summary' },
+  { key: 'exposure',  label: 'Exposure' },
+  { key: 'evolution', label: 'Evolution' },
+  { key: 'act',       label: 'Act' },
 ];
 
 /* ─────────────────────────────────────────────
@@ -116,6 +117,26 @@ const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Severity Score (0\u2013100)',
     body: 'Algorithmic risk score combining four weighted factors: event magnitude (30%), proximity to SKF sites (25%), asset criticality of affected sites (25%), and supply chain depth (20%). Fully deterministic \u2014 no AI in the scoring. The score drives the severity label: \u226575 = Critical, \u226550 = High, \u226525 = Medium, <25 = Low. See the Score Breakdown section below for component details.',
   },
+  phase: {
+    title: 'Situation Phase',
+    body: 'AI-detected transitions in the nature of a disruption. As events evolve, they pass through phases — e.g. from "Initial Shock" to "Active Conflict" to "Structural Trade Shift". Each phase represents a qualitative change in how the event impacts supply chains.',
+  },
+  evolution_trajectory: {
+    title: 'Severity Trajectory',
+    body: 'Severity score plotted over time. Vertical dashed markers indicate phase transitions detected by the evolution analyzer. Rising trends suggest escalation; flat trends suggest stabilization.',
+  },
+  milestones: {
+    title: 'Key Milestones',
+    body: 'Significant changes detected by the evolution analyzer — severity jumps, new manufacturing sites affected, category shifts, or supply chain exposure changes.',
+  },
+  exposure_drift: {
+    title: 'Exposure Drift',
+    body: 'How SKF\'s exposure to this event has changed over time — new sites entering the risk zone, suppliers affected, or route dependencies shifting.',
+  },
+  forward_outlook: {
+    title: 'Forward Outlook',
+    body: 'AI projection of where this event is heading if the current trajectory continues without intervention.',
+  },
 };
 
 function InfoBadge({ glossaryKey, badgeBg, badgeFg, children, theme: V3 }: {
@@ -154,6 +175,27 @@ function InfoBadge({ glossaryKey, badgeBg, badgeFg, children, theme: V3 }: {
         </span>
       )}
     </span>
+  );
+}
+
+function HoverTip({ tip, theme: V3, children }: { tip: { title: string; body: string }; theme: V3Theme; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  if (!tip) return <>{children}</>;
+  return (
+    <div style={{ position: 'relative' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 50,
+          marginTop: 4, padding: '6px 8px', borderRadius: 4, width: 220,
+          background: V3.bg.sidebar, border: `1px solid ${V3.border.default}`,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)', whiteSpace: 'normal', cursor: 'default',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: V3.text.primary, marginBottom: 3 }}>{tip.title}</div>
+          <div style={{ fontSize: 9, color: V3.text.muted, lineHeight: 1.5, fontWeight: 400, fontFamily: V3_FONT }}>{tip.body}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -232,8 +274,9 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
 
       {/* Content — scrolls internally only on map placement; feed relies on parent scroll */}
       <div className={isFeed ? undefined : 'sc-s'} style={isFeed ? {} : { flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
-        {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} />}
+        {tab === 'summary'  && <SummaryTab event={event} sev={sev} sevCol={sevCol} theme={V3} handleTab={handleTab} />}
         {tab === 'exposure' && <ExposureTab event={event} onHoverSite={onHoverSite} theme={V3} />}
+        {tab === 'evolution' && <EvolutionTab event={event} sevCol={sevCol} theme={V3} />}
         {tab === 'act'      && <ActTab event={event} theme={V3} onStatusChange={onStatusChange} />}
       </div>
     </div>
@@ -243,7 +286,7 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
 /* ══════════════════════════════════════════════
    TAB 1: Summary
    ══════════════════════════════════════════════ */
-function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent; sev: Severity; sevCol: string; theme: V3Theme }) {
+function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: DisruptionEvent; sev: Severity; sevCol: string; theme: V3Theme; handleTab: (t: Tab) => void }) {
   const [assessment, setAssessment] = useState<string | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const assessmentFetched = useRef(false);
@@ -257,6 +300,19 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
     fetchAssessment(eventId)
       .then(res => { if (res?.assessment) setAssessment(res.assessment); })
       .finally(() => setAssessmentLoading(false));
+  }, [event]);
+
+  const [evolutionLatest, setEvolutionLatest] = useState<any>(null);
+  const evolutionFetched = useRef(false);
+
+  useEffect(() => {
+    if (evolutionFetched.current) return;
+    evolutionFetched.current = true;
+    const eventId = (event as any).id || (event as any).event_id || '';
+    if (!eventId) return;
+    fetchEvolutionLatest(eventId).then(res => {
+      if (res?.summary) setEvolutionLatest(res.summary);
+    });
   }, [event]);
 
   const cs = event.computed_severity;
@@ -451,6 +507,46 @@ function SummaryTab({ event, sev, sevCol, theme: V3 }: { event: DisruptionEvent;
 
       {/* Score breakdown */}
       {cs?.components && <ScoreBreakdown components={cs.components} score={cs.score} sevCol={sevCol} theme={V3} />}
+
+      {/* Compact evolution card */}
+      {evolutionLatest && (
+        <div
+          style={{
+            background: V3.bg.base, borderRadius: 6, padding: '8px 10px',
+            border: `1px solid ${V3.border.subtle}`, marginTop: 8,
+            cursor: 'pointer',
+          }}
+          onClick={() => handleTab('evolution')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <InfoBadge glossaryKey="phase" badgeBg={sevCol} badgeFg={sevCol} theme={V3}>
+                PHASE {evolutionLatest.phase_number}
+              </InfoBadge>
+              <span style={{ fontSize: 10, color: V3.text.secondary }}>
+                {evolutionLatest.phase_label}
+              </span>
+            </div>
+            <span style={{ fontSize: 9, color: V3.accent.blue, fontFamily: V3_FONT_MONO }}>
+              View timeline →
+            </span>
+          </div>
+          {(() => {
+            try {
+              const vals: number[] = JSON.parse(evolutionLatest.severity_values || '[]');
+              if (vals.length < 2) return null;
+              const max = Math.max(...vals, 1);
+              const w = 200; const h = 20;
+              const pts = vals.map((v: number, i: number) => `${(i / (vals.length - 1)) * w},${h - (v / max) * (h - 2)}`).join(' ');
+              return (
+                <svg width={w} height={h} style={{ display: 'block' }}>
+                  <polyline points={pts} fill="none" stroke={sevCol} strokeWidth={1.5} strokeLinecap="round" />
+                </svg>
+              );
+            } catch { return null; }
+          })()}
+        </div>
+      )}
 
       {/* Tracking timeline */}
       {(firstSeen || lastSeen || sources.length > 0) && (
@@ -1479,6 +1575,204 @@ function CommBtn({ label, icon, href, theme: V3 }: { label: string; icon: string
       <span style={{ fontSize: 13 }}>{icon}</span>
       {label}
     </a>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB: Evolution
+   ══════════════════════════════════════════════ */
+function EvolutionTab({ event, sevCol, theme: V3 }: { event: DisruptionEvent; sevCol: string; theme: V3Theme }) {
+  const [summaries, setSummaries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const fetched = useRef(false);
+
+  useEffect(() => {
+    if (fetched.current) return;
+    fetched.current = true;
+    const eventId = (event as any).id || (event as any).event_id || '';
+    if (!eventId) { setLoading(false); return; }
+    import('../../services/api').then(({ fetchEvolution }) =>
+      fetchEvolution(eventId).then(res => {
+        if (res?.summaries) setSummaries(res.summaries);
+        setLoading(false);
+      })
+    );
+  }, [event]);
+
+  const sectionHeader = sectionHeaderStyle(V3);
+
+  if (loading) {
+    return <div style={{ padding: 12, color: V3.text.muted, fontSize: 11, fontStyle: 'italic' }}>Loading evolution data...</div>;
+  }
+
+  if (summaries.length === 0) {
+    return (
+      <div style={{ padding: 12, textAlign: 'center', color: V3.text.muted }}>
+        <div style={{ fontSize: 11, marginBottom: 4 }}>No evolution data yet</div>
+        <div style={{ fontSize: 9 }}>Evolution analysis runs automatically based on event severity. Check back after the first analysis cycle.</div>
+      </div>
+    );
+  }
+
+  const latest = summaries[summaries.length - 1];
+  const phaseLabel = latest.phase_label || 'Unknown';
+  const phaseNumber = latest.phase_number || 1;
+
+  // Collect all severity values across summaries for trajectory chart
+  const allSevValues: number[] = [];
+  const phaseMarkers: { index: number; label: string; number: number }[] = [];
+  let lastPhase = '';
+  for (const s of summaries) {
+    const vals: number[] = (() => { try { return JSON.parse(s.severity_values || '[]'); } catch { return []; } })();
+    for (const v of vals) {
+      if (s.phase_label && s.phase_label !== lastPhase) {
+        phaseMarkers.push({ index: allSevValues.length, label: s.phase_label, number: s.phase_number });
+        lastPhase = s.phase_label;
+      }
+      allSevValues.push(v);
+    }
+  }
+
+  // Collect all milestones
+  const allMilestones: { date: string; description: string }[] = [];
+  const seenMilestones = new Set<string>();
+  for (const s of summaries) {
+    const devs: any[] = (() => { try { return JSON.parse(s.key_developments || '[]'); } catch { return []; } })();
+    for (const d of devs) {
+      const key = `${d.date}|${d.description}`;
+      if (!seenMilestones.has(key)) {
+        seenMilestones.add(key);
+        allMilestones.push(d);
+      }
+    }
+  }
+  allMilestones.sort((a, b) => a.date.localeCompare(b.date));
+
+  const exposureDelta = latest.exposure_delta || '';
+  const forwardOutlook = latest.forward_outlook || '';
+  const narrative = latest.narrative || '';
+
+  // Trajectory chart dimensions
+  const chartW = 300;
+  const chartH = 60;
+  const maxSev = Math.max(...allSevValues, 1);
+
+  return (
+    <div>
+      {/* Phase banner */}
+      <HoverTip tip={GLOSSARY.phase} theme={V3}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+            background: sevCol + '18', color: sevCol, border: `1px solid ${sevCol}33`,
+            fontFamily: V3_FONT_MONO, textTransform: 'uppercase',
+          }}>
+            Phase {phaseNumber}
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: V3.text.primary }}>{phaseLabel}</span>
+          <span style={{ fontSize: 9, color: V3.text.muted, fontFamily: V3_FONT_MONO, marginLeft: 'auto' }}>
+            since {latest.period_start}
+          </span>
+        </div>
+      </HoverTip>
+
+      {/* Severity trajectory chart */}
+      {allSevValues.length >= 2 && (
+        <div>
+          <HoverTip tip={GLOSSARY.evolution_trajectory} theme={V3}>
+            <div style={sectionHeader}>Severity Trajectory</div>
+          </HoverTip>
+          <div style={{
+            background: V3.bg.base, borderRadius: 6, padding: '10px 12px',
+            border: `1px solid ${V3.border.subtle}`, marginBottom: 10,
+          }}>
+            <svg width="100%" height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none">
+              {/* Grid lines */}
+              {[25, 50, 75].map(v => (
+                <line key={v} x1={0} y1={chartH - (v / maxSev) * (chartH - 4)} x2={chartW} y2={chartH - (v / maxSev) * (chartH - 4)}
+                  stroke={V3.border.subtle} strokeWidth={0.5} strokeDasharray="4,4" />
+              ))}
+              {/* Severity line */}
+              <polyline
+                points={allSevValues.map((v, i) => `${(i / (allSevValues.length - 1)) * chartW},${chartH - (v / maxSev) * (chartH - 4)}`).join(' ')}
+                fill="none" stroke={sevCol} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+              />
+              {/* Phase markers */}
+              {phaseMarkers.map((pm, pi) => {
+                const x = allSevValues.length > 1 ? (pm.index / (allSevValues.length - 1)) * chartW : 0;
+                return (
+                  <g key={pi}>
+                    <line x1={x} y1={2} x2={x} y2={chartH - 2} stroke={V3.accent.blue} strokeWidth={1} strokeDasharray="3,3" opacity={0.5} />
+                    <text x={x + 3} y={8} fill={V3.accent.blue} fontSize={6} fontFamily="monospace">{pm.label}</text>
+                    <circle cx={x} cy={chartH - ((allSevValues[pm.index] || 0) / maxSev) * (chartH - 4)} r={3} fill={sevCol} />
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Key milestones */}
+      {allMilestones.length > 0 && (
+        <div>
+          <HoverTip tip={GLOSSARY.milestones} theme={V3}>
+            <div style={sectionHeader}>Key Milestones</div>
+          </HoverTip>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+            {allMilestones.map((m, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 10, alignItems: 'flex-start' }}>
+                <span style={{ color: V3.text.muted, fontFamily: V3_FONT_MONO, minWidth: 70, flexShrink: 0 }}>{m.date}</span>
+                <span style={{ color: V3.text.secondary }}>{m.description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Exposure drift */}
+      {exposureDelta && (
+        <HoverTip tip={GLOSSARY.exposure_drift} theme={V3}>
+          <div style={{
+            background: V3.accent.red + '08', borderRadius: 6, padding: '8px 10px',
+            border: `1px solid ${V3.accent.red}18`, marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, fontFamily: V3_FONT_MONO, color: V3.accent.red, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Exposure Change
+            </div>
+            <div style={{ fontSize: 11, color: V3.text.secondary, lineHeight: 1.5 }}>{exposureDelta}</div>
+          </div>
+        </HoverTip>
+      )}
+
+      {/* Evolution narrative */}
+      {narrative && (
+        <div style={{
+          padding: '8px 10px', borderRadius: 6, marginBottom: 10,
+          background: V3.bg.base, border: `1px solid ${V3.border.subtle}`,
+        }}>
+          <div style={{ fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO, color: V3.text.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+            Evolution Assessment
+          </div>
+          <div style={{ fontSize: 11, color: V3.text.secondary, lineHeight: 1.6 }}>{narrative}</div>
+        </div>
+      )}
+
+      {/* Forward outlook */}
+      {forwardOutlook && (
+        <HoverTip tip={GLOSSARY.forward_outlook} theme={V3}>
+          <div style={{
+            padding: '8px 10px', borderRadius: 6,
+            background: V3.accent.blue + '08', border: `1px solid ${V3.accent.blue}18`,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 600, fontFamily: V3_FONT_MONO, color: V3.accent.blue, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+              Outlook
+            </div>
+            <div style={{ fontSize: 11, color: V3.text.secondary, lineHeight: 1.6 }}>{forwardOutlook}</div>
+          </div>
+        </HoverTip>
+      )}
+    </div>
   );
 }
 
