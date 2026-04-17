@@ -104,3 +104,35 @@ async def test_generate_one_liner_with_api():
         result = await generate_executive_one_liner(events)
 
     assert "Red Sea" in result
+
+
+def test_executive_summary_endpoint():
+    """GET /events/executive-summary returns expected structure."""
+    from backend.app.services.executive import build_executive_summary
+
+    events = [
+        _make_event("Red Sea Closure", "Critical", "Middle East"),
+        _make_event("Steel Tariffs", "High", "Americas"),
+        _make_event("Port Strike", "Medium", "Europe"),
+        _make_event("Minor Delay", "Low", "India"),
+    ]
+    weekly = {
+        "severity_snapshot": {"Critical": 1, "High": 1, "Medium": 1, "Low": 1},
+        "escalated_events": [events[1]],
+        "resolved_events": [_make_event("Old Event", "Medium", "Global", status="archived")],
+        "period": {"from": "2026-04-10", "to": "2026-04-17"},
+    }
+    bu_exposure = [
+        {"bu": "Industrial", "active_disruption_count": 2, "total_affected_sites": 3, "max_severity": "Critical"},
+        {"bu": "Aerospace", "active_disruption_count": 1, "total_affected_sites": 1, "max_severity": "High"},
+    ]
+
+    result = build_executive_summary(events, weekly, bu_exposure, one_liner="Test one-liner.")
+
+    assert result["risk_level"] == "ELEVATED"
+    assert result["one_liner"] == "Test one-liner."
+    assert len(result["actively_bleeding"]) == 2  # 1 Critical + 1 High
+    assert result["actively_bleeding"][0]["severity"] == "Critical"
+    assert len(result["escalating"]) == 1
+    assert len(result["recently_resolved"]) == 1
+    assert len(result["bu_exposure"]) == 2

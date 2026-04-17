@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..auth.dependencies import get_current_user
 from ..config import settings
 from ..data import load_disruptions, load_geopolitical, load_trade
-from ..db.database import get_db, get_event, get_event_edits, get_event_feedback, get_event_severity_history, get_events, get_evolution_summaries, get_feedback_stats, get_latest_evolution_summary, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
+from ..db.database import get_bu_exposure_summary, get_db, get_event, get_event_edits, get_event_feedback, get_event_severity_history, get_events, get_evolution_summaries, get_feedback_stats, get_latest_evolution_summary, get_timeline_data, get_weekly_summary, save_event_edit, save_event_feedback, update_event_status
 from ..models.schemas import EventFeedbackCreate, EventRecommendationsResponse, FeedbackStats
 from ..services.narrative import (
     TalkingPoints,
@@ -93,6 +93,25 @@ async def weekly_summary(days: int = 7, user: dict[str, Any] = Depends(get_curre
     if days < 1 or days > 90:
         raise HTTPException(status_code=400, detail="days must be between 1 and 90")
     return get_weekly_summary(days=days)
+
+
+@router.get("/executive-summary")
+async def executive_summary(user: dict[str, Any] = Depends(get_current_user)):
+    """Return the executive summary for the hero panel.
+
+    Aggregates weekly summary, BU exposure, active events, and AI one-liner.
+    """
+    from ..services.executive import build_executive_summary, generate_executive_one_liner
+
+    weekly = get_weekly_summary(days=7)
+    active = get_events(status="active", limit=50, max_age_hours=24)
+    bu_exp = get_bu_exposure_summary()
+
+    one_liner = await generate_executive_one_liner(active)
+
+    result = build_executive_summary(active, weekly, bu_exp, one_liner=one_liner)
+    result["generated_at"] = datetime.now(timezone.utc).isoformat()
+    return result
 
 
 @router.get("/{event_id}")
