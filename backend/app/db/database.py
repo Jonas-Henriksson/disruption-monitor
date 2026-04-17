@@ -562,6 +562,7 @@ def get_events(
     mode: str | None = None,
     status: str | None = None,
     limit: int = 100,
+    max_age_hours: int | None = None,
 ) -> list[dict]:
     """Get events with their full payload."""
     with get_db() as conn:
@@ -573,6 +574,9 @@ def get_events(
         if status:
             conditions.append("status = ?")
             params.append(status)
+        if max_age_hours is not None:
+            conditions.append("updated_at >= datetime('now', ?)")
+            params.append(f"-{max_age_hours} hours")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         params.append(limit)
