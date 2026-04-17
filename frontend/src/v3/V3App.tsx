@@ -24,7 +24,7 @@ import { FeedList } from './components/FeedList';
 import { RiskSummary } from './components/RiskSummary';
 import { WeeklyBriefing } from './components/WeeklyBriefing';
 import { WhatIfPanel } from './components/WhatIfPanel';
-import { VersionToggle } from './VersionToggle';
+// V1/V2/V3 toggle removed — V3 is now the primary UI
 
 // Map components (created by map agent — using direct imports)
 import { MiniMap } from './map/MiniMap';
@@ -193,7 +193,6 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
           filters={{}}
           onStatusChange={handleStatusChange}
         />
-        <VersionToggle version={version} onVersionChange={onVersionChange} />
       </div>
     );
   }
@@ -318,8 +317,6 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
       {/* What-If scenario drawer */}
       <WhatIfPanel open={showWhatIf} onClose={() => setShowWhatIf(false)} />
 
-      {/* Version toggle */}
-      <VersionToggle version={version} onVersionChange={onVersionChange} />
     </div>
   );
 }

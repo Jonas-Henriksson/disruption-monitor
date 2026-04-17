@@ -63,7 +63,7 @@ async def get_latest_scan_results(mode: ScanMode):
     Reads from SQLite. If no scan has been run, returns sample data.
     """
     latest = get_latest_scan(mode)
-    events = get_events(mode=mode)
+    events = get_events(mode=mode, status="active", limit=200)
 
     if events:
         now = latest["completed_at"] if latest else datetime.now(timezone.utc).isoformat()

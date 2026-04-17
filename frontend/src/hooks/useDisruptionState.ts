@@ -142,9 +142,12 @@ export function useDisruptionState() {
     setScanPct(10);
     const apiResult = await triggerScan(m);
     if (apiResult) {
-      const apiItems = extractItems(apiResult);
-      if (apiItems.length > 0) {
-        const sorted = sortBySeverity(apiItems);
+      setScanPct(80);
+      // After scan completes, reload ALL active events for this mode (not just the scan's items)
+      const fullResult = await fetchLatestScan(m);
+      const allItems = fullResult ? extractItems(fullResult) : extractItems(apiResult);
+      if (allItems.length > 0) {
+        const sorted = sortBySeverity(allItems);
         setItems(sorted);
         setScanPct(100);
         setDataSource(apiResult.source === "live" ? "live" : "sample");
