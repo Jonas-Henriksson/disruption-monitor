@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .middleware.logging_middleware import RequestIdMiddleware, configure_logging
 from .seed.seed_db import seed_if_empty
-from .services.scheduler import start_digest_schedule, start_scheduler, stop_digest_schedule, stop_scheduler
+from .services.scheduler import start_digest_schedule, start_scheduler, start_weekly_digest, stop_digest_schedule, stop_scheduler, stop_weekly_digest
 
 # Configure structured logging (JSON on Lambda, human-readable locally)
 configure_logging(debug=settings.debug)
@@ -40,9 +40,13 @@ async def lifespan(app: FastAPI):
     # Start daily digest scheduler
     start_digest_schedule()
 
+    # Start weekly digest scheduler
+    start_weekly_digest()
+
     yield
 
     # Shutdown
+    stop_weekly_digest()
     stop_digest_schedule()
     await stop_scheduler()
     logger.info("Scheduler stopped")

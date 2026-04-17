@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     teams_webhook_url: str = os.environ.get("TEAMS_WEBHOOK_URL", "")
     teams_min_severity: str = os.environ.get("TEAMS_MIN_SEVERITY", "High")
     teams_digest_enabled: bool = os.environ.get("TEAMS_DIGEST_ENABLED", "false").lower() in ("1", "true", "yes")
+    weekly_digest_enabled: bool = os.environ.get("WEEKLY_DIGEST_ENABLED", "true").lower() in ("1", "true", "yes")
+    weekly_digest_day: int = int(os.environ.get("WEEKLY_DIGEST_DAY", "0"))  # 0=Monday
+    weekly_digest_hour: int = int(os.environ.get("WEEKLY_DIGEST_HOUR", "8"))  # UTC
 
     # Outbound webhooks / event bus
     webhook_urls: str = os.environ.get("WEBHOOK_URLS", "")  # comma-separated HTTP(S) endpoints

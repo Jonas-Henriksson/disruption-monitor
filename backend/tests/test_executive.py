@@ -136,3 +136,26 @@ def test_executive_summary_endpoint():
     assert len(result["escalating"]) == 1
     assert len(result["recently_resolved"]) == 1
     assert len(result["bu_exposure"]) == 2
+
+
+def test_build_weekly_digest_card():
+    from backend.app.services.teams_channel import build_weekly_digest_card
+
+    summary = {
+        "risk_level": "ELEVATED",
+        "one_liner": "Port congestion converging with steel tariffs.",
+        "severity_counts": {"Critical": 2, "High": 5, "Medium": 3, "Low": 1},
+        "actively_bleeding": [
+            _make_event("Red Sea Closure", "Critical", "Middle East"),
+        ],
+        "escalating": [],
+        "recently_resolved": [],
+        "bu_exposure": [],
+        "period": {"from": "2026-04-10", "to": "2026-04-17"},
+    }
+
+    card = build_weekly_digest_card(summary)
+    assert card["type"] == "message"
+    body_text = str(card)
+    assert "ELEVATED" in body_text
+    assert "Red Sea Closure" in body_text

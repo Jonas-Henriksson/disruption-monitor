@@ -263,3 +263,99 @@ def get_teams_channel_status() -> dict[str, Any]:
         "min_severity": settings.teams_min_severity,
         "digest_enabled": settings.teams_digest_enabled,
     }
+
+
+def build_weekly_digest_card(summary: dict) -> dict:
+    """Build a Teams Adaptive Card for the weekly executive digest."""
+    risk_level = summary.get("risk_level", "STABLE")
+    one_liner = summary.get("one_liner", "")
+    sev = summary.get("severity_counts", {})
+    bleeding = summary.get("actively_bleeding", [])
+
+    color_map = {"HIGH": "attention", "ELEVATED": "warning", "STABLE": "good"}
+    risk_color = color_map.get(risk_level, "default")
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": "SC Hub Weekly Risk Digest",
+            "weight": "bolder",
+            "size": "medium",
+        },
+        {
+            "type": "TextBlock",
+            "text": f"**Risk Level: {risk_level}** | {sev.get('Critical', 0)} Critical, {sev.get('High', 0)} High, {sev.get('Medium', 0)} Medium",
+            "color": risk_color,
+            "spacing": "small",
+        },
+    ]
+
+    if one_liner:
+        body.append({
+            "type": "TextBlock",
+            "text": f"_{one_liner}_",
+            "wrap": True,
+            "spacing": "small",
+        })
+
+    if bleeding:
+        body.append({
+            "type": "TextBlock",
+            "text": "**Actively Bleeding:**",
+            "spacing": "medium",
+        })
+        for evt in bleeding[:3]:
+            title = evt.get("event") or evt.get("risk", "?")
+            region = evt.get("region", "")
+            sev_label = evt.get("severity", evt.get("risk_level", "?"))
+            body.append({
+                "type": "TextBlock",
+                "text": f"- [{sev_label}] {title} ({region})",
+                "wrap": True,
+                "spacing": "none",
+            })
+
+    body.append({
+        "type": "ActionSet",
+        "actions": [
+            {
+                "type": "Action.OpenUrl",
+                "title": "Open SC Hub",
+                "url": "https://d2rbfnbkfx00z5.cloudfront.net/",
+            }
+        ],
+    })
+
+    return {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": body,
+                },
+            }
+        ],
+    }
+
+
+async def send_weekly_digest(summary: dict) -> bool:
+    """Send the weekly executive digest to the configured Teams channel."""
+    if not settings.has_teams_channel:
+        logger.info("Weekly digest: Teams webhook not configured, skipping")
+        return False
+
+    card = build_weekly_digest_card(summary)
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(settings.teams_webhook_url, json=card)
+            resp.raise_for_status()
+            logger.info("Weekly digest sent to Teams channel")
+            return True
+    except Exception as exc:
+        logger.error("Failed to send weekly digest to Teams: %s", exc)
+        return False

@@ -437,6 +437,79 @@ def stop_digest_schedule() -> None:
         _digest_task = None
 
 
+_weekly_digest_task: asyncio.Task | None = None
+
+
+async def _weekly_digest_loop() -> None:
+    """Send executive digest via Teams/Telegram every Monday at configured hour."""
+    from .executive import build_executive_summary, generate_executive_one_liner
+    from .teams_channel import send_weekly_digest
+    from ..db.database import get_bu_exposure_summary, get_weekly_summary
+
+    while True:
+        now = datetime.now(timezone.utc)
+        target_day = settings.weekly_digest_day  # 0=Monday
+        target_hour = settings.weekly_digest_hour
+        days_ahead = (target_day - now.weekday()) % 7
+        if days_ahead == 0 and now.hour >= target_hour:
+            days_ahead = 7
+        next_run = (now + timedelta(days=days_ahead)).replace(
+            hour=target_hour, minute=0, second=0, microsecond=0
+        )
+
+        wait_seconds = (next_run - now).total_seconds()
+        logger.info("Weekly digest scheduled for %s (in %.0f hours)", next_run.isoformat(), wait_seconds / 3600)
+        await asyncio.sleep(wait_seconds)
+
+        if not settings.weekly_digest_enabled:
+            logger.info("Weekly digest disabled, skipping")
+            continue
+
+        try:
+            weekly = get_weekly_summary(days=7)
+            active = get_events(status="active", limit=50, max_age_hours=168)
+            bu_exp = get_bu_exposure_summary()
+            one_liner = await generate_executive_one_liner(active)
+            summary = build_executive_summary(active, weekly, bu_exp, one_liner=one_liner)
+
+            await send_weekly_digest(summary)
+
+            # Also send via Telegram if configured
+            if settings.has_telegram:
+                from .telegram import send_telegram_message
+                tg_text = (
+                    f"*SC Hub Weekly Digest*\n"
+                    f"Risk: *{summary['risk_level']}* | "
+                    f"{summary['severity_counts'].get('Critical', 0)} Critical, "
+                    f"{summary['severity_counts'].get('High', 0)} High\n"
+                )
+                if one_liner:
+                    tg_text += f"_{one_liner}_\n"
+                for evt in summary.get("actively_bleeding", [])[:3]:
+                    title = evt.get("event") or evt.get("risk", "?")
+                    tg_text += f"\n\u26a0 {title}"
+                await send_telegram_message(tg_text)
+        except Exception:
+            logger.exception("Failed to send weekly digest")
+
+
+def start_weekly_digest() -> None:
+    """Start the weekly digest background task."""
+    global _weekly_digest_task
+    if _weekly_digest_task is not None:
+        return
+    _weekly_digest_task = asyncio.create_task(_weekly_digest_loop())
+    logger.info("Weekly digest scheduler started")
+
+
+def stop_weekly_digest() -> None:
+    """Stop the weekly digest background task."""
+    global _weekly_digest_task
+    if _weekly_digest_task is not None and not _weekly_digest_task.done():
+        _weekly_digest_task.cancel()
+    _weekly_digest_task = None
+
+
 def get_scheduler_status() -> dict:
     """Return the current status of the scheduler."""
     return {
