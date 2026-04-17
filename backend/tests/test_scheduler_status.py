@@ -235,4 +235,4 @@ class TestGetSchedulerStatus:
         assert "running" in status
         assert "api_configured" in status
         assert "tasks" in status
-        assert set(status["tasks"].keys()) == {"disruptions", "geopolitical", "trade"}
+        assert set(status["tasks"].keys()) == {"disruptions", "trade"}

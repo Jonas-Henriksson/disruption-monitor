@@ -37,7 +37,7 @@ def get_scan_cooldowns() -> dict[str, dict]:
     """Return cooldown status per mode for the health endpoint."""
     now = time.monotonic()
     result: dict[str, dict] = {}
-    for mode in ("disruptions", "geopolitical", "trade"):
+    for mode in ("disruptions", "trade"):
         last = _last_scan_completed.get(mode)
         if last is None:
             result[mode] = {"ready": True, "retry_after_seconds": 0}

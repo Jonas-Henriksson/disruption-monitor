@@ -52,7 +52,7 @@ _running = False
 _scan_status: dict[str, dict] = {}
 
 # Initial delay before first scan per mode (seconds). Module-level for testability.
-_INITIAL_DELAYS: dict[str, int] = {"disruptions": 30, "geopolitical": 60, "trade": 90}
+_INITIAL_DELAYS: dict[str, int] = {"disruptions": 30, "trade": 60}
 
 
 def get_scan_status() -> dict:
@@ -357,7 +357,9 @@ def start_scheduler() -> None:
     _running = True
     loop = asyncio.get_running_loop()
 
-    for mode in ("disruptions", "geopolitical", "trade"):
+    # geopolitical mode disabled — overlaps heavily with disruptions scan.
+    # Re-enable by adding "geopolitical" back to this tuple.
+    for mode in ("disruptions", "trade"):
         task = loop.create_task(_scan_loop(mode), name=f"scan-{mode}")
         _tasks[mode] = task
         logger.info("Scheduler: started %s task", mode)
@@ -520,6 +522,6 @@ def get_scheduler_status() -> dict:
                 "active": (not _tasks[mode].done()) if mode in _tasks else False,
                 "interval_minutes": _interval_seconds(mode) // 60,
             }
-            for mode in ("disruptions", "geopolitical", "trade")
+            for mode in ("disruptions", "trade")
         },
     }

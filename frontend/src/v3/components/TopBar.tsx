@@ -28,7 +28,6 @@ export interface TopBarProps {
 
 const MODES: { key: ScanMode; label: string }[] = [
   { key: 'disruptions', label: 'Disruptions' },
-  { key: 'geopolitical', label: 'Geopolitical' },
   { key: 'trade', label: 'Trade' },
 ];
 
