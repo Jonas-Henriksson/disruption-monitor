@@ -15,11 +15,14 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useMapState } from '../hooks/useMapState';
 import { SITES, SUPPLIERS } from '../data';
 import { eventId } from '../utils/format';
-import type { ScanMode } from '../types';
+import type { ScanMode, CorridorSummaryItem } from '../types';
+import { fetchCorridorSummary } from '../services/api';
 
 // V3 components
 import { TopBar } from './components/TopBar';
 import { ExecutiveHero } from './components/ExecutiveHero';
+import { CorridorStrip } from './components/CorridorStrip';
+import { CorridorDetail } from './components/CorridorDetail';
 import { FeedList } from './components/FeedList';
 import { RiskSummary } from './components/RiskSummary';
 import { WeeklyBriefing } from './components/WeeklyBriefing';
@@ -61,6 +64,8 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [buFilter, setBuFilter] = useState<string | null>(null);
   const [showWhatIf, setShowWhatIf] = useState(false);
+  const [selectedCorridor, setSelectedCorridor] = useState<string | null>(null);
+  const [corridorData, setCorridorData] = useState<CorridorSummaryItem[] | null>(null);
 
   // Inject CSS
   const cssInjected = useRef(false);
@@ -94,6 +99,21 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
       })();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch corridor data for trade mode
+  useEffect(() => {
+    if (dis.mode !== 'trade') {
+      setSelectedCorridor(null);
+      setCorridorData(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const result = await fetchCorridorSummary();
+      if (!cancelled && result) setCorridorData(result.corridors);
+    })();
+    return () => { cancelled = true; };
+  }, [dis.mode, dis.items]);
 
   // Map selected index <-> selectedEventId
   const selectedIndex = useMemo(() => {
@@ -135,6 +155,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
   const handleModeChange = useCallback((mode: ScanMode) => {
     dis.scan(mode);
     setSelectedEventId(null);
+    setSelectedCorridor(null);
   }, [dis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleScanNow = useCallback(() => {
@@ -261,6 +282,14 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         }}
       />
 
+      {/* Corridor Risk Strip (Trade mode only) */}
+      {dis.mode === 'trade' && (
+        <CorridorStrip
+          selectedCorridor={selectedCorridor}
+          onSelectCorridor={setSelectedCorridor}
+        />
+      )}
+
       {/* Main content: Feed (left) + Sidebar (right) */}
       <div style={{
         flex: 1,
@@ -276,7 +305,9 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
           borderRight: `1px solid ${V3.border.subtle}`,
         }}>
           <FeedList
-            items={dis.items}
+            items={selectedCorridor && dis.items
+              ? dis.items.filter(d => (d as any).corridor === selectedCorridor)
+              : dis.items}
             loading={dis.loading}
             error={dis.error}
             severityFilter={fil.sevFilter}
@@ -309,8 +340,25 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
             />
           </div>
 
-          {/* Risk Summary */}
-          <RiskSummary items={dis.items} />
+          {/* Corridor Detail or Risk Summary */}
+          {selectedCorridor && corridorData?.find(c => c.corridor === selectedCorridor) ? (
+            <CorridorDetail
+              corridor={corridorData.find(c => c.corridor === selectedCorridor)!}
+              events={dis.items || []}
+              onSelectEvent={(id: string) => {
+                if (dis.items) {
+                  const idx = dis.items.findIndex(d => {
+                    const eid = eventId(d as { event?: string; risk?: string; region?: string });
+                    return eid === id || ('id' in d && (d as any).id === id);
+                  });
+                  if (idx >= 0) handleSelectIndex(idx);
+                }
+              }}
+              onClose={() => setSelectedCorridor(null)}
+            />
+          ) : (
+            <RiskSummary items={dis.items} />
+          )}
         </div>
       </div>
 
