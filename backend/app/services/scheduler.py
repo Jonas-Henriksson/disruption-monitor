@@ -21,6 +21,7 @@ from ..db.database import (
     get_active_events_all_modes,
     get_events,
     get_latest_evolution_summary,
+    save_event_assessment,
     save_evolution_summary,
     save_scan_record,
     update_event_related_events,
@@ -34,6 +35,7 @@ from .evolution import (
     get_evolution_cadence_hours,
 )
 from .dedup import find_cross_mode_related
+from .narrative import generate_assessment
 from .scanner import ScanMode, run_scan
 from .teams_channel import send_scan_channel_alerts as send_teams_alerts
 from .telegram import send_scan_alerts
@@ -140,6 +142,16 @@ async def _scan_loop(mode: ScanMode) -> None:
                             )
                         except Exception:
                             logger.debug("Could not record action-gen failure edit for %s", event_id)
+
+            # Pre-compute risk assessments for new events (Sonnet, fast)
+            if result.get("source") == "live":
+                for item in items:
+                    event_id = item.get("id", f"{mode}-unknown")
+                    try:
+                        text = await generate_assessment(item)
+                        save_event_assessment(event_id, text)
+                    except Exception as exc:
+                        logger.debug("Assessment pre-compute failed for %s: %s", event_id, exc)
 
             # Cross-mode related event linkage
             try:

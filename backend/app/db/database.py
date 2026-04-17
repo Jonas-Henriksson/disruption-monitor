@@ -286,6 +286,8 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE events ADD COLUMN archived_severity INTEGER")
         if "resurfaced_at" not in event_cols:
             conn.execute("ALTER TABLE events ADD COLUMN resurfaced_at TEXT")
+        if "assessment" not in event_cols:
+            conn.execute("ALTER TABLE events ADD COLUMN assessment TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -590,6 +592,8 @@ def get_events(
             event["scan_count"] = row["scan_count"]
             event["archived_severity"] = row["archived_severity"] if "archived_severity" in row.keys() else None
             event["resurfaced_at"] = row["resurfaced_at"] if "resurfaced_at" in row.keys() else None
+            if "assessment" in row.keys() and row["assessment"]:
+                event["assessment"] = row["assessment"]
             _enrich_supply_chain_if_missing(event)
             results.append(event)
         return results
@@ -608,8 +612,19 @@ def get_event(event_id: str) -> dict | None:
         event["scan_count"] = row["scan_count"]
         event["archived_severity"] = row["archived_severity"] if "archived_severity" in row.keys() else None
         event["resurfaced_at"] = row["resurfaced_at"] if "resurfaced_at" in row.keys() else None
+        if "assessment" in row.keys() and row["assessment"]:
+            event["assessment"] = row["assessment"]
         _enrich_supply_chain_if_missing(event)
         return event
+
+
+def save_event_assessment(event_id: str, assessment: str) -> None:
+    """Store a pre-computed risk assessment for an event."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE events SET assessment = ? WHERE id = ?",
+            (assessment, event_id),
+        )
 
 
 def update_event_status(event_id: str, status: str) -> bool:

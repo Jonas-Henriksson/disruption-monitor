@@ -285,11 +285,16 @@ export function ExpandedCard({ event, placement, onClose, onHoverSite, onStatusC
    TAB 1: Summary
    ══════════════════════════════════════════════ */
 function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: DisruptionEvent; sev: Severity; sevCol: string; theme: V3Theme; handleTab: (t: Tab) => void }) {
-  const [assessment, setAssessment] = useState<string | null>(null);
+  const [assessment, setAssessment] = useState<string | null>((event as any).assessment || null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const assessmentFetched = useRef(false);
 
   useEffect(() => {
+    // Use cached assessment from event payload if available
+    if ((event as any).assessment) {
+      setAssessment((event as any).assessment);
+      return;
+    }
     if (assessmentFetched.current) return;
     assessmentFetched.current = true;
     setAssessmentLoading(true);

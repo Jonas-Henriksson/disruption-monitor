@@ -323,10 +323,15 @@ class AssessmentResponse(BaseModel):
 
 @router.post("/{event_id}/assessment", response_model=AssessmentResponse)
 async def get_assessment(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
-    """Generate a plain-text AI assessment of velocity, recovery, probability, and trend."""
+    """Return cached risk assessment, or generate on-demand if missing."""
     event = _find_event(event_id)
     if event is None:
         raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+
+    # Return cached assessment if available (pre-computed during scan)
+    cached = event.get("assessment")
+    if cached:
+        return AssessmentResponse(event_id=event_id, assessment=cached, generated_by="cached")
 
     if not settings.has_claude_api:
         return AssessmentResponse(
@@ -337,6 +342,9 @@ async def get_assessment(event_id: str, user: dict[str, Any] = Depends(get_curre
 
     try:
         text = await generate_assessment(event)
+        # Cache for future requests
+        from ..db.database import save_event_assessment
+        save_event_assessment(event_id, text)
         return AssessmentResponse(event_id=event_id, assessment=text, generated_by="claude")
     except Exception as exc:
         logger.error("Assessment generation failed for %s: %s", event_id, exc)

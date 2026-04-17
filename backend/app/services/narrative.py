@@ -201,21 +201,18 @@ def talking_points_to_narrative(tp: TalkingPoints) -> str:
 
 
 _ASSESSMENT_PROMPT = """\
-You are a supply chain risk analyst at SKF Group. Given the disruption event data below, \
-write a SHORT plain-text assessment (3–5 sentences, no bullet points, no headers) that \
-explains the following dimensions in human terms:
+You are a supply chain risk analyst. The user already sees the event description and SKF exposure text — do NOT repeat them.
 
-1. **Velocity** — why is the onset {velocity}? What about this event drives that speed?
-2. **Recovery** — why is recovery estimated at {recovery}? What factors determine the timeline?
-3. **Probability** — why is the probability of SKF impact {probability}%? What exposure drives it?
-4. **Trend** — why is the trend {trend}? What evidence from recent developments supports this direction?
+Write exactly 2 short sentences (max 40 words total) that answer ONLY:
+1. Why is onset {velocity} and recovery {recovery}?
+2. What single factor could make this worse?
 
-Write for a senior operations leader. Be specific to THIS event — name regions, sites, \
-chokepoints, or suppliers where relevant. No hedging, no preamble, no sign-off. \
-Start directly with the first sentence.
+Event: {title}
+Severity: {severity} | Trend: {trend} | Probability: {probability}%
+Region: {region}
+Affected sites: {site_count}
 
-Event data:
-{event_json}
+No preamble. No hedging. No site lists. No exposure recap. Just the two sentences.
 """
 
 
@@ -243,21 +240,20 @@ async def generate_assessment(event: dict) -> str:
     prob_str = f"{round(probability * 100)}" if probability is not None else "unknown"
 
     trend = event.get("trend") or event.get("payload", {}).get("trend", "Stable")
-
-    event_subset = {
-        k: v for k, v in event.items()
-        if k not in ("first_seen", "last_seen", "scan_count", "status", "lat", "lng", "trend_arrow")
-    }
-    event_json = json.dumps(event_subset, indent=2, default=str)
+    title = event.get("event") or event.get("risk", "Unknown")
+    region = event.get("region", "")
+    affected = event.get("affected_sites") or []
+    site_count = len(affected)
 
     prompt = _ASSESSMENT_PROMPT.format(
         velocity=velocity, recovery=recovery, probability=prob_str,
-        trend=trend, event_json=event_json,
+        trend=trend, title=title, severity=severity, region=region,
+        site_count=site_count,
     )
 
     response = await client.messages.create(
-        model=settings.analysis_model,
-        max_tokens=512,
+        model=settings.scan_model,
+        max_tokens=120,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -270,23 +266,15 @@ async def generate_assessment(event: dict) -> str:
 
 def build_fallback_assessment(event: dict) -> str:
     """Template-based fallback when Claude API is unavailable."""
-    title = event.get("event") or event.get("risk", "this event")
     severity = event.get("severity") or "Medium"
     cs = event.get("computed_severity", {}) or {}
     trend = event.get("trend") or "Stable"
-    region = event.get("region", "the affected region")
     recovery = cs.get("recovery_estimate") or "weeks"
-    probability = cs.get("probability")
-    prob_str = f"{round(probability * 100)}%" if probability is not None else "moderate"
 
     return (
-        f"The onset is driven by the nature of {title} in {region}, "
-        f"which is characteristic of {severity.lower()}-severity disruptions. "
-        f"Recovery is estimated at {recovery} based on historical patterns for this event category "
-        f"and the current logistics infrastructure in the region. "
-        f"There is a {prob_str} probability of direct SKF impact given the proximity of operations "
-        f"to the disruption zone. "
-        f"The trend remains {trend.lower()} based on severity movement across recent scan cycles."
+        f"Onset is {severity.lower()}-speed; recovery estimated at {recovery} "
+        f"based on historical patterns for this category. "
+        f"Trend is {trend.lower()} — escalation risk tied to regional instability."
     )
 
 

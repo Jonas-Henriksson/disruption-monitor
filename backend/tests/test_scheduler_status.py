@@ -144,6 +144,8 @@ class TestScanStatusUpdatedDuringScan:
             patch("backend.app.services.scheduler.save_scan_record"),
             patch("backend.app.services.scheduler.upsert_event", return_value=True),
             patch("backend.app.services.scheduler.send_scan_alerts", new_callable=AsyncMock, return_value=0),
+            patch("backend.app.services.scheduler.generate_assessment", new_callable=AsyncMock, return_value="test assessment"),
+            patch("backend.app.services.scheduler.save_event_assessment"),
             patch("backend.app.services.scheduler._INITIAL_DELAYS", {"disruptions": 0, "geopolitical": 0, "trade": 0}),
         ):
             import backend.app.services.scheduler as sched_mod
@@ -152,7 +154,7 @@ class TestScanStatusUpdatedDuringScan:
             sched_mod._running = True
 
             task = asyncio.create_task(_scan_loop("disruptions"))
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.3)
             sched_mod._running = False
             task.cancel()
             try:
