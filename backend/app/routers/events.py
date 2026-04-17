@@ -114,6 +114,15 @@ async def executive_summary(user: dict[str, Any] = Depends(get_current_user)):
     return result
 
 
+@router.get("/corridor-summary")
+async def corridor_summary(user: dict[str, Any] = Depends(get_current_user)):
+    """Return corridor-level risk summary for the trade corridor strip."""
+    from ..services.corridors import build_corridor_summary
+
+    trade_events = get_events(mode="trade", status="active", limit=50, max_age_hours=168)
+    return build_corridor_summary(trade_events)
+
+
 @router.get("/{event_id}")
 async def get_event_detail(event_id: str, user: dict[str, Any] = Depends(get_current_user)):
     """Return full event detail with severity history for sparkline rendering."""

@@ -99,3 +99,30 @@ def test_corridor_has_expected_fields():
     assert "skf_sites_affected" in c
     assert "skf_suppliers_affected" in c
     assert "last_updated" in c
+
+
+def test_corridor_summary_with_real_structure():
+    """Verify the full output matches the API contract."""
+    events = [
+        _make_trade_event("US Tariffs on Chinese Steel", "US-CN", "High", "Critical", "Escalating"),
+        _make_trade_event("China Export Controls", "US-CN", "Moderate", "High", "Stable"),
+        _make_trade_event("EU Steel Safeguard Review", "EU-CN", "Moderate", "High", "Stable"),
+        _make_trade_event("RCEP Implementation", "GLOBAL", "Low", "Medium", "De-escalating"),
+    ]
+    result = build_corridor_summary(events)
+
+    assert "corridors" in result
+    assert "generated_at" in result
+    assert len(result["corridors"]) == 3
+
+    # First should be US-CN (worst: High friction + Critical severity)
+    first = result["corridors"][0]
+    assert first["corridor"] == "US-CN"
+    assert first["friction_level"] == "High"
+    assert first["max_severity"] == "Critical"
+    assert first["trend"] == "Escalating"
+    assert first["event_count"] == 2
+    assert first["top_event"] == "US Tariffs on Chinese Steel"
+    assert isinstance(first["label"], str)
+    assert isinstance(first["skf_sites_affected"], int)
+    assert isinstance(first["skf_suppliers_affected"], int)
