@@ -19,7 +19,7 @@ import type { ScanMode } from '../types';
 
 // V3 components
 import { TopBar } from './components/TopBar';
-import { DeltaBanner } from './components/DeltaBanner';
+import { ExecutiveHero } from './components/ExecutiveHero';
 import { FeedList } from './components/FeedList';
 import { RiskSummary } from './components/RiskSummary';
 import { WeeklyBriefing } from './components/WeeklyBriefing';
@@ -247,12 +247,18 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         </div>
       )}
 
-      {/* Delta Banner */}
-      <DeltaBanner
+      {/* Executive Hero Panel */}
+      <ExecutiveHero
         items={dis.items}
-        registry={dis.registry}
-        mode={dis.mode}
-        onOpenWeeklyBriefing={() => setShowWeeklyBriefing(true)}
+        onSelectEvent={(id: string) => {
+          if (dis.items) {
+            const idx = dis.items.findIndex(d => {
+              const eid = eventId(d as { event?: string; risk?: string; region?: string });
+              return eid === id || ('id' in d && (d as any).id === id);
+            });
+            if (idx >= 0) handleSelectIndex(idx);
+          }
+        }}
       />
 
       {/* Main content: Feed (left) + Sidebar (right) */}
