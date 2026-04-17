@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 _SEV_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
@@ -62,3 +64,77 @@ def build_executive_summary(
         "period": weekly_summary.get("period", {}),
         "generated_at": None,  # filled by endpoint
     }
+
+
+# ── AI One-Liner Generation ─────────────────────────────────────────
+
+
+_ONE_LINER_PROMPT = """\
+You are a supply chain risk analyst. Given the active disruptions below, \
+write exactly ONE sentence (max 30 words) answering: "What should a VP know right now?"
+Focus on convergent risks and operational impact. No hedging. No preamble.
+
+Active Critical events:
+{critical_events}
+
+Active High events:
+{high_events}
+"""
+
+
+def _get_client():
+    """Get the Anthropic/Bedrock client (same pattern as narrative.py)."""
+    from .scanner import _get_claude_client
+    return _get_claude_client()
+
+
+def _build_fallback_one_liner(events: list[dict]) -> str:
+    """Template-based one-liner when Claude API is unavailable."""
+    critical = [e for e in events if e.get("severity") == "Critical" or e.get("risk_level") == "Critical"]
+    high = [e for e in events if e.get("severity") == "High" or e.get("risk_level") == "High"]
+    regions = set()
+    for e in critical + high:
+        r = e.get("region", "")
+        if r:
+            regions.add(r)
+
+    if critical:
+        return (
+            f"{len(critical)} critical disruption{'s' if len(critical) != 1 else ''} "
+            f"across {', '.join(sorted(regions)[:3]) or 'multiple regions'} "
+            f"with {len(high)} high-severity events requiring monitoring."
+        )
+    if high:
+        return f"{len(high)} high-severity events active across {', '.join(sorted(regions)[:3]) or 'multiple regions'}."
+    return "No critical or high-severity disruptions currently active."
+
+
+async def generate_executive_one_liner(events: list[dict]) -> str:
+    """Generate a single-sentence executive risk summary."""
+    if not settings.has_claude_api:
+        return _build_fallback_one_liner(events)
+
+    critical = [e for e in events if e.get("severity") == "Critical" or e.get("risk_level") == "Critical"]
+    high = [e for e in events if e.get("severity") == "High" or e.get("risk_level") == "High"]
+
+    critical_text = "\n".join(
+        f"- {e.get('event', e.get('risk', '?'))}: {e.get('region', '?')}" for e in critical[:5]
+    ) or "None"
+    high_text = "\n".join(
+        f"- {e.get('event', e.get('risk', '?'))}: {e.get('region', '?')}" for e in high[:5]
+    ) or "None"
+
+    prompt = _ONE_LINER_PROMPT.format(critical_events=critical_text, high_events=high_text)
+
+    try:
+        client = _get_client()
+        response = await client.messages.create(
+            model=settings.scan_model,
+            max_tokens=80,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        return text
+    except Exception as exc:
+        logger.warning("One-liner generation failed: %s — using fallback", exc)
+        return _build_fallback_one_liner(events)
