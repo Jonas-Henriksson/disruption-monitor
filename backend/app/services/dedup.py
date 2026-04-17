@@ -226,6 +226,22 @@ def find_cross_mode_related(
     return related_map
 
 
+def resolve_event_id(
+    new_item: dict,
+    existing_events: list[dict],
+    title_threshold: float = 0.45,
+) -> str | None:
+    """Match a new scan item against existing DB events by fuzzy title + region + geo.
+
+    Returns the existing event's ID if a strong match is found, or None if the
+    item is genuinely new.  Uses the same matching logic as find_duplicates.
+    """
+    matches = find_duplicates(new_item, existing_events, title_threshold=title_threshold)
+    if matches:
+        return matches[0]["existing_event_id"]
+    return None
+
+
 def tag_duplicates(
     events: list[dict],
     title_threshold: float = 0.4,

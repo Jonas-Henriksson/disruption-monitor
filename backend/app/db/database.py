@@ -631,6 +631,27 @@ def save_event_assessment(event_id: str, assessment: str) -> None:
         )
 
 
+def get_active_event_summaries(mode: str) -> list[dict]:
+    """Lightweight query for dedup matching — returns id, title, region, lat, lng only."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, event_title, region, lat, lng FROM events "
+            "WHERE mode = ? AND status IN ('active', 'watching')",
+            (mode,),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "event": r["event_title"],
+                "risk": r["event_title"],  # geopolitical mode uses 'risk' key
+                "region": r["region"] or "Global",
+                "lat": r["lat"],
+                "lng": r["lng"],
+            }
+            for r in rows
+        ]
+
+
 def update_event_status(event_id: str, status: str) -> bool:
     """Update event lifecycle status. Returns True if event existed."""
     with get_db() as conn:

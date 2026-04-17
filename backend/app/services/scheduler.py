@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from ..config import settings
 from ..db.database import (
     create_action,
+    get_active_event_summaries,
     get_active_events_all_modes,
     get_events,
     get_latest_evolution_summary,
@@ -34,7 +35,7 @@ from .evolution import (
     generate_evolution_summary,
     get_evolution_cadence_hours,
 )
-from .dedup import find_cross_mode_related
+from .dedup import find_cross_mode_related, resolve_event_id
 from .narrative import generate_assessment
 from .scanner import ScanMode, run_scan
 from .teams_channel import send_scan_channel_alerts as send_teams_alerts
@@ -106,11 +107,30 @@ async def _scan_loop(mode: ScanMode) -> None:
             scan_id = result.get("scan_id", "unknown")
             new_count = 0
             actions_count = 0
+
+            # Fetch existing events for fuzzy dedup matching
+            existing_summaries = get_active_event_summaries(mode)
+
             for item in items:
                 event_id = item.get("id", f"{mode}-unknown")
+                # Fuzzy match against existing events to reuse IDs
+                matched_id = resolve_event_id(item, existing_summaries)
+                if matched_id:
+                    logger.info("Dedup: '%s' matched existing '%s'", item.get("event", item.get("risk", "?"))[:50], matched_id[:50])
+                    event_id = matched_id
+                    item["id"] = matched_id
                 is_new = upsert_event(event_id, mode, item, scan_id)
                 if is_new:
                     new_count += 1
+                    # Track new event for intra-batch dedup
+                    existing_summaries.append({
+                        "id": event_id,
+                        "event": item.get("event") or item.get("risk", ""),
+                        "risk": item.get("event") or item.get("risk", ""),
+                        "region": item.get("region", "Global"),
+                        "lat": item.get("lat"),
+                        "lng": item.get("lng"),
+                    })
                     # Auto-generate structured actions for new events
                     try:
                         action_defs = generate_actions_for_event(item)

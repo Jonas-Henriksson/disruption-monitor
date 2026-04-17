@@ -130,12 +130,28 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
     )
 
     # Persist each event and generate structured actions for new events
+    from ..services.dedup import resolve_event_id
+    from ..db.database import get_active_event_summaries
+
     items = result.get("items", result.get(request.mode, []))
     scan_id = result.get("scan_id", "unknown")
+    existing_summaries = get_active_event_summaries(request.mode)
     for item in items:
         event_id = _get_event_id(item, request.mode)
+        matched_id = resolve_event_id(item, existing_summaries)
+        if matched_id:
+            event_id = matched_id
+            item["id"] = matched_id
         is_new = upsert_event(event_id, request.mode, item, scan_id)
         if is_new:
+            existing_summaries.append({
+                "id": event_id,
+                "event": item.get("event") or item.get("risk", ""),
+                "risk": item.get("event") or item.get("risk", ""),
+                "region": item.get("region", "Global"),
+                "lat": item.get("lat"),
+                "lng": item.get("lng"),
+            })
             _generate_actions_for_item(event_id, item)
 
     # Send Telegram alerts for Critical/High events
