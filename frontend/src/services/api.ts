@@ -5,7 +5,7 @@
  * All functions gracefully return null on failure so callers can fall back to sample data.
  */
 
-import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult } from "../types";
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary } from "../types";
 import { getToken, getGraphToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
@@ -471,6 +471,21 @@ export async function fetchWeeklySummary(days: number = 7): Promise<WeeklySummar
     });
     if (!resp.ok) return null;
     return (await resp.json()) as WeeklySummary;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch the executive summary for the hero panel. */
+export async function fetchExecutiveSummary(): Promise<ExecutiveSummary | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/executive-summary`, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as ExecutiveSummary;
   } catch {
     return null;
   }

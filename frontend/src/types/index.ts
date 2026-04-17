@@ -408,3 +408,20 @@ export interface ExecBriefData {
   actions: string[];
   total: number;
 }
+
+export interface ExecutiveSummary {
+  risk_level: 'STABLE' | 'ELEVATED' | 'HIGH';
+  one_liner: string;
+  severity_counts: Record<Severity, number>;
+  actively_bleeding: ScanItem[];
+  escalating: ScanItem[];
+  recently_resolved: ScanItem[];
+  bu_exposure: Array<{
+    bu: string;
+    active_disruption_count: number;
+    total_affected_sites: number;
+    max_severity: string;
+  }>;
+  period: { from: string; to: string };
+  generated_at: string;
+}
