@@ -425,3 +425,23 @@ export interface ExecutiveSummary {
   period: { from: string; to: string };
   generated_at: string;
 }
+
+export interface CorridorSummaryItem {
+  corridor: string;
+  label: string;
+  friction_level: FrictionLevel;
+  trend: string;
+  event_count: number;
+  top_event: string;
+  top_event_id: string;
+  max_severity: string;
+  skf_sites_affected: number;
+  skf_suppliers_affected: number;
+  trajectory_text: string;
+  last_updated: string;
+}
+
+export interface CorridorSummaryResponse {
+  corridors: CorridorSummaryItem[];
+  generated_at: string;
+}

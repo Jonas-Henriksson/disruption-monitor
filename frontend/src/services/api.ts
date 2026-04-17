@@ -5,7 +5,7 @@
  * All functions gracefully return null on failure so callers can fall back to sample data.
  */
 
-import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary } from "../types";
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary, CorridorSummaryResponse } from "../types";
 import { getToken, getGraphToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
@@ -486,6 +486,21 @@ export async function fetchExecutiveSummary(): Promise<ExecutiveSummary | null> 
     });
     if (!resp.ok) return null;
     return (await resp.json()) as ExecutiveSummary;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch corridor-level risk summary for the trade corridor strip. */
+export async function fetchCorridorSummary(): Promise<CorridorSummaryResponse | null> {
+  try {
+    const headers = await authHeaders();
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/corridor-summary`, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as CorridorSummaryResponse;
   } catch {
     return null;
   }
