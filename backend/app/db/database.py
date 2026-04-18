@@ -1260,6 +1260,11 @@ def get_supplier_relationship_stats() -> dict:
         }
 
 
+def _escape_like(value: str) -> str:
+    """Escape special LIKE characters so user input is treated literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def resolve_site_code(display_name: str) -> str | None:
     """Resolve a frontend display name (e.g. 'Gothenburg') to an operational unit code (e.g. '109G').
 
@@ -1276,8 +1281,8 @@ def resolve_site_code(display_name: str) -> str | None:
 
         # Case-insensitive partial match on description
         row = conn.execute(
-            "SELECT site_code FROM site_code_map WHERE LOWER(site_description) LIKE ?",
-            (f"%{display_name.lower()}%",),
+            "SELECT site_code FROM site_code_map WHERE LOWER(site_description) LIKE ? ESCAPE '\\'",
+            (f"%{_escape_like(display_name.lower())}%",),
         ).fetchone()
         if row:
             return row[0]
@@ -1287,8 +1292,8 @@ def resolve_site_code(display_name: str) -> str | None:
             if len(word) < 3:
                 continue
             row = conn.execute(
-                "SELECT site_code FROM site_code_map WHERE LOWER(site_description) LIKE ?",
-                (f"%{word.lower()}%",),
+                "SELECT site_code FROM site_code_map WHERE LOWER(site_description) LIKE ? ESCAPE '\\'",
+                (f"%{_escape_like(word.lower())}%",),
             ).fetchone()
             if row:
                 return row[0]
