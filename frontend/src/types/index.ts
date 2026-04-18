@@ -316,6 +316,44 @@ export interface ActionItem {
   id: number;
 }
 
+export type ActionStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'dismissed';
+export type ActionSource = 'ai' | 'manual' | 'template';
+
+export interface BackendAction {
+  id: number;
+  event_id: string;
+  action_type: string;
+  title: string;
+  description: string | null;
+  assignee_hint: string | null;
+  priority: 'critical' | 'high' | 'normal' | 'low';
+  status: ActionStatus;
+  due_date: string | null;
+  source: ActionSource;
+  assignee_email: string | null;
+  assignee_name: string | null;
+  created_by_email: string | null;
+  created_by_name: string | null;
+  completion_note: string | null;
+  evidence_url: string | null;
+  completed_at: string | null;
+  completed_by_email: string | null;
+  completed_by_name: string | null;
+  dismissed_reason: string | null;
+  dismissed_at: string | null;
+  dismissed_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+  // Enriched by /actions/mine
+  event_title?: string;
+  event_severity?: string;
+}
+
+export interface DirectoryUser {
+  displayName: string;
+  email: string;
+}
+
 export type TicketPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export interface Ticket {

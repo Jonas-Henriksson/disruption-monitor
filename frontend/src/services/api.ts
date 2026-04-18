@@ -5,7 +5,7 @@
  * All functions gracefully return null on failure so callers can fall back to sample data.
  */
 
-import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary, CorridorSummaryResponse } from "../types";
+import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary, CorridorSummaryResponse, BackendAction, DirectoryUser } from "../types";
 import { getToken, getGraphToken } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
@@ -782,4 +782,106 @@ export async function graphGetStatus(): Promise<GraphResponse | null> {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Action Management API
+// ---------------------------------------------------------------------------
+
+/** Fetch all actions assigned to the current user. */
+export async function fetchMyActions(): Promise<BackendAction[] | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/actions/mine`, {
+      headers: await authHeaders(),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch { return null; }
+}
+
+/** Search MS365 directory for users (requires Graph token). */
+export async function searchUsers(query: string): Promise<DirectoryUser[]> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/users/search?q=${encodeURIComponent(query)}`, {
+      headers: await graphHeaders(),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return [];
+    return resp.json();
+  } catch { return []; }
+}
+
+/** Assign an action to a person from the MS365 directory. */
+export async function assignAction(
+  actionId: number,
+  assignee: { email: string; name: string },
+  options?: { due_date?: string; priority?: string }
+): Promise<BackendAction | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/actions/${actionId}/assign`, {
+      method: 'PATCH',
+      headers: await graphHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        assignee_email: assignee.email,
+        assignee_name: assignee.name,
+        ...options,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch { return null; }
+}
+
+/** Mark an action as done with a completion note. */
+export async function completeAction(
+  actionId: number,
+  note: string,
+  evidenceUrl?: string
+): Promise<BackendAction | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/actions/${actionId}/complete`, {
+      method: 'PATCH',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ completion_note: note, evidence_url: evidenceUrl || null }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch { return null; }
+}
+
+/** Dismiss an action as not applicable. */
+export async function dismissAction(
+  actionId: number,
+  reason?: string
+): Promise<BackendAction | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/actions/${actionId}/dismiss`, {
+      method: 'PATCH',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ reason: reason || null }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch { return null; }
+}
+
+/** Create a manual action for an event. */
+export async function createManualAction(
+  eventId: string,
+  action: { action_type: string; title: string; description?: string; priority?: string; assignee_email?: string; assignee_name?: string }
+): Promise<BackendAction | null> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/actions`, {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ ...action, source: action.action_type === 'custom' ? 'manual' : 'template' }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch { return null; }
 }
