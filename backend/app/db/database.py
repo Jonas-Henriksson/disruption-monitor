@@ -1719,6 +1719,12 @@ def create_action(
     assignee_hint: str | None = None,
     priority: str = "normal",
     due_date: str | None = None,
+    source: str = "ai",
+    assignee_email: str | None = None,
+    assignee_name: str | None = None,
+    created_by_email: str | None = None,
+    created_by_name: str | None = None,
+    status: str = "pending",
 ) -> int:
     """Create a structured action for an event. Returns the new action ID.
 
@@ -1728,9 +1734,14 @@ def create_action(
         title = action_type.replace("_", " ").title()
     with get_db() as conn:
         cursor = conn.execute(
-            """INSERT INTO actions (event_id, action_type, title, description, assignee_hint, priority, due_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (event_id, action_type, title, description, assignee_hint, priority, due_date),
+            """INSERT INTO actions
+               (event_id, action_type, title, description, assignee_hint, priority,
+                due_date, source, assignee_email, assignee_name, created_by_email,
+                created_by_name, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, action_type, title, description, assignee_hint, priority,
+             due_date, source, assignee_email, assignee_name, created_by_email,
+             created_by_name, status),
         )
         return cursor.lastrowid
 
@@ -1751,6 +1762,7 @@ def get_actions_for_event(event_id: str) -> list[dict]:
 def get_actions(
     status: str | None = None,
     event_id: str | None = None,
+    assignee_email: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
     """Get actions across all events with optional filters."""
@@ -1762,6 +1774,9 @@ def get_actions(
     if event_id:
         conditions.append("event_id = ?")
         params.append(event_id)
+    if assignee_email:
+        conditions.append("assignee_email = ?")
+        params.append(assignee_email)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     params.append(limit)
 
@@ -1777,28 +1792,47 @@ def update_action(
     action_id: int,
     status: str | None = None,
     assignee_hint: str | None = None,
+    assignee_email: str | None = None,
+    assignee_name: str | None = None,
     due_date: str | None = None,
     priority: str | None = None,
+    completion_note: str | None = None,
+    evidence_url: str | None = None,
+    completed_by_email: str | None = None,
+    completed_by_name: str | None = None,
+    dismissed_reason: str | None = None,
+    dismissed_by_email: str | None = None,
 ) -> bool:
     """Update an action's status or fields. Returns True if action existed."""
     updates: list[str] = []
     params: list[Any] = []
-    if status is not None:
-        updates.append("status = ?")
-        params.append(status)
-    if assignee_hint is not None:
-        updates.append("assignee_hint = ?")
-        params.append(assignee_hint)
-    if due_date is not None:
-        updates.append("due_date = ?")
-        params.append(due_date)
-    if priority is not None:
-        updates.append("priority = ?")
-        params.append(priority)
+    now = datetime.now(timezone.utc).isoformat()
+
+    field_map = {
+        "status": status, "assignee_hint": assignee_hint,
+        "assignee_email": assignee_email, "assignee_name": assignee_name,
+        "due_date": due_date, "priority": priority,
+        "completion_note": completion_note, "evidence_url": evidence_url,
+        "completed_by_email": completed_by_email, "completed_by_name": completed_by_name,
+        "dismissed_reason": dismissed_reason, "dismissed_by_email": dismissed_by_email,
+    }
+    for col, val in field_map.items():
+        if val is not None:
+            updates.append(f"{col} = ?")
+            params.append(val)
+
+    # Auto-set timestamps
+    if status == "completed":
+        updates.append("completed_at = ?")
+        params.append(now)
+    if status == "dismissed":
+        updates.append("dismissed_at = ?")
+        params.append(now)
+
     if not updates:
         return False
     updates.append("updated_at = ?")
-    params.append(datetime.now(timezone.utc).isoformat())
+    params.append(now)
     params.append(action_id)
 
     with get_db() as conn:
