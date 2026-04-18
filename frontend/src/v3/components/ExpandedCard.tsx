@@ -6,10 +6,11 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
-import type { Severity, SupplierAlternativesResponse } from '../../types';
+import type { Severity, SupplierAlternativesResponse, BackendAction, DirectoryUser } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
+import { PeoplePicker } from './PeoplePicker';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment, fetchEvolutionLatest, submitEventFeedback } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment, fetchEvolutionLatest, submitEventFeedback, assignAction, completeAction, dismissAction, createManualAction } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -1337,28 +1338,39 @@ function generateDefaultActions(event: DisruptionEvent): ActionItemShape[] {
   return actions;
 }
 
+/* ── Action templates for the "Add Action" menu ── */
+const ACTION_TEMPLATES: { type: string; title: string }[] = [
+  { type: 'activate_backup_supplier', title: 'Activate backup supplier' },
+  { type: 'increase_safety_stock', title: 'Increase safety stock' },
+  { type: 'reroute_shipment', title: 'Reroute shipment' },
+  { type: 'contact_supplier', title: 'Contact supplier' },
+  { type: 'monitor_situation', title: 'Monitor situation' },
+  { type: 'escalate_to_leadership', title: 'Escalate to leadership' },
+  { type: 'file_insurance_claim', title: 'File insurance claim' },
+  { type: 'activate_bcp', title: 'Activate BCP' },
+];
+
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  high: '#f97316',
+  normal: '#3b82f6',
+  low: '#22c55e',
+};
+
 function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; theme: V3Theme; onStatusChange?: (eventId: string, newStatus: string) => void }) {
-  const [actions, setActions] = useState<ActionItemShape[]>(() => {
-    const recs = event.recommendations?.actions;
-    if (Array.isArray(recs) && recs.length > 0) return recs;
-    const payActions = event.payload?.actions;
-    if (Array.isArray(payActions) && payActions.length > 0) return payActions as ActionItemShape[];
-    // Fall back to parsing recommended_action string
-    const actionStr = (event as any).recommended_action
-      || event.payload?.recommended_action
-      || '';
-    if (actionStr) {
-      const parsed = parseActionsFromString(actionStr);
-      if (parsed.length > 0) return parsed;
-    }
-    // Generate smart defaults based on event characteristics
-    return generateDefaultActions(event);
-  });
+  const [actions, setActions] = useState<BackendAction[]>([]);
   const [backendLoaded, setBackendLoaded] = useState(false);
   const [status, setStatus] = useState(event.status || 'active');
-  const [assignInput, setAssignInput] = useState('');
-  const [showAssignInput, setShowAssignInput] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [completingId, setCompletingId] = useState<number | null>(null);
+  const [completionNote, setCompletionNote] = useState('');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const [dismissReason, setDismissReason] = useState('');
 
   const sectionHeader = sectionHeaderStyle(V3);
 
@@ -1366,7 +1378,7 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     setStatus(event.status || 'active');
   }, [event.status]);
 
-  // Build event ID: prefer backend id, fall back to slug|region (matches backend _make_disruption_id)
+  // Build event ID: prefer backend id, fall back to slug|region
   const resolvedId = useMemo(() => {
     if (event.id) return event.id;
     const name = (event.event || event.risk || 'unknown').toLowerCase().slice(0, 40).replace(/\s+/g, '-');
@@ -1374,32 +1386,94 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     return `${name}|${region}`;
   }, [event.id, event.event, event.risk, event.region]);
 
+  // Fetch backend actions on mount
   useEffect(() => {
     if (!resolvedId || backendLoaded) return;
     fetchEventActions(resolvedId).then(backendActions => {
       if (backendActions && backendActions.length > 0) {
+        // Map backend response to BackendAction shape
         setActions(backendActions.map(a => ({
           id: a.id,
-          text: a.title || a.description || '',
-          owner: a.assignee_hint || 'SC Operations',
-          due: a.due_date || '',
-          status: (a.status === 'completed' ? 'done' : 'open') as 'open' | 'done',
-          created: '',
+          event_id: resolvedId,
+          action_type: a.action_type || 'monitor_situation',
+          title: a.title || a.description || '',
+          description: a.description ?? null,
+          assignee_hint: a.assignee_hint ?? null,
+          priority: (a.priority || 'normal') as BackendAction['priority'],
+          status: (a.status || 'pending') as BackendAction['status'],
+          due_date: a.due_date ?? null,
+          source: ((a as any).source || 'ai') as BackendAction['source'],
+          assignee_email: (a as any).assignee_email ?? null,
+          assignee_name: (a as any).assignee_name ?? null,
+          created_by_email: (a as any).created_by_email ?? null,
+          created_by_name: (a as any).created_by_name ?? null,
+          completion_note: (a as any).completion_note ?? null,
+          evidence_url: (a as any).evidence_url ?? null,
+          completed_at: (a as any).completed_at ?? null,
+          completed_by_email: (a as any).completed_by_email ?? null,
+          completed_by_name: (a as any).completed_by_name ?? null,
+          dismissed_reason: (a as any).dismissed_reason ?? null,
+          dismissed_at: (a as any).dismissed_at ?? null,
+          dismissed_by_email: (a as any).dismissed_by_email ?? null,
+          created_at: (a as any).created_at || '',
+          updated_at: (a as any).updated_at || '',
         })));
       }
       setBackendLoaded(true);
     });
   }, [resolvedId, backendLoaded]);
 
-  const handleToggle = useCallback((id: string, done: boolean) => {
-    setActions(prev => prev.map(a =>
-      String(a.id) === id ? { ...a, status: done ? 'done' : 'open' } : a
-    ));
-    const numId = parseInt(id, 10);
-    if (!isNaN(numId) && numId > 0) {
-      updateActionStatus(numId, done ? 'completed' : 'pending');
+  // Progress computation (exclude dismissed from denominator)
+  const activeActions = actions.filter(a => a.status !== 'dismissed');
+  const completedCount = activeActions.filter(a => a.status === 'completed').length;
+  const progressPct = activeActions.length > 0 ? (completedCount / activeActions.length) * 100 : 0;
+
+  const handleAssign = useCallback(async (actionId: number, user: DirectoryUser) => {
+    const result = await assignAction(actionId, { email: user.email, name: user.displayName });
+    if (result) {
+      setActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'assigned' as const, assignee_email: user.email, assignee_name: user.displayName } : a));
     }
+    setAssigningId(null);
   }, []);
+
+  const handleComplete = useCallback(async (actionId: number) => {
+    if (!completionNote.trim()) return;
+    const result = await completeAction(actionId, completionNote.trim(), evidenceUrl.trim() || undefined);
+    if (result) {
+      setActions(prev => prev.map(a => a.id === actionId ? {
+        ...a, status: 'completed' as const,
+        completion_note: completionNote.trim(),
+        evidence_url: evidenceUrl.trim() || null,
+        completed_at: new Date().toISOString(),
+      } : a));
+    }
+    setCompletingId(null);
+    setCompletionNote('');
+    setEvidenceUrl('');
+  }, [completionNote, evidenceUrl]);
+
+  const handleDismiss = useCallback(async (actionId: number) => {
+    const result = await dismissAction(actionId, dismissReason.trim() || undefined);
+    if (result) {
+      setActions(prev => prev.map(a => a.id === actionId ? {
+        ...a, status: 'dismissed' as const,
+        dismissed_reason: dismissReason.trim() || null,
+        dismissed_at: new Date().toISOString(),
+      } : a));
+    }
+    setDismissingId(null);
+    setDismissReason('');
+  }, [dismissReason]);
+
+  const handleAddAction = useCallback(async (actionType: string, title: string) => {
+    const result = await createManualAction(resolvedId, { action_type: actionType, title });
+    if (result) {
+      setActions(prev => [...prev, result]);
+    }
+    setShowAddMenu(false);
+    setShowCustomInput(false);
+    setCustomTitle('');
+  }, [resolvedId]);
 
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -1428,27 +1502,273 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
 
   return (
     <div>
-      {/* Recommended Actions */}
-      <div style={sectionHeader}>Recommended Actions</div>
-      {actions.length === 0 && (
-        <EmptyRow label="No actions available -- generate a briefing to populate" theme={V3} />
-      )}
-      {actions.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+      {/* Progress bar */}
+      <div style={sectionHeader}>Actions</div>
+      {activeActions.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{ flex: 1, height: 3, background: V3.border.subtle, borderRadius: 2, overflow: 'hidden' }}>
             <div style={{
-              width: `${(actions.filter(a => a.status === 'done').length / actions.length) * 100}%`,
-              height: '100%', background: V3.accent.green, borderRadius: 2, transition: 'width 300ms'
+              width: `${progressPct}%`,
+              height: '100%', background: V3.accent.green, borderRadius: 2, transition: 'width 300ms',
             }} />
           </div>
           <span style={{ fontSize: 9, fontFamily: V3_FONT_MONO, color: V3.text.muted, flexShrink: 0 }}>
-            {actions.filter(a => a.status === 'done').length}/{actions.length}
+            {completedCount} of {activeActions.length} complete
           </span>
         </div>
       )}
-      {actions.map((a, i) => (
-        <ActionCheckbox key={a.id ?? i} action={a} onToggle={handleToggle} />
-      ))}
+
+      {/* Action rows */}
+      {actions.length === 0 && backendLoaded && (
+        <EmptyRow label="No actions yet -- add one below" theme={V3} />
+      )}
+      {actions.map(action => {
+        const isDismissed = action.status === 'dismissed';
+        const isCompleted = action.status === 'completed';
+        const isUnassigned = !action.assignee_email && action.status === 'pending';
+
+        return (
+          <div key={action.id} style={{
+            padding: '6px 0',
+            borderBottom: `1px solid ${V3.border.subtle}`,
+            opacity: isDismissed ? 0.4 : isUnassigned ? 0.7 : 1,
+            textDecoration: isDismissed ? 'line-through' : 'none',
+          }}
+            title={isDismissed && action.dismissed_reason ? `Dismissed: ${action.dismissed_reason}` : undefined}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Source badge */}
+              <span style={{
+                fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                fontFamily: V3_FONT_MONO, textTransform: 'uppercase' as const,
+                background: action.source === 'ai' ? V3.accent.blue + '22' : V3.accent.green + '22',
+                color: action.source === 'ai' ? V3.accent.blue : V3.accent.green,
+                border: `1px solid ${action.source === 'ai' ? V3.accent.blue + '44' : V3.accent.green + '44'}`,
+                flexShrink: 0,
+              }}>
+                {action.source === 'ai' ? 'AI' : action.created_by_name || 'Manual'}
+              </span>
+
+              {/* Priority dot */}
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                background: PRIORITY_COLORS[action.priority] || PRIORITY_COLORS.normal,
+              }} />
+
+              {/* Title + assignee */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 500, color: isCompleted ? V3.accent.green : V3.text.primary,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {isCompleted && '\u2713 '}{action.title}
+                </div>
+                <div style={{ fontSize: 9, color: V3.text.muted }}>
+                  {action.assignee_name || action.assignee_hint || 'Unassigned'}
+                  {action.due_date && ` \u00B7 Due ${action.due_date.slice(0, 10)}`}
+                </div>
+              </div>
+
+              {/* Status buttons */}
+              {!isCompleted && !isDismissed && (
+                <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                  {!action.assignee_email && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setAssigningId(assigningId === action.id ? null : action.id); }}
+                      style={{
+                        fontSize: 9, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                        background: V3.bg.badge, color: V3.text.muted, border: `1px solid ${V3.border.subtle}`,
+                        fontFamily: V3_FONT,
+                      }}
+                    >Assign</button>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); setCompletingId(completingId === action.id ? null : action.id); }}
+                    style={{
+                      fontSize: 9, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                      background: V3.accent.green + '18', color: V3.accent.green, border: `1px solid ${V3.accent.green}44`,
+                      fontFamily: V3_FONT,
+                    }}
+                  >Done</button>
+                  <button
+                    onClick={e => { e.stopPropagation(); setDismissingId(dismissingId === action.id ? null : action.id); }}
+                    style={{
+                      fontSize: 9, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                      background: V3.bg.badge, color: V3.text.muted, border: `1px solid ${V3.border.subtle}`,
+                      fontFamily: V3_FONT,
+                    }}
+                  >Dismiss</button>
+                </div>
+              )}
+            </div>
+
+            {/* Completed action details */}
+            {isCompleted && action.completion_note && (
+              <div style={{ fontSize: 9, color: V3.text.muted, marginTop: 3, paddingLeft: 20 }}>
+                {action.completion_note}
+                {action.evidence_url && (
+                  <> &mdash; <a href={action.evidence_url} target="_blank" rel="noopener noreferrer"
+                    style={{ color: V3.accent.blue, textDecoration: 'underline' }}
+                    onClick={e => e.stopPropagation()}
+                  >evidence</a></>
+                )}
+              </div>
+            )}
+
+            {/* Inline assign with PeoplePicker */}
+            {assigningId === action.id && (
+              <div style={{ marginTop: 4, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                <PeoplePicker onSelect={user => handleAssign(action.id, user)} placeholder="Search directory..." />
+              </div>
+            )}
+
+            {/* Inline completion form */}
+            {completingId === action.id && (
+              <div style={{ marginTop: 4, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }} onClick={e => e.stopPropagation()}>
+                <textarea
+                  value={completionNote}
+                  onChange={e => setCompletionNote(e.target.value)}
+                  placeholder="Completion note (required)..."
+                  rows={2}
+                  style={{
+                    width: '100%', padding: '5px 8px', fontSize: 10,
+                    background: V3.bg.base, color: V3.text.primary,
+                    border: `1px solid ${V3.border.default}`, borderRadius: 4,
+                    fontFamily: V3_FONT, outline: 'none', resize: 'vertical',
+                    boxSizing: 'border-box' as const,
+                  }}
+                />
+                <input
+                  value={evidenceUrl}
+                  onChange={e => setEvidenceUrl(e.target.value)}
+                  placeholder="Evidence URL (optional)"
+                  style={{
+                    width: '100%', padding: '4px 8px', fontSize: 10,
+                    background: V3.bg.base, color: V3.text.primary,
+                    border: `1px solid ${V3.border.default}`, borderRadius: 4,
+                    fontFamily: V3_FONT, outline: 'none',
+                    boxSizing: 'border-box' as const,
+                  }}
+                />
+                <button
+                  onClick={() => handleComplete(action.id)}
+                  disabled={!completionNote.trim()}
+                  style={{
+                    alignSelf: 'flex-start', padding: '3px 10px', fontSize: 10, fontWeight: 600,
+                    background: completionNote.trim() ? V3.accent.green + '22' : V3.bg.badge,
+                    color: completionNote.trim() ? V3.accent.green : V3.text.muted,
+                    border: `1px solid ${completionNote.trim() ? V3.accent.green + '44' : V3.border.subtle}`,
+                    borderRadius: 4, cursor: completionNote.trim() ? 'pointer' : 'not-allowed',
+                    fontFamily: V3_FONT,
+                  }}
+                >Submit</button>
+              </div>
+            )}
+
+            {/* Inline dismiss form */}
+            {dismissingId === action.id && (
+              <div style={{ marginTop: 4, paddingLeft: 20, display: 'flex', gap: 4, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                <input
+                  value={dismissReason}
+                  onChange={e => setDismissReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  style={{
+                    flex: 1, padding: '4px 8px', fontSize: 10,
+                    background: V3.bg.base, color: V3.text.primary,
+                    border: `1px solid ${V3.border.default}`, borderRadius: 4,
+                    fontFamily: V3_FONT, outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => handleDismiss(action.id)}
+                  style={{
+                    padding: '3px 10px', fontSize: 10, fontWeight: 600,
+                    background: V3.accent.red + '18', color: V3.accent.red,
+                    border: `1px solid ${V3.accent.red}44`, borderRadius: 4,
+                    cursor: 'pointer', fontFamily: V3_FONT,
+                  }}
+                >Dismiss</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add Action button + menu */}
+      <div style={{ marginTop: 8, position: 'relative' }}>
+        <button
+          onClick={e => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
+          style={{
+            fontSize: 10, padding: '4px 10px', borderRadius: 4, cursor: 'pointer',
+            background: V3.accent.blue + '18', color: V3.accent.blue,
+            border: `1px solid ${V3.accent.blue}44`, fontFamily: V3_FONT, fontWeight: 600,
+          }}
+        >+ Add Action</button>
+        {showAddMenu && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50,
+            background: V3.bg.card, border: `1px solid ${V3.border.default}`,
+            borderRadius: 6, padding: 4, minWidth: 220,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }} onClick={e => e.stopPropagation()}>
+            {ACTION_TEMPLATES.map(t => (
+              <button
+                key={t.type}
+                onClick={() => handleAddAction(t.type, t.title)}
+                style={{
+                  display: 'block', width: '100%', padding: '5px 8px', fontSize: 10,
+                  background: 'transparent', color: V3.text.primary, border: 'none',
+                  borderRadius: 4, cursor: 'pointer', textAlign: 'left', fontFamily: V3_FONT,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = V3.bg.cardHover)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >{t.title}</button>
+            ))}
+            <div style={{ borderTop: `1px solid ${V3.border.subtle}`, margin: '4px 0' }} />
+            {!showCustomInput ? (
+              <button
+                onClick={() => setShowCustomInput(true)}
+                style={{
+                  display: 'block', width: '100%', padding: '5px 8px', fontSize: 10,
+                  background: 'transparent', color: V3.accent.blue, border: 'none',
+                  borderRadius: 4, cursor: 'pointer', textAlign: 'left', fontFamily: V3_FONT,
+                  fontWeight: 600,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = V3.bg.cardHover)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >Custom action...</button>
+            ) : (
+              <div style={{ display: 'flex', gap: 4, padding: '4px 0' }}>
+                <input
+                  value={customTitle}
+                  onChange={e => setCustomTitle(e.target.value)}
+                  placeholder="Action title..."
+                  autoFocus
+                  style={{
+                    flex: 1, padding: '4px 8px', fontSize: 10,
+                    background: V3.bg.base, color: V3.text.primary,
+                    border: `1px solid ${V3.border.default}`, borderRadius: 4,
+                    fontFamily: V3_FONT, outline: 'none',
+                  }}
+                  onKeyDown={e => { if (e.key === 'Enter' && customTitle.trim()) handleAddAction('custom', customTitle.trim()); }}
+                />
+                <button
+                  onClick={() => { if (customTitle.trim()) handleAddAction('custom', customTitle.trim()); }}
+                  disabled={!customTitle.trim()}
+                  style={{
+                    padding: '4px 8px', fontSize: 10, fontWeight: 600,
+                    background: customTitle.trim() ? V3.accent.blue + '22' : V3.bg.badge,
+                    color: customTitle.trim() ? V3.accent.blue : V3.text.muted,
+                    border: `1px solid ${customTitle.trim() ? V3.accent.blue + '44' : V3.border.subtle}`,
+                    borderRadius: 4, cursor: customTitle.trim() ? 'pointer' : 'default',
+                    fontFamily: V3_FONT,
+                  }}
+                >Add</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Lifecycle */}
       <div style={sectionHeader}>Lifecycle</div>
@@ -1467,49 +1787,27 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
           onClick={() => handleStatusChange(status === 'archived' ? 'active' : 'archived')}
           theme={V3}
         />
-        <LifecycleBtn
-          label="Assign" icon={'\uD83D\uDC64'}
-          active={showAssignInput}
-          onClick={() => setShowAssignInput(!showAssignInput)}
+      </div>
+
+      {/* Communicate */}
+      <div style={sectionHeader}>Communicate</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        <CommBtn
+          label="Email" icon={'\u2709'}
+          href={`mailto:?subject=${emailSubject}&body=${emailBody}`}
+          theme={V3}
+        />
+        <CommBtn
+          label="Teams" icon={'\uD83D\uDCAC'}
+          href={`https://teams.microsoft.com/l/chat/0/0?message=${teamsMsg}`}
+          theme={V3}
+        />
+        <CommBtn
+          label="Meeting" icon={'\uD83D\uDCC5'}
+          href={`https://outlook.office.com/calendar/0/deeplink/compose?subject=${emailSubject}&body=${emailBody}`}
           theme={V3}
         />
       </div>
-      {showAssignInput && (
-        <div
-          style={{ display: 'flex', gap: 6, marginBottom: 10 }}
-          onClick={e => e.stopPropagation()}
-        >
-          <input
-            value={assignInput}
-            onChange={e => setAssignInput(e.target.value)}
-            placeholder="Assignee name..."
-            style={{
-              flex: 1, padding: '5px 8px', fontSize: 11,
-              background: V3.bg.base, color: V3.text.primary,
-              border: `1px solid ${V3.border.default}`, borderRadius: 4,
-              fontFamily: V3_FONT, outline: 'none',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = V3.accent.blue; }}
-            onBlur={e => { e.currentTarget.style.borderColor = V3.border.default; }}
-          />
-          <button
-            onClick={() => {
-              if (assignInput.trim() && resolvedId) {
-                assignTicket(resolvedId, assignInput.trim());
-              }
-              setShowAssignInput(false);
-            }}
-            style={{
-              padding: '5px 10px', fontSize: 10, fontWeight: 600,
-              background: V3.accent.blue + '22', color: V3.accent.blue,
-              border: `1px solid ${V3.accent.blue}44`, borderRadius: 4,
-              cursor: 'pointer', fontFamily: V3_FONT_MONO,
-            }}
-          >
-            Save
-          </button>
-        </div>
-      )}
 
       {/* Signal Quality Feedback */}
       <div style={sectionHeader}>Signal Quality</div>
@@ -1538,26 +1836,6 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
             Thanks — this improves future scans
           </span>
         )}
-      </div>
-
-      {/* Communicate */}
-      <div style={sectionHeader}>Communicate</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <CommBtn
-          label="Email" icon={'\u2709'}
-          href={`mailto:?subject=${emailSubject}&body=${emailBody}`}
-          theme={V3}
-        />
-        <CommBtn
-          label="Teams" icon={'\uD83D\uDCAC'}
-          href={`https://teams.microsoft.com/l/chat/0/0?message=${teamsMsg}`}
-          theme={V3}
-        />
-        <CommBtn
-          label="Meeting" icon={'\uD83D\uDCC5'}
-          href={`https://outlook.office.com/calendar/0/deeplink/compose?subject=${emailSubject}&body=${emailBody}`}
-          theme={V3}
-        />
       </div>
     </div>
   );
