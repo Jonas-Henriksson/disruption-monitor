@@ -111,6 +111,7 @@ export interface Disruption {
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
+  resurfaced_at?: string;
   confidence?: number;
   sources?: string[];
 }
@@ -139,6 +140,7 @@ export interface GeopoliticalRisk {
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
+  resurfaced_at?: string;
   confidence?: number;
   sources?: string[];
 }
@@ -169,6 +171,7 @@ export interface TradeEvent {
   possible_duplicate_of?: string;
   duplicate_reason?: string;
   duplicate_similarity?: number;
+  resurfaced_at?: string;
   confidence?: number;
   sources?: string[];
 }

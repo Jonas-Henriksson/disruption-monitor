@@ -81,7 +81,7 @@ export function FeedList({
   }, [items, severityFilter, searchQuery, showMyItems]);
 
   // Step 2: Separate duplicates and severity tiers from filtered list
-  const { primary, duplicates, highPriority, lowerPriority } = useMemo(() => {
+  const { duplicates, highPriority, lowerPriority } = useMemo(() => {
     const dupes: ScanItem[] = [];
     const nonDupes: ScanItem[] = [];
 

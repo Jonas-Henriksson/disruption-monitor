@@ -226,20 +226,95 @@ def find_cross_mode_related(
     return related_map
 
 
+def _extract_key_entities(text: str) -> set[str]:
+    """Extract likely proper-noun entities (place names, company names) from a title.
+
+    Heuristic: words that are capitalized in the original text AND are at least
+    3 chars long, excluding common title-case filler words.
+    """
+    _FILLER = {
+        "the", "and", "for", "from", "with", "that", "this", "are", "has",
+        "its", "was", "were", "will", "may", "can", "not", "but", "all",
+        "new", "via", "due", "risk", "supply", "chain", "global", "critical",
+        "shipping", "disruption", "impact", "crisis", "closure", "cost",
+        "manufacturing", "industrial", "production", "trade", "policy",
+        "economic", "energy", "market", "port", "canal", "corridor",
+        "rerouting", "congestion", "escalation", "volatility", "inflation",
+        "shortage", "halt", "driving", "remains", "persists", "affecting",
+        "compounding", "cascading", "secondary", "effective", "linked",
+    }
+    words = re.findall(r"\b[A-Z][a-z]{2,}\b", text)
+    return {w.lower() for w in words if w.lower() not in _FILLER}
+
+
 def resolve_event_id(
     new_item: dict,
     existing_events: list[dict],
-    title_threshold: float = 0.45,
+    title_threshold: float = 0.20,
 ) -> str | None:
     """Match a new scan item against existing DB events by fuzzy title + region + geo.
 
     Returns the existing event's ID if a strong match is found, or None if the
-    item is genuinely new.  Uses the same matching logic as find_duplicates.
+    item is genuinely new.
+
+    Uses a multi-signal approach with a low initial gate (0.20 Jaccard) but
+    requires composite score >= 0.45 after boosts to accept a match:
+    - Jaccard word overlap (initial gate)
+    - Geographic proximity boost (events <200km apart)
+    - Key entity matching (shared proper nouns like place/company names)
     """
-    matches = find_duplicates(new_item, existing_events, title_threshold=title_threshold)
-    if matches:
-        return matches[0]["existing_event_id"]
-    return None
+    new_title = new_item.get("event") or new_item.get("risk", "")
+    if not new_title:
+        return None
+
+    new_lat = new_item.get("lat")
+    new_lng = new_item.get("lng")
+    new_region = new_item.get("region", "Global")
+    new_entities = _extract_key_entities(new_title)
+
+    best_id: str | None = None
+    best_score: float = 0.0
+
+    for existing in existing_events:
+        existing_id = existing.get("id", "")
+        existing_title = existing.get("event") or existing.get("risk", "")
+        if not existing_title or existing_id == new_item.get("id"):
+            continue
+
+        # 1. Title similarity (Jaccard)
+        sim = _title_similarity(new_title, existing_title)
+        if sim < title_threshold:
+            continue
+
+        # 2. Region compatibility
+        existing_region = existing.get("region", "Global")
+        if not _regions_compatible(new_region, existing_region):
+            continue
+
+        # 3. Geographic distance
+        existing_lat = existing.get("lat")
+        existing_lng = existing.get("lng")
+        distance = None
+        if all(v is not None for v in [new_lat, new_lng, existing_lat, existing_lng]):
+            distance = _haversine_km(new_lat, new_lng, existing_lat, existing_lng)
+
+        # 4. Key entity overlap (Hormuz, Malacca, Toto, Houthi, etc.)
+        existing_entities = _extract_key_entities(existing_title)
+        shared_entities = new_entities & existing_entities
+
+        # Compute composite score: base Jaccard + boosts
+        score = sim
+        if distance is not None and distance < 200:
+            score += 0.15  # nearby events get a proximity boost
+        if shared_entities:
+            score += 0.10 * min(len(shared_entities), 3)  # entity boost, capped at +0.30
+
+        # Accept if composite score >= 0.45 (the effective merge threshold)
+        if score >= 0.45 and score > best_score:
+            best_score = score
+            best_id = existing_id
+
+    return best_id
 
 
 def tag_duplicates(
