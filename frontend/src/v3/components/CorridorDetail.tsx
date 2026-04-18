@@ -5,7 +5,7 @@
  * Shows friction gauge, trajectory, affected sites, and related events.
  */
 
-import { TYPE, V3_FONT_MONO, sevColor } from '../theme';
+import { TYPE, V3_FONT_MONO, sevColor, type V3Theme } from '../theme';
 import { useV3Theme } from '../ThemeContext';
 import type { CorridorSummaryItem, ScanItem } from '../../types';
 import { getSev } from '../../utils/scan';
@@ -17,13 +17,13 @@ interface CorridorDetailProps {
   onClose: () => void;
 }
 
-const FRICTION_COLORS: Record<string, string> = {
-  Prohibitive: '#dc2626',
-  High: '#ef4444',
-  Moderate: '#f59e0b',
-  Low: '#22c55e',
-  Free: '#6ee7b7',
-};
+const frictionColors = (theme: V3Theme): Record<string, string> => ({
+  Prohibitive: theme.friction.prohibitive,
+  High: theme.friction.high,
+  Moderate: theme.friction.moderate,
+  Low: theme.friction.low,
+  Free: theme.friction.free,
+});
 
 const FRICTION_WIDTH: Record<string, number> = {
   Free: 10,
@@ -42,7 +42,7 @@ const TREND_LABEL: Record<string, string> = {
 
 export function CorridorDetail({ corridor, events, onSelectEvent, onClose }: CorridorDetailProps) {
   const { theme: V3 } = useV3Theme();
-  const frictionColor = FRICTION_COLORS[corridor.friction_level] || V3.text.muted;
+  const frictionColor = frictionColors(V3)[corridor.friction_level] || V3.text.muted;
   const barWidth = FRICTION_WIDTH[corridor.friction_level] || 50;
   const trendLabel = TREND_LABEL[corridor.trend] || corridor.trend;
 

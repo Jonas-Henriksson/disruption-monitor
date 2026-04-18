@@ -439,11 +439,11 @@ function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: Disru
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
         <InfoBadge glossaryKey="velocity" badgeBg={inferredVelColor} badgeFg={inferredVelColor} theme={V3}>
           <span style={{ color: V3.text.muted, fontWeight: 500 }}>Velocity</span> {inferredVelocity}
-          {!velLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
+          {!velLabel && <span style={{ fontSize: 9, opacity: 0.6 }}> est</span>}
         </InfoBadge>
         <InfoBadge glossaryKey="recovery" badgeBg={inferredRecColor} badgeFg={inferredRecColor} theme={V3}>
           <span style={{ color: V3.text.muted, fontWeight: 500 }}>Recovery</span> {inferredRecovery}
-          {!recLabel && <span style={{ fontSize: 7, opacity: 0.6 }}> est</span>}
+          {!recLabel && <span style={{ fontSize: 9, opacity: 0.6 }}> est</span>}
         </InfoBadge>
         {probPct != null && (
           <InfoBadge glossaryKey="probability" badgeBg={probColor} badgeFg={probColor} theme={V3}>

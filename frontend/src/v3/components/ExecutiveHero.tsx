@@ -31,11 +31,11 @@ function useAutoExpand(): [boolean, (v: boolean) => void] {
   return [collapsed, toggle];
 }
 
-const RISK_COLORS: Record<string, string> = {
-  STABLE: '#22c55e',
-  ELEVATED: '#f59e0b',
-  HIGH: '#ef4444',
-};
+const riskColors = (theme: V3Theme): Record<string, string> => ({
+  STABLE: theme.risk.stable,
+  ELEVATED: theme.risk.elevated,
+  HIGH: theme.risk.high,
+});
 
 export function ExecutiveHero({ items, onSelectEvent }: ExecutiveHeroProps) {
   const { theme: V3 } = useV3Theme();
@@ -59,7 +59,7 @@ export function ExecutiveHero({ items, onSelectEvent }: ExecutiveHeroProps) {
   if (loading && !data) return null; // don't flash empty panel
   if (!data) return null;
 
-  const riskColor = RISK_COLORS[data.risk_level] || V3.text.muted;
+  const riskColor = riskColors(V3)[data.risk_level] || V3.text.muted;
 
   if (collapsed) {
     return (

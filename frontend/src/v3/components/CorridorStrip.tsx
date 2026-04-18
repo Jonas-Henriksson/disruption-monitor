@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { V3_FONT_MONO } from '../theme';
+import { V3_FONT_MONO, type V3Theme } from '../theme';
 import { useV3Theme } from '../ThemeContext';
 import type { CorridorSummaryResponse } from '../../types';
 import { fetchCorridorSummary } from '../../services/api';
@@ -17,13 +17,13 @@ interface CorridorStripProps {
   onSelectCorridor: (corridor: string | null) => void;
 }
 
-const FRICTION_COLORS: Record<string, string> = {
-  Prohibitive: '#dc2626',
-  High: '#ef4444',
-  Moderate: '#f59e0b',
-  Low: '#22c55e',
-  Free: '#6ee7b7',
-};
+const frictionColors = (theme: V3Theme): Record<string, string> => ({
+  Prohibitive: theme.friction.prohibitive,
+  High: theme.friction.high,
+  Moderate: theme.friction.moderate,
+  Low: theme.friction.low,
+  Free: theme.friction.free,
+});
 
 const TREND_ARROW: Record<string, string> = {
   Escalating: '\u25B2',
@@ -72,7 +72,7 @@ export function CorridorStrip({ selectedCorridor, onSelectCorridor }: CorridorSt
 
       {data.corridors.map(c => {
         const isSelected = selectedCorridor === c.corridor;
-        const bg = FRICTION_COLORS[c.friction_level] || V3.text.muted;
+        const bg = frictionColors(V3)[c.friction_level] || V3.text.muted;
         const arrow = TREND_ARROW[c.trend] || '\u2014';
 
         return (

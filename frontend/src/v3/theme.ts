@@ -62,6 +62,18 @@ export const V3_DARK = {
     '2xl': 24,
     '3xl': 32,
   },
+  risk: {
+    stable: '#22c55e',
+    elevated: '#f59e0b',
+    high: '#ef4444',
+  },
+  friction: {
+    prohibitive: '#dc2626',
+    high: '#ef4444',
+    moderate: '#f59e0b',
+    low: '#22c55e',
+    free: '#6ee7b7',
+  },
   radius: {
     sm: 4,
     md: 8,
@@ -127,6 +139,18 @@ export const V3_LIGHT = {
     xl: 20,
     '2xl': 24,
     '3xl': 32,
+  },
+  risk: {
+    stable: '#16a34a',
+    elevated: '#d97706',
+    high: '#dc2626',
+  },
+  friction: {
+    prohibitive: '#dc2626',
+    high: '#ef4444',
+    moderate: '#f59e0b',
+    low: '#22c55e',
+    free: '#6ee7b7',
   },
   radius: {
     sm: 4,

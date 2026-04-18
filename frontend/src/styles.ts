@@ -1,6 +1,6 @@
 // Global CSS injected once on mount
 export const GLOBAL_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
 @keyframes spc{0%,100%{r:8;opacity:.35}50%{r:18;opacity:.08}}
 @keyframes sph{0%,100%{r:7;opacity:.3}50%{r:15;opacity:.06}}
 @keyframes spm{0%,100%{r:6;opacity:.25}50%{r:12;opacity:.04}}
