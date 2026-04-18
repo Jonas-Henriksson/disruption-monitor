@@ -139,7 +139,6 @@ async def _generate_with_claude(
 ) -> dict:
     """Call Opus to generate an evolution summary."""
     from .scanner import _get_claude_client
-    import asyncio
 
     client = _get_claude_client()
 
@@ -170,8 +169,7 @@ async def _generate_with_claude(
         next_phase_number=next_phase,
     )
 
-    response = await asyncio.to_thread(
-        client.messages.create,
+    response = await client.messages.create(
         model=settings.analysis_model,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
