@@ -24,6 +24,7 @@ export interface TopBarProps {
   onToggleMap: () => void;
   onToggleWhatIf?: () => void;
   whatIfOpen?: boolean;
+  onOpenWeeklyBriefing?: () => void;
 }
 
 const MODES: { key: ScanMode; label: string }[] = [
@@ -74,6 +75,7 @@ export function TopBar({
   onToggleMap,
   onToggleWhatIf,
   whatIfOpen,
+  onOpenWeeklyBriefing,
 }: TopBarProps) {
   const { theme: V3, mode: themeMode, toggleTheme } = useV3Theme();
   const [buOpen, setBuOpen] = useState(false);
@@ -331,6 +333,23 @@ export function TopBar({
       >
         {themeMode === 'dark' ? '\u2600' : '\u263E'}
       </button>
+
+      {/* Weekly Briefing */}
+      {onOpenWeeklyBriefing && (
+        <button
+          onClick={onOpenWeeklyBriefing}
+          title="Weekly Briefing"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: V3.text.muted, fontSize: 16, padding: '4px 6px',
+            borderRadius: V3.radius.sm,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = V3.text.primary)}
+          onMouseLeave={e => (e.currentTarget.style.color = V3.text.muted)}
+        >
+          {'\uD83D\uDCCB'}
+        </button>
+      )}
 
       {/* Scan status + button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: V3.spacing.sm, flexShrink: 0 }}>

@@ -245,6 +245,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         onToggleMap={() => setMapMode(true)}
         onToggleWhatIf={() => setShowWhatIf(prev => !prev)}
         whatIfOpen={showWhatIf}
+        onOpenWeeklyBriefing={() => setShowWeeklyBriefing(true)}
       />
 
       {/* Scan progress bar */}
