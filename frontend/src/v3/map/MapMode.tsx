@@ -31,18 +31,6 @@ const CONFLICT_ZONES = new Set([
 
 // CSS for map animations
 const MAP_CSS = `
-@keyframes v3-map-critical-pulse {
-  0%, 100% { r: 10; opacity: 0.8; }
-  50% { r: 18; opacity: 0.2; }
-}
-@keyframes v3-map-critical-ring {
-  0% { r: 12; opacity: 0.5; }
-  100% { r: 24; opacity: 0; }
-}
-@keyframes v3-map-high-pulse {
-  0%, 100% { r: 10; opacity: 0.6; }
-  50% { r: 16; opacity: 0.15; }
-}
 @keyframes v3-panel-slide-in {
   from { transform: translateX(-100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -528,23 +516,27 @@ export function MapMode({
                 onMouseLeave={() => setHoveredEvent(null)}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Outer pulse rings */}
+                {/* Outer pulse rings — radius scales with zoom via baseR */}
                 {isCritical && (
                   <>
                     <circle
                       cx={p[0]} cy={p[1]}
                       fill="none" stroke={color}
                       strokeWidth={Math.max(0.5, 1.5 * inv)}
-                      opacity={0.4}
-                      style={{ animation: 'v3-map-critical-pulse 1.5s ease-in-out infinite' }}
-                    />
+                      pointerEvents="none"
+                    >
+                      <animate attributeName="r" values={`${baseR * 1.3};${baseR * 2.2};${baseR * 1.3}`} dur="1.5s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
                     <circle
                       cx={p[0]} cy={p[1]}
                       fill="none" stroke={color}
                       strokeWidth={Math.max(0.3, 0.8 * inv)}
-                      opacity={0.2}
-                      style={{ animation: 'v3-map-critical-ring 2s ease-in-out infinite' }}
-                    />
+                      pointerEvents="none"
+                    >
+                      <animate attributeName="r" values={`${baseR * 1.5};${baseR * 3};${baseR * 1.5}`} dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite" />
+                    </circle>
                   </>
                 )}
                 {isHigh && (
@@ -552,9 +544,11 @@ export function MapMode({
                     cx={p[0]} cy={p[1]}
                     fill="none" stroke={color}
                     strokeWidth={Math.max(0.4, 1 * inv)}
-                    opacity={0.3}
-                    style={{ animation: 'v3-map-high-pulse 2.5s ease-in-out infinite' }}
-                  />
+                    pointerEvents="none"
+                  >
+                    <animate attributeName="r" values={`${baseR * 1.3};${baseR * 2};${baseR * 1.3}`} dur="2.5s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.6;0.15;0.6" dur="2.5s" repeatCount="indefinite" />
+                  </circle>
                 )}
 
                 {/* Hover glow */}
