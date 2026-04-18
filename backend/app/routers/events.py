@@ -57,7 +57,7 @@ def _find_event(event_id: str) -> dict | None:
 
 
 @router.get("")
-async def list_events(mode: str | None = None, status: str | None = None, limit: int = 100, user: dict[str, Any] = Depends(get_current_user)):
+async def list_events(mode: str | None = None, status: str | None = None, limit: int = 500, user: dict[str, Any] = Depends(get_current_user)):
     """List events with optional filters."""
     return get_events(mode=mode, status=status, limit=limit)
 
@@ -104,7 +104,7 @@ async def executive_summary(user: dict[str, Any] = Depends(get_current_user)):
     from ..services.executive import build_executive_summary, generate_executive_one_liner
 
     weekly = get_weekly_summary(days=7)
-    active = get_events(status="active", limit=50, max_age_hours=24)
+    active = get_events(status="active", limit=500)
     bu_exp = get_bu_exposure_summary()
 
     one_liner = await generate_executive_one_liner(active)
@@ -119,7 +119,7 @@ async def corridor_summary(user: dict[str, Any] = Depends(get_current_user)):
     """Return corridor-level risk summary for the trade corridor strip."""
     from ..services.corridors import build_corridor_summary
 
-    trade_events = get_events(mode="trade", status="active", limit=50, max_age_hours=168)
+    trade_events = get_events(mode="trade", status="active", limit=500)
     return build_corridor_summary(trade_events)
 
 

@@ -99,7 +99,7 @@ For each risk, return a JSON object with these exact fields:
 - lng: number (longitude center)
 - watchpoint: string (what to watch for next)
 
-Return a JSON array of 6-8 risks, ordered by risk_level.
+Return a JSON array of 12-15 risks, ordered by risk_level.
 Only return the JSON array, no other text.
 """
 
@@ -133,7 +133,7 @@ For each event, return a JSON object with these exact fields:
 
 Focus on changes in the last 7 days. Prioritize tariff changes, sanctions updates, and export control modifications that directly affect bearing manufacturing supply chains.
 
-Return a JSON array of 6-8 events, ordered by severity.
+Return a JSON array of 12-15 events, ordered by severity.
 Only return the JSON array, no other text.
 """
 
