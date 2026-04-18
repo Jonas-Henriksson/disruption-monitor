@@ -83,7 +83,7 @@ export async function fetchLatestScan(mode: ScanMode): Promise<ScanResponse | nu
     const headers = await authHeaders();
     const resp = await fetch(`${BASE_URL}${API_PREFIX}/scans/latest/${mode}`, {
       headers,
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!resp.ok) return null;
     return (await resp.json()) as ScanResponse;

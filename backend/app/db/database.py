@@ -592,13 +592,27 @@ def upsert_event(event_id: str, mode: str, payload: dict, scan_id: str) -> bool:
             return True
 
 
+# Heavy payload fields stripped from list responses to reduce transfer size
+_SLIM_STRIP_KEYS = {
+    "input_details", "routing_context", "downstream_exposure", "assessment",
+    "actions", "impact", "sources", "severity_history",
+    "recommended_action", "skf_exposure", "skf_relevance", "skf_cost_impact",
+    "this_week", "watchpoint",
+}
+
+
 def get_events(
     mode: str | None = None,
     status: str | None = None,
     limit: int = 100,
     max_age_hours: int | None = None,
+    slim: bool = False,
 ) -> list[dict]:
-    """Get events with their full payload."""
+    """Get events with their payload.
+
+    When slim=True, heavy fields (input_details, routing_context, etc.) are
+    stripped to reduce response size for list views (~1.6 MB → ~200 KB).
+    """
     with get_db() as conn:
         conditions = []
         params: list[Any] = []
@@ -632,7 +646,16 @@ def get_events(
             event["resurfaced_at"] = row["resurfaced_at"] if "resurfaced_at" in row.keys() else None
             if "assessment" in row.keys() and row["assessment"]:
                 event["assessment"] = row["assessment"]
-            _enrich_supply_chain_if_missing(event)
+            if slim:
+                for key in _SLIM_STRIP_KEYS:
+                    event.pop(key, None)
+                # Cap affected_sites to 3 for feed card preview
+                sites = event.get("affected_sites")
+                if isinstance(sites, list) and len(sites) > 3:
+                    event["affected_sites"] = sites[:3]
+                    event["affected_sites_total"] = len(sites)
+            else:
+                _enrich_supply_chain_if_missing(event)
             results.append(event)
         return results
 

@@ -63,8 +63,8 @@ async def get_latest_scan_results(mode: ScanMode):
     Reads from SQLite. If no scan has been run, returns sample data.
     """
     latest = get_latest_scan(mode)
-    # Only return events updated in the last 24 hours to avoid stale accumulation
-    events = get_events(mode=mode, status="active", limit=200, max_age_hours=168)
+    # Slim payloads for list view — strips heavy fields to reduce ~1.6MB → ~200KB
+    events = get_events(mode=mode, status="active", limit=200, max_age_hours=168, slim=True)
 
     if events:
         now = latest["completed_at"] if latest else datetime.now(timezone.utc).isoformat()
@@ -176,7 +176,7 @@ async def trigger_scan(request: ScanRequest, user: dict[str, Any] = Depends(get_
 
     # Return all active events for this mode (not just the scan's items)
     # so the frontend shows the full picture after a scan
-    all_active = get_events(mode=request.mode, status="active", limit=200, max_age_hours=168)
+    all_active = get_events(mode=request.mode, status="active", limit=200, max_age_hours=168, slim=True)
     result["items"] = all_active
     result[request.mode] = all_active
     result["count"] = len(all_active)
