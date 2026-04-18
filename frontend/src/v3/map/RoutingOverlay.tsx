@@ -42,28 +42,19 @@ interface TooltipState {
   subContent?: string;
 }
 
-/** Check if an event affects a given route corridor */
+/** Check if an event affects a given route corridor — reads AI-tagged affected_corridors */
 function getAffectedCorridors(events: ScanItem[]): Map<string, string[]> {
   const corridorEvents = new Map<string, string[]>();
 
-  const REGION_CORRIDORS: Record<string, string[]> = {
-    'Europe': ['EU-CN', 'EU-US', 'EU-ASEAN', 'EU-ME', 'EU-IN', 'EU-BR', 'CN-EU'],
-    'Middle East': ['EU-CN', 'EU-ASEAN', 'EU-ME', 'EU-IN', 'CN-EU'],
-    'China': ['EU-CN', 'CN-US', 'CN-ASEAN', 'CN-EU'],
-    'India': ['EU-IN'],
-    'Americas': ['EU-US', 'CN-US', 'EU-BR'],
-    'Africa': ['EU-CN', 'EU-IN', 'EU-ASEAN'],
-    'Global': ['EU-CN', 'EU-US', 'CN-US', 'EU-IN', 'EU-ASEAN', 'EU-ME', 'EU-BR', 'CN-EU'],
-  };
-
   events.forEach(evt => {
-    const region = 'region' in evt ? (evt as { region: string }).region : '';
     const name = 'event' in evt ? (evt as { event: string }).event : 'risk' in evt ? (evt as { risk: string }).risk : 'Unknown';
-    const corridors = REGION_CORRIDORS[region] || [];
-    corridors.forEach(c => {
-      if (!corridorEvents.has(c)) corridorEvents.set(c, []);
-      corridorEvents.get(c)!.push(name);
-    });
+    const tagged = (evt as Record<string, unknown>).affected_corridors;
+    if (Array.isArray(tagged)) {
+      tagged.forEach((c: string) => {
+        if (!corridorEvents.has(c)) corridorEvents.set(c, []);
+        corridorEvents.get(c)!.push(name);
+      });
+    }
   });
 
   return corridorEvents;

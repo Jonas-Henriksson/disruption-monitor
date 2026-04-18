@@ -9,6 +9,7 @@ import json
 import pytest
 
 from backend.app.db.database import (
+    auto_archive_stale_events,
     create_ticket,
     get_db,
     get_db_stats,
@@ -339,3 +340,83 @@ class TestDBStats:
     def test_stats_empty_db(self):
         stats = get_db_stats()
         assert stats["events"] == 0
+
+
+# ── Auto-archive stale events ──────────────────────────────────
+
+
+class TestAutoArchiveStaleEvents:
+    def test_archives_stale_active_events(self, seeded_db):
+        """Events with old last_seen should be archived."""
+        # Backdate last_seen to 100 hours ago
+        from datetime import datetime, timedelta, timezone
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=100)).isoformat()
+        with get_db() as conn:
+            conn.execute("UPDATE events SET last_seen = ? WHERE status = 'active'", (old_time,))
+
+        archived = auto_archive_stale_events(max_age_hours=72)
+        assert archived >= 2  # seeded_db creates at least 2 events
+
+        # Verify they are now archived
+        events = get_events(status="active")
+        assert len(events) == 0
+
+    def test_does_not_archive_fresh_events(self, seeded_db):
+        """Events seen recently should not be archived."""
+        archived = auto_archive_stale_events(max_age_hours=72)
+        assert archived == 0
+
+        events = get_events(status="active")
+        assert len(events) >= 2
+
+    def test_does_not_archive_watching_events(self, seeded_db):
+        """Watching events should never be auto-archived, even if stale."""
+        from datetime import datetime, timedelta, timezone
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=100)).isoformat()
+
+        # Set one event to watching, backdate all last_seen
+        with get_db() as conn:
+            conn.execute("UPDATE events SET last_seen = ?", (old_time,))
+            conn.execute(
+                "UPDATE events SET status = 'watching' WHERE id = (SELECT id FROM events LIMIT 1)"
+            )
+
+        archived = auto_archive_stale_events(max_age_hours=72)
+        # At least one watching event should remain
+        watching = get_events(status="watching")
+        assert len(watching) >= 1
+
+    def test_stores_archived_severity(self, seeded_db):
+        """Archived events should have their severity score preserved."""
+        from datetime import datetime, timedelta, timezone
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=100)).isoformat()
+
+        # Insert event with known computed_severity
+        payload = {
+            "id": "test-archive-sev|region",
+            "event": "Test Severity Archive",
+            "severity": "High",
+            "region": "Europe",
+            "computed_severity": {"score": 65},
+        }
+        upsert_event("test-archive-sev|region", "disruptions", payload, "scan-1")
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE events SET last_seen = ? WHERE id = ?",
+                (old_time, "test-archive-sev|region"),
+            )
+
+        auto_archive_stale_events(max_age_hours=72)
+
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT status, archived_severity FROM events WHERE id = ?",
+                ("test-archive-sev|region",),
+            ).fetchone()
+        assert row["status"] == "archived"
+        assert row["archived_severity"] == 65
+
+    def test_returns_zero_when_no_stale(self):
+        """Should return 0 when there are no events at all."""
+        archived = auto_archive_stale_events(max_age_hours=72)
+        assert archived == 0

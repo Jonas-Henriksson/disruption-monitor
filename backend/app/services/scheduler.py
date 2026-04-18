@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..config import settings
 from ..db.database import (
+    auto_archive_stale_events,
     create_action,
     get_active_event_summaries,
     get_active_events_all_modes,
@@ -223,6 +224,14 @@ async def _scan_loop(mode: ScanMode) -> None:
                 "events_found": len(items),
                 "source": source,
             }
+
+            # Auto-archive stale events not seen in 72 hours
+            try:
+                archived = auto_archive_stale_events(max_age_hours=72)
+                if archived:
+                    logger.info("Scheduler: auto-archived %d stale events after %s scan", archived, mode)
+            except Exception:
+                logger.exception("Scheduler: auto-archive failed after %s scan (non-fatal)", mode)
 
         except asyncio.CancelledError:
             logger.info("Scheduler: %s scan loop cancelled", mode)

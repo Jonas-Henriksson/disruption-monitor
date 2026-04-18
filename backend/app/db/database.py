@@ -937,6 +937,60 @@ def get_timeline_data(days: int = 30) -> list[dict]:
 # ── Event retention / cleanup ─────────────────────────────────
 
 
+def auto_archive_stale_events(max_age_hours: int = 72) -> int:
+    """Archive events not seen in recent scans.
+
+    Events not updated by any scan in max_age_hours are auto-archived.
+    Only archives 'active' status events — 'watching' events are manually
+    pinned and should not be auto-archived.
+
+    Stores the current severity score as archived_severity so resurrection
+    logic can compare against it if the event resurfaces.
+
+    Returns count of archived events.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = (now - __import__("datetime").timedelta(hours=max_age_hours)).isoformat()
+
+    with get_db() as conn:
+        # Find stale active events
+        rows = conn.execute(
+            "SELECT id, event_title, severity, region, payload FROM events "
+            "WHERE status = 'active' AND last_seen < ?",
+            (cutoff,),
+        ).fetchall()
+
+        if not rows:
+            return 0
+
+        archived_count = 0
+        for row in rows:
+            event_id = row["id"]
+            # Extract severity score for resurrection comparison
+            try:
+                payload = json.loads(row["payload"])
+                cs = payload.get("computed_severity") or {}
+                score = cs.get("score", 0) if isinstance(cs, dict) else 0
+            except (json.JSONDecodeError, TypeError):
+                score = 0
+
+            conn.execute(
+                "UPDATE events SET status = 'archived', archived_severity = ?, updated_at = ? WHERE id = ?",
+                (score, now.isoformat(), event_id),
+            )
+            archived_count += 1
+            logger.info(
+                "Auto-archived stale event: %s [%s] %s (score=%d)",
+                event_id[:60], row["severity"], row["region"] or "Global", score,
+            )
+
+        logger.info(
+            "Auto-archive complete: %d events archived (cutoff: %dh, threshold: %s)",
+            archived_count, max_age_hours, cutoff,
+        )
+        return archived_count
+
+
 def cleanup_old_events(days: int = 90) -> int:
     """Delete archived events older than *days* and all their related records.
 

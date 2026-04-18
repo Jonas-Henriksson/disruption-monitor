@@ -68,6 +68,7 @@ For each disruption found, return a JSON object with these exact fields:
 - skf_exposure: string (how this affects SKF specifically — mention specific factories or suppliers)
 - recommended_action: string (concrete mitigation steps)
 - affected_chokepoints: string[] (which maritime chokepoints this disruption directly affects — only include if the disruption specifically impacts that chokepoint. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
+- affected_corridors: string[] (which trade corridors this disruption actually disrupts. Only include corridors where cargo flow is materially impacted. Valid values: "EU-CN", "EU-US", "EU-ASEAN", "EU-ME", "EU-IN", "EU-BR", "CN-US", "CN-ASEAN", "CN-EU", "CN-IN". Empty array [] if no corridors affected.)
 
 Return all significant disruptions you find. If fewer than 5 exist, return fewer. Do not pad with low-relevance items. Order by severity (Critical first).
 Only return the JSON array, no other text.
@@ -100,6 +101,7 @@ For each risk, return a JSON object with these exact fields:
 - lng: number (longitude center)
 - watchpoint: string (what to watch for next)
 - affected_chokepoints: string[] (which maritime chokepoints this risk directly affects. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
+- affected_corridors: string[] (which trade corridors this risk actually disrupts. Only include corridors where cargo flow is materially impacted. Valid values: "EU-CN", "EU-US", "EU-ASEAN", "EU-ME", "EU-IN", "EU-BR", "CN-US", "CN-ASEAN", "CN-EU", "CN-IN". Empty array [] if no corridors affected.)
 
 Return a JSON array of 12-15 risks, ordered by risk_level.
 Only return the JSON array, no other text.
@@ -133,6 +135,7 @@ For each event, return a JSON object with these exact fields:
 - skf_cost_impact: string (cost impact description)
 - recommended_action: string (concrete steps)
 - affected_chokepoints: string[] (which maritime chokepoints this event directly affects. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
+- affected_corridors: string[] (which trade corridors this event actually disrupts. Only include corridors where cargo flow is materially impacted. Valid values: "EU-CN", "EU-US", "EU-ASEAN", "EU-ME", "EU-IN", "EU-BR", "CN-US", "CN-ASEAN", "CN-EU", "CN-IN". Empty array [] if no corridors affected.)
 
 Focus on changes in the last 7 days. Prioritize tariff changes, sanctions updates, and export control modifications that directly affect bearing manufacturing supply chains.
 
@@ -523,6 +526,72 @@ def _infer_chokepoints(item: dict) -> list[str]:
     return sorted(matched)
 
 
+# ── Corridor inference ──────────────────────────────────────────
+
+_VALID_CORRIDORS = {
+    "EU-CN", "EU-US", "EU-ASEAN", "EU-ME", "EU-IN", "EU-BR",
+    "CN-US", "CN-ASEAN", "CN-EU", "CN-IN",
+}
+
+_TRADE_CONFLICT_WORDS = {"tariff", "trade war", "trade dispute", "sanction", "ban", "restriction", "duty", "embargo"}
+
+
+def _infer_corridors(item: dict) -> list[str]:
+    """Infer affected trade corridors from event text and metadata.
+
+    Uses keyword matching on title + description + exposure text and
+    region/category heuristics. Returns empty list if nothing matches.
+    """
+    text = " ".join([
+        item.get("event", ""),
+        item.get("risk", ""),
+        item.get("description", ""),
+        item.get("this_week", ""),
+        item.get("skf_exposure", ""),
+        item.get("skf_relevance", ""),
+    ]).lower()
+
+    region = item.get("region", "")
+
+    matched: set[str] = set()
+
+    # Suez / Red Sea / Houthi → EU-Asia corridors
+    if "suez" in text or "red sea" in text or "houthi" in text:
+        matched.update(["EU-CN", "EU-ASEAN", "EU-IN", "EU-ME", "CN-EU"])
+
+    # Hormuz / Iran conflict → Middle East + India corridors
+    if "hormuz" in text or (
+        "iran" in text and any(w in text for w in ["war", "conflict", "military", "strike", "attack", "threat", "tension"])
+    ):
+        matched.update(["EU-ME", "EU-IN", "EU-CN", "CN-EU"])
+
+    # Malacca → SE Asia corridors
+    if "malacca" in text:
+        matched.update(["EU-CN", "EU-ASEAN", "CN-ASEAN", "CN-EU"])
+
+    # Panama → Americas corridors
+    if "panama" in text:
+        matched.update(["EU-US", "CN-US", "EU-BR"])
+
+    # Rotterdam → major EU hub corridors
+    if "rotterdam" in text:
+        matched.update(["EU-CN", "EU-US", "EU-BR", "EU-ASEAN", "CN-EU"])
+
+    # Taiwan → China corridors
+    if "taiwan" in text:
+        matched.update(["EU-CN", "CN-US", "CN-ASEAN", "CN-EU"])
+
+    # China region + trade/tariff language
+    if region == "China" and any(w in text for w in _TRADE_CONFLICT_WORDS):
+        matched.update(["EU-CN", "CN-US", "CN-EU"])
+
+    # Americas region or US trade keywords
+    if region == "Americas" or "us tariff" in text or "usmca" in text:
+        matched.update(["EU-US", "CN-US"])
+
+    return sorted(matched)
+
+
 # ── Core scanning logic ─────────────────────────────────────────
 
 
@@ -640,6 +709,8 @@ def _build_sample_result(
         item["computed_severity"] = compute_severity_score(item)
         if "affected_chokepoints" not in item:
             item["affected_chokepoints"] = _infer_chokepoints(item)
+        if "affected_corridors" not in item:
+            item["affected_corridors"] = _infer_corridors(item)
 
     # Tag potential duplicates
     tag_duplicates(data)
@@ -753,6 +824,10 @@ async def _run_live_scan(
         # Ensure affected_chokepoints is always present (keyword fallback if AI didn't tag)
         if "affected_chokepoints" not in item or not isinstance(item.get("affected_chokepoints"), list):
             item["affected_chokepoints"] = _infer_chokepoints(item)
+
+        # Ensure affected_corridors is always present (keyword fallback if AI didn't tag)
+        if "affected_corridors" not in item or not isinstance(item.get("affected_corridors"), list):
+            item["affected_corridors"] = _infer_corridors(item)
 
     # Compute algorithmic severity scores (keeps AI severity intact)
     for item in items:
