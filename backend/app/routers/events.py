@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..auth.dependencies import get_current_user
@@ -57,13 +57,13 @@ def _find_event(event_id: str) -> dict | None:
 
 
 @router.get("")
-async def list_events(mode: str | None = None, status: str | None = None, limit: int = 500, user: dict[str, Any] = Depends(get_current_user)):
+async def list_events(mode: str | None = None, status: str | None = None, limit: int = Query(default=500, ge=1, le=500), user: dict[str, Any] = Depends(get_current_user)):
     """List events with optional filters."""
     return get_events(mode=mode, status=status, limit=limit)
 
 
 @router.get("/feedback/stats", response_model=FeedbackStats)
-async def feedback_stats():
+async def feedback_stats(user: dict[str, Any] = Depends(get_current_user)):
     """Return aggregate event accuracy statistics.
 
     Precision = true_positives / (true_positives + false_positives).
