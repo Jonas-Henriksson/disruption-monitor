@@ -415,7 +415,7 @@ export function MapMode({
             const p = pt(s.lat, s.lng);
             if (!p) return null;
             const isMfg = s.type === 'mfg';
-            const r = isMfg ? Math.max(2, 4 * inv) : Math.max(1.5, 3 * inv);
+            const r = isMfg ? Math.max(0.25, 4 * inv) : Math.max(0.2, 3 * inv);
             const color = isMfg ? '#3b82f6' : s.type === 'log' ? '#f59e0b' : '#4a5568';
             const opacity = isMfg ? 0.7 : 0.35;
 
@@ -444,7 +444,7 @@ export function MapMode({
                 <circle
                   cx={p[0]}
                   cy={p[1]}
-                  r={Math.max(4, 8 * inv)}
+                  r={Math.max(0.5, 8 * inv)}
                   fill="transparent"
                   pointerEvents="all"
                 />
@@ -497,7 +497,7 @@ export function MapMode({
             const isHovered = hoveredEvent === i;
             const isCritical = sev === 'Critical';
             const isHigh = sev === 'High';
-            const baseR = Math.max(3, 8 * inv);
+            const baseR = Math.max(0.4, 8 * inv);
 
             return (
               <g
@@ -568,7 +568,7 @@ export function MapMode({
                   r={isSelected ? baseR * 1.3 : baseR}
                   fill={color}
                   stroke={isSelected ? V3.selRing : V3.dotStroke}
-                  strokeWidth={isSelected ? Math.max(1, 2 * inv) : Math.max(0.5, inv)}
+                  strokeWidth={isSelected ? Math.max(0.1, 2 * inv) : Math.max(0.05, inv)}
                   filter="url(#v3-map-glow)"
                 />
 
@@ -579,8 +579,8 @@ export function MapMode({
                     r={baseR * 2}
                     fill="none"
                     stroke={V3.selRing}
-                    strokeWidth={Math.max(0.4, 0.8 * inv)}
-                    strokeDasharray={`${Math.max(1.5, 3 * inv)},${Math.max(1, 2 * inv)}`}
+                    strokeWidth={Math.max(0.05, 0.8 * inv)}
+                    strokeDasharray={`${Math.max(0.15, 3 * inv)},${Math.max(0.1, 2 * inv)}`}
                     opacity={0.5}
                   />
                 )}
