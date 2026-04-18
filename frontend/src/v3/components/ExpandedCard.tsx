@@ -9,7 +9,7 @@ import type { DisruptionEvent, ActionItemShape } from './expandedcard_types';
 import type { Severity, SupplierAlternativesResponse } from '../../types';
 import { ActionCheckbox } from './ActionCheckbox';
 import { BU_MAP } from '../../data/sites';
-import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment, fetchEvolutionLatest } from '../../services/api';
+import { updateEventStatus, fetchSupplierAlternatives, fetchBuExposure, fetchEventActions, updateActionStatus, generateEventActions, assignTicket, fetchAssessment, fetchEvolutionLatest, submitEventFeedback } from '../../services/api';
 import { enrichExposureData, computeImpactWithGraph } from '../../utils/impact';
 import { ROUTES, SUPPLY_GRAPH } from '../../data';
 import type { ScanItem, SupplyGraphInput } from '../../types';
@@ -1358,6 +1358,7 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
   const [status, setStatus] = useState(event.status || 'active');
   const [assignInput, setAssignInput] = useState('');
   const [showAssignInput, setShowAssignInput] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
 
   const sectionHeader = sectionHeaderStyle(V3);
 
@@ -1509,6 +1510,35 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
           </button>
         </div>
       )}
+
+      {/* Signal Quality Feedback */}
+      <div style={sectionHeader}>Signal Quality</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        {(['true_positive', 'false_positive'] as const).map(outcome => (
+          <button
+            key={outcome}
+            onClick={async () => {
+              const ok = await submitEventFeedback(resolvedId, outcome);
+              if (ok) setFeedbackSent(outcome);
+            }}
+            disabled={!!feedbackSent}
+            style={{
+              padding: '4px 10px', fontSize: 10, borderRadius: 4, cursor: feedbackSent ? 'default' : 'pointer',
+              border: `1px solid ${feedbackSent === outcome ? V3.accent.green : V3.border.default}`,
+              background: feedbackSent === outcome ? V3.severity.lowBg : V3.bg.card,
+              color: feedbackSent === outcome ? V3.accent.green : V3.text.secondary,
+              fontFamily: V3_FONT, opacity: feedbackSent && feedbackSent !== outcome ? 0.4 : 1,
+            }}
+          >
+            {outcome === 'true_positive' ? '\u2713 Accurate' : '\u2717 False alarm'}
+          </button>
+        ))}
+        {feedbackSent && (
+          <span style={{ fontSize: 9, color: V3.text.muted, alignSelf: 'center' }}>
+            Thanks — this improves future scans
+          </span>
+        )}
+      </div>
 
       {/* Communicate */}
       <div style={sectionHeader}>Communicate</div>

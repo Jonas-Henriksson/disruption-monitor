@@ -753,6 +753,22 @@ export async function graphCreateEventMeeting(eventId: string): Promise<GraphRes
   }
 }
 
+/** Submit signal quality feedback for an event. */
+export async function submitEventFeedback(
+  eventId: string,
+  outcome: 'true_positive' | 'false_positive' | 'missed',
+  comment?: string
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`${BASE_URL}${API_PREFIX}/events/${encodeURIComponent(eventId)}/feedback`, {
+      method: 'POST',
+      headers: await authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ outcome, comment: comment || null }),
+    });
+    return resp.ok;
+  } catch { return false; }
+}
+
 /** Get the status of Graph API integration (permissions, connectivity). */
 export async function graphGetStatus(): Promise<GraphResponse | null> {
   try {
