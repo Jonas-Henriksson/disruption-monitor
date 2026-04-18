@@ -539,10 +539,12 @@ ActionType = Literal[
     "escalate_to_leadership",
     "file_insurance_claim",
     "activate_bcp",
+    "custom",
 ]
 
-ActionStatus = Literal["pending", "in_progress", "completed", "dismissed"]
+ActionStatus = Literal["pending", "assigned", "in_progress", "completed", "dismissed"]
 ActionPriority = Literal["critical", "high", "normal", "low"]
+ActionSource = Literal["ai", "manual", "template"]
 
 
 class Action(BaseModel):
@@ -557,6 +559,19 @@ class Action(BaseModel):
     priority: ActionPriority = "normal"
     status: ActionStatus = "pending"
     due_date: Optional[datetime] = None
+    source: ActionSource = "ai"
+    assignee_email: Optional[str] = None
+    assignee_name: Optional[str] = None
+    created_by_email: Optional[str] = None
+    created_by_name: Optional[str] = None
+    completion_note: Optional[str] = None
+    evidence_url: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completed_by_email: Optional[str] = None
+    completed_by_name: Optional[str] = None
+    dismissed_reason: Optional[str] = None
+    dismissed_at: Optional[datetime] = None
+    dismissed_by_email: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -570,6 +585,31 @@ class ActionCreate(BaseModel):
     assignee_hint: Optional[str] = None
     priority: ActionPriority = "normal"
     due_date: Optional[datetime] = None
+    source: ActionSource = "manual"
+    assignee_email: Optional[str] = None
+    assignee_name: Optional[str] = None
+
+
+class ActionAssign(BaseModel):
+    """Assign an action to a person."""
+
+    assignee_email: str
+    assignee_name: str
+    due_date: Optional[datetime] = None
+    priority: Optional[ActionPriority] = None
+
+
+class ActionComplete(BaseModel):
+    """Mark an action as done."""
+
+    completion_note: str
+    evidence_url: Optional[str] = None
+
+
+class ActionDismiss(BaseModel):
+    """Dismiss an action."""
+
+    reason: Optional[str] = None
 
 
 class ActionUpdate(BaseModel):

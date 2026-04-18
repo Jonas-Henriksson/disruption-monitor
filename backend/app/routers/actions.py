@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from ..auth.dependencies import get_current_user
 from ..db.database import (
@@ -16,8 +18,9 @@ from ..db.database import (
     get_event,
     update_action,
 )
-from ..models.schemas import Action, ActionCreate, ActionUpdate
+from ..models.schemas import Action, ActionAssign, ActionComplete, ActionCreate, ActionDismiss, ActionUpdate
 from ..services.action_engine import generate_actions_for_event
+from ..services.teams_notify import send_assignment_chat
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,11 @@ async def create_event_action(event_id: str, body: ActionCreate, user: dict[str,
         assignee_hint=body.assignee_hint,
         priority=body.priority,
         due_date=due_str,
+        source=body.source,
+        assignee_email=body.assignee_email,
+        assignee_name=body.assignee_name,
+        created_by_email=user.get("email", ""),
+        created_by_name=user.get("name", ""),
     )
     row = get_action(action_id)
     return row
@@ -109,6 +117,140 @@ async def generate_event_actions(event_id: str, user: dict[str, Any] = Depends(g
             created_actions.append(row)
 
     return created_actions
+
+
+# ── GET /actions/mine ─────────────────────────────────────────────
+
+
+@router.get("/actions/mine")
+async def my_actions(
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[Action]:
+    """Get all actions assigned to the current user."""
+    email = user.get("email", "")
+    if not email:
+        return []
+    rows = get_actions(assignee_email=email, limit=200)
+    # Enrich with event title for display
+    for row in rows:
+        evt = get_event(row["event_id"])
+        if evt:
+            payload = evt
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            row["event_title"] = payload.get("event", payload.get("risk", row.get("event_id", "")))
+            row["event_severity"] = payload.get("severity", payload.get("risk_level", "Medium"))
+    return [Action(**r) for r in rows]
+
+
+# ── PATCH /actions/{action_id}/assign ────────────────────────────
+
+
+@router.patch("/actions/{action_id}/assign")
+async def assign_action(
+    action_id: int,
+    body: ActionAssign,
+    x_graph_token: str | None = Header(None),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> Action:
+    """Assign an action to a person from the MS365 directory."""
+    action = get_action(action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+
+    update_action(
+        action_id,
+        status="assigned",
+        assignee_email=body.assignee_email,
+        assignee_name=body.assignee_name,
+        due_date=body.due_date.isoformat() if body.due_date else None,
+        priority=body.priority,
+    )
+
+    # Fire-and-forget Teams notification
+    if x_graph_token:
+        evt = get_event(action["event_id"])
+        event_title = ""
+        event_severity = "Medium"
+        if evt:
+            payload = evt
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            event_title = payload.get("event", payload.get("risk", ""))
+            event_severity = payload.get("severity", payload.get("risk_level", "Medium"))
+        asyncio.ensure_future(send_assignment_chat(
+            graph_token=x_graph_token,
+            assignee_email=body.assignee_email,
+            event_title=event_title,
+            event_severity=event_severity,
+            action_title=action.get("title", ""),
+            priority=body.priority or action.get("priority", "normal"),
+            due_date=body.due_date.isoformat() if body.due_date else action.get("due_date"),
+            assigner_name=user.get("name", "Unknown"),
+        ))
+
+    updated = get_action(action_id)
+    return Action(**updated)
+
+
+# ── PATCH /actions/{action_id}/complete ──────────────────────────
+
+
+@router.patch("/actions/{action_id}/complete")
+async def complete_action(
+    action_id: int,
+    body: ActionComplete,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> Action:
+    """Mark an action as done with a completion note."""
+    action = get_action(action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+    if action["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Action already completed")
+
+    update_action(
+        action_id,
+        status="completed",
+        completion_note=body.completion_note,
+        evidence_url=body.evidence_url,
+        completed_by_email=user.get("email", ""),
+        completed_by_name=user.get("name", ""),
+    )
+    updated = get_action(action_id)
+    return Action(**updated)
+
+
+# ── PATCH /actions/{action_id}/dismiss ───────────────────────────
+
+
+@router.patch("/actions/{action_id}/dismiss")
+async def dismiss_action(
+    action_id: int,
+    body: ActionDismiss,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> Action:
+    """Dismiss an action as not applicable."""
+    action = get_action(action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+    if action["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Cannot dismiss a completed action")
+
+    update_action(
+        action_id,
+        status="dismissed",
+        dismissed_reason=body.reason,
+        dismissed_by_email=user.get("email", ""),
+    )
+    updated = get_action(action_id)
+    return Action(**updated)
 
 
 # ── PATCH /actions/{action_id} ─────────────────────────────────────
