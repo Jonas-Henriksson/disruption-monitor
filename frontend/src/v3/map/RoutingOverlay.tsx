@@ -73,22 +73,13 @@ function getAffectedCorridors(events: ScanItem[]): Map<string, string[]> {
 function getChokepointDisruptions(events: ScanItem[], chokepoints: Chokepoint[]): Map<string, number> {
   const result = new Map<string, number>();
 
-  const CHOKEPOINT_REGIONS: Record<string, string[]> = {
-    'Suez Canal': ['Middle East', 'Africa', 'Europe'],
-    'Str. of Malacca': ['China', 'India', 'Asia Pacific'],
-    'Taiwan Strait': ['China'],
-    'Str. of Hormuz': ['Middle East'],
-    'Panama Canal': ['Americas'],
-    'Cape of Good Hope': ['Africa'],
-    'Rotterdam': ['Europe'],
-  };
-
   chokepoints.forEach(cp => {
-    const relRegions = CHOKEPOINT_REGIONS[cp.n] || [];
     let count = 0;
     events.forEach(evt => {
-      const r = 'region' in evt ? (evt as { region: string }).region : '';
-      if (relRegions.includes(r) || r === 'Global') count++;
+      const tagged = (evt as Record<string, unknown>).affected_chokepoints;
+      if (Array.isArray(tagged) && tagged.includes(cp.n)) {
+        count++;
+      }
     });
     if (count > 0) result.set(cp.n, count);
   });

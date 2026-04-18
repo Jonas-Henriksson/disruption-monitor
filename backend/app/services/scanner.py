@@ -67,6 +67,7 @@ For each disruption found, return a JSON object with these exact fields:
 - lng: number (longitude of event epicenter)
 - skf_exposure: string (how this affects SKF specifically — mention specific factories or suppliers)
 - recommended_action: string (concrete mitigation steps)
+- affected_chokepoints: string[] (which maritime chokepoints this disruption directly affects — only include if the disruption specifically impacts that chokepoint. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
 
 Return all significant disruptions you find. If fewer than 5 exist, return fewer. Do not pad with low-relevance items. Order by severity (Critical first).
 Only return the JSON array, no other text.
@@ -98,6 +99,7 @@ For each risk, return a JSON object with these exact fields:
 - lat: number (latitude center)
 - lng: number (longitude center)
 - watchpoint: string (what to watch for next)
+- affected_chokepoints: string[] (which maritime chokepoints this risk directly affects. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
 
 Return a JSON array of 12-15 risks, ordered by risk_level.
 Only return the JSON array, no other text.
@@ -130,6 +132,7 @@ For each event, return a JSON object with these exact fields:
 - friction_level: string (Free | Low | Moderate | High | Prohibitive)
 - skf_cost_impact: string (cost impact description)
 - recommended_action: string (concrete steps)
+- affected_chokepoints: string[] (which maritime chokepoints this event directly affects. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
 
 Focus on changes in the last 7 days. Prioritize tariff changes, sanctions updates, and export control modifications that directly affect bearing manufacturing supply chains.
 
@@ -449,6 +452,77 @@ def _enrich_supply_chain_data(item: dict) -> None:
         item["routing_context"] = routing_reasons[:10]  # Cap at 10
 
 
+# ── Chokepoint inference ─────────────────────────────────────────
+
+_CHOKEPOINT_KEYWORDS: dict[str, list[str]] = {
+    "Suez Canal": ["suez"],
+    "Str. of Malacca": ["malacca"],
+    "Str. of Hormuz": ["hormuz"],
+    "Panama Canal": ["panama canal", "panama passage"],
+    "Cape of Good Hope": ["cape of good hope", "good hope", "cape route"],
+    "Taiwan Strait": ["taiwan strait"],
+    "Rotterdam": ["rotterdam port", "port of rotterdam"],
+}
+
+# Proximity-based: if event is within this radius of the chokepoint, tag it
+_CHOKEPOINT_COORDS: dict[str, tuple[float, float, float]] = {
+    "Suez Canal": (30.46, 32.34, 200),
+    "Str. of Malacca": (2.5, 101.2, 300),
+    "Str. of Hormuz": (26.57, 56.25, 300),
+    "Panama Canal": (9.08, -79.68, 200),
+    "Cape of Good Hope": (-34.36, 18.49, 400),
+    "Taiwan Strait": (24.5, 119.5, 250),
+    "Rotterdam": (51.92, 4.48, 100),
+}
+
+
+def _infer_chokepoints(item: dict) -> list[str]:
+    """Infer affected chokepoints from event text and coordinates.
+
+    Uses keyword matching on title + description + exposure text,
+    plus geographic proximity to known chokepoint locations.
+    """
+    text = " ".join([
+        item.get("event", ""),
+        item.get("risk", ""),
+        item.get("description", ""),
+        item.get("this_week", ""),
+        item.get("skf_exposure", ""),
+        item.get("skf_relevance", ""),
+    ]).lower()
+
+    matched: set[str] = set()
+
+    # Keyword matching
+    for cp_name, keywords in _CHOKEPOINT_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                matched.add(cp_name)
+                break
+
+    # Red Sea / Houthi → Suez Canal + Cape of Good Hope (rerouting)
+    if "red sea" in text or "houthi" in text:
+        matched.add("Suez Canal")
+        matched.add("Cape of Good Hope")
+
+    # Bosporus / Black Sea → tag but not a defined chokepoint in our list
+    # Iran conflict → Hormuz
+    if "iran" in text and any(w in text for w in ["war", "conflict", "military", "strike", "attack", "threat", "tension"]):
+        matched.add("Str. of Hormuz")
+
+    # Geographic proximity
+    lat = item.get("lat")
+    lng = item.get("lng")
+    if lat is not None and lng is not None:
+        for cp_name, (cp_lat, cp_lng, radius_km) in _CHOKEPOINT_COORDS.items():
+            if cp_name not in matched:
+                dist = _haversine_km(lat, lng, cp_lat, cp_lng)
+                if dist <= radius_km:
+                    matched.add(cp_name)
+
+    return sorted(matched)
+
+
 # ── Core scanning logic ─────────────────────────────────────────
 
 
@@ -564,6 +638,8 @@ def _build_sample_result(
     for item in data:
         _enrich_supply_chain_data(item)
         item["computed_severity"] = compute_severity_score(item)
+        if "affected_chokepoints" not in item:
+            item["affected_chokepoints"] = _infer_chokepoints(item)
 
     # Tag potential duplicates
     tag_duplicates(data)
@@ -673,6 +749,10 @@ async def _run_live_scan(
 
         # Enrich with supplier input_details and routing context from SUPPLY_GRAPH
         _enrich_supply_chain_data(item)
+
+        # Ensure affected_chokepoints is always present (keyword fallback if AI didn't tag)
+        if "affected_chokepoints" not in item or not isinstance(item.get("affected_chokepoints"), list):
+            item["affected_chokepoints"] = _infer_chokepoints(item)
 
     # Compute algorithmic severity scores (keeps AI severity intact)
     for item in items:
