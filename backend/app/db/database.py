@@ -209,21 +209,34 @@ CREATE TABLE IF NOT EXISTS event_feedback (
 CREATE INDEX IF NOT EXISTS idx_event_feedback_event ON event_feedback(event_id);
 
 CREATE TABLE IF NOT EXISTS actions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id    TEXT NOT NULL REFERENCES events(id),
-    action_type TEXT NOT NULL CHECK (action_type IN (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id        TEXT NOT NULL REFERENCES events(id),
+    action_type     TEXT NOT NULL CHECK (action_type IN (
         'activate_backup_supplier', 'increase_safety_stock', 'reroute_shipment',
         'contact_supplier', 'monitor_situation', 'escalate_to_leadership',
-        'file_insurance_claim', 'activate_bcp'
+        'file_insurance_claim', 'activate_bcp', 'custom'
     )),
-    title       TEXT NOT NULL DEFAULT '',
-    description TEXT,
-    assignee_hint TEXT,
-    priority    TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('critical', 'high', 'normal', 'low')),
-    status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'dismissed')),
-    due_date    TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+    title           TEXT NOT NULL DEFAULT '',
+    description     TEXT,
+    assignee_hint   TEXT,
+    priority        TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('critical', 'high', 'normal', 'low')),
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'assigned', 'in_progress', 'completed', 'dismissed')),
+    due_date        TEXT,
+    source          TEXT NOT NULL DEFAULT 'ai' CHECK (source IN ('ai', 'manual', 'template')),
+    assignee_email  TEXT,
+    assignee_name   TEXT,
+    created_by_email TEXT,
+    created_by_name TEXT,
+    completion_note TEXT,
+    evidence_url    TEXT,
+    completed_at    TEXT,
+    completed_by_email TEXT,
+    completed_by_name TEXT,
+    dismissed_reason TEXT,
+    dismissed_at    TEXT,
+    dismissed_by_email TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_actions_event ON actions(event_id);
@@ -288,6 +301,27 @@ def _init_db() -> None:
             conn.execute("ALTER TABLE events ADD COLUMN resurfaced_at TEXT")
         if "assessment" not in event_cols:
             conn.execute("ALTER TABLE events ADD COLUMN assessment TEXT")
+        # Migration: add new action columns (idempotent)
+        _new_action_cols = [
+            ("source", "TEXT NOT NULL DEFAULT 'ai'"),
+            ("assignee_email", "TEXT"),
+            ("assignee_name", "TEXT"),
+            ("created_by_email", "TEXT"),
+            ("created_by_name", "TEXT"),
+            ("completion_note", "TEXT"),
+            ("evidence_url", "TEXT"),
+            ("completed_at", "TEXT"),
+            ("completed_by_email", "TEXT"),
+            ("completed_by_name", "TEXT"),
+            ("dismissed_reason", "TEXT"),
+            ("dismissed_at", "TEXT"),
+            ("dismissed_by_email", "TEXT"),
+        ]
+        for col_name, col_type in _new_action_cols:
+            try:
+                conn.execute(f"ALTER TABLE actions ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass  # Column already exists
         conn.commit()
     finally:
         conn.close()
