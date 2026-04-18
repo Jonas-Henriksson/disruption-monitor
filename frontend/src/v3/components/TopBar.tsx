@@ -25,6 +25,8 @@ export interface TopBarProps {
   onToggleWhatIf?: () => void;
   whatIfOpen?: boolean;
   onOpenWeeklyBriefing?: () => void;
+  myWorkCount?: number;
+  onOpenMyWork?: () => void;
 }
 
 const MODES: { key: ScanMode; label: string }[] = [
@@ -76,6 +78,8 @@ export function TopBar({
   onToggleWhatIf,
   whatIfOpen,
   onOpenWeeklyBriefing,
+  myWorkCount,
+  onOpenMyWork,
 }: TopBarProps) {
   const { theme: V3, mode: themeMode, toggleTheme } = useV3Theme();
   const [buOpen, setBuOpen] = useState(false);
@@ -333,6 +337,34 @@ export function TopBar({
       >
         {themeMode === 'dark' ? '\u2600' : '\u263E'}
       </button>
+
+      {/* My Work */}
+      {onOpenMyWork && (
+        <button
+          onClick={onOpenMyWork}
+          title="My Work"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', position: 'relative',
+            color: V3.text.muted, fontSize: 16, padding: '4px 6px',
+            borderRadius: V3.radius.sm,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = V3.text.primary)}
+          onMouseLeave={e => (e.currentTarget.style.color = V3.text.muted)}
+        >
+          {'\uD83D\uDCDD'}
+          {(myWorkCount ?? 0) > 0 && (
+            <span style={{
+              position: 'absolute', top: -2, right: -4,
+              background: V3.severity.critical, color: '#fff',
+              fontSize: 8, fontWeight: 700, borderRadius: '50%',
+              minWidth: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 3px',
+            }}>
+              {myWorkCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Weekly Briefing */}
       {onOpenWeeklyBriefing && (

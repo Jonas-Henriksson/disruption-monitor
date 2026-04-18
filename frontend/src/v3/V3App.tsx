@@ -16,7 +16,7 @@ import { useMapState } from '../hooks/useMapState';
 import { SITES, SUPPLIERS } from '../data';
 import { eventId } from '../utils/format';
 import type { ScanMode, CorridorSummaryItem } from '../types';
-import { fetchCorridorSummary } from '../services/api';
+import { fetchCorridorSummary, fetchMyActions } from '../services/api';
 
 // V3 components
 import { TopBar } from './components/TopBar';
@@ -27,6 +27,7 @@ import { FeedList } from './components/FeedList';
 import { RiskSummary } from './components/RiskSummary';
 import { WeeklyBriefing } from './components/WeeklyBriefing';
 import { WhatIfPanel } from './components/WhatIfPanel';
+import { MyWorkPanel } from './components/MyWorkPanel';
 // V1/V2/V3 toggle removed — V3 is now the primary UI
 
 // Map components (created by map agent — using direct imports)
@@ -66,6 +67,8 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [selectedCorridor, setSelectedCorridor] = useState<string | null>(null);
   const [corridorData, setCorridorData] = useState<CorridorSummaryItem[] | null>(null);
+  const [myWorkOpen, setMyWorkOpen] = useState(false);
+  const [myWorkCount, setMyWorkCount] = useState(0);
 
   // Inject CSS
   const cssInjected = useRef(false);
@@ -114,6 +117,15 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
     })();
     return () => { cancelled = true; };
   }, [dis.mode, dis.items]);
+
+  // Fetch My Work action count on mount and after scans
+  useEffect(() => {
+    fetchMyActions().then(result => {
+      if (result) {
+        setMyWorkCount(result.filter(a => a.status !== 'completed' && a.status !== 'dismissed').length);
+      }
+    });
+  }, [dis.items]); // Refresh after scan completes
 
   // Map selected index <-> selectedEventId
   const selectedIndex = useMemo(() => {
@@ -246,6 +258,8 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
         onToggleWhatIf={() => setShowWhatIf(prev => !prev)}
         whatIfOpen={showWhatIf}
         onOpenWeeklyBriefing={() => setShowWeeklyBriefing(true)}
+        myWorkCount={myWorkCount}
+        onOpenMyWork={() => setMyWorkOpen(true)}
       />
 
       {/* Scan progress bar */}
@@ -371,6 +385,28 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
 
       {/* What-If scenario drawer */}
       <WhatIfPanel open={showWhatIf} onClose={() => setShowWhatIf(false)} />
+
+      {/* My Work panel */}
+      <MyWorkPanel
+        open={myWorkOpen}
+        onClose={() => {
+          setMyWorkOpen(false);
+          // Refresh count after panel closes
+          fetchMyActions().then(result => {
+            if (result) setMyWorkCount(result.filter(a => a.status !== 'completed' && a.status !== 'dismissed').length);
+          });
+        }}
+        onNavigateToEvent={(evtId) => {
+          setMyWorkOpen(false);
+          if (dis.items) {
+            const idx = dis.items.findIndex(d => {
+              const eid = eventId(d as { event?: string; risk?: string; region?: string });
+              return eid === evtId || ('id' in d && (d as any).id === evtId);
+            });
+            if (idx >= 0) handleSelectIndex(idx);
+          }
+        }}
+      />
 
     </div>
   );
