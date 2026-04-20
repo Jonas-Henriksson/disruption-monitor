@@ -152,19 +152,29 @@ _PROMPTS: dict[ScanMode, str] = {
 # ── ID generation helpers ────────────────────────────────────────
 
 
+def _sanitize_slug(text: str, max_len: int = 40) -> str:
+    """Create a URL-safe slug: lowercase, no slashes or special chars."""
+    import re
+    slug = text.lower()[:max_len]
+    slug = re.sub(r"[/\\]", "-", slug)   # replace slashes
+    slug = slug.replace(" ", "-")
+    slug = re.sub(r"-{2,}", "-", slug)   # collapse repeated dashes
+    return slug.strip("-")
+
+
 def _make_disruption_id(item: dict) -> str:
-    slug = item.get("event", "unknown").lower()[:40].replace(" ", "-")
-    region = item.get("region", "unknown").lower().replace(" ", "-")
+    slug = _sanitize_slug(item.get("event", "unknown"))
+    region = _sanitize_slug(item.get("region", "unknown"))
     return f"{slug}|{region}"
 
 
 def _make_geopolitical_id(item: dict) -> str:
-    return item.get("risk", "unknown").lower()[:50].replace(" ", "-")
+    return _sanitize_slug(item.get("risk", "unknown"), max_len=50)
 
 
 def _make_trade_id(item: dict) -> str:
-    slug = item.get("event", "unknown").lower()[:40].replace(" ", "-")
-    region = item.get("region", "unknown").lower().replace(" ", "-")
+    slug = _sanitize_slug(item.get("event", "unknown"))
+    region = _sanitize_slug(item.get("region", "unknown"))
     return f"{slug}|{region}"
 
 

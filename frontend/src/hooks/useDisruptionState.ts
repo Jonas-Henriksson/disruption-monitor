@@ -3,6 +3,7 @@ import type { ScanMode, ScanItem, Severity, EventRegistryEntry, EditEntry, Ticke
 import { SO, SAMPLE } from "../data";
 import { eventId } from "../utils/format";
 import { fetchLatestScan, triggerScan, extractItems, fetchRecommendations, updateEventStatus, fetchNarrative, fetchTimeline, type BackendRecommendation, type NarrativeResponse, type TimelineDataPoint } from "../services/api";
+import { preloadEventData } from "../services/preloader";
 
 export type DataSource = "live" | "sample" | "fallback";
 
@@ -46,7 +47,7 @@ export function useDisruptionState() {
         const r = await window.storage?.get('scan-data');
         if (r?.value) {
           const d = JSON.parse(r.value);
-          if (d.items?.length) { setItems(d.items); setMode(d.mode || null); setSTime(new Date(d.time)); setDOpen(false); }
+          if (d.items?.length) { setItems(d.items); setMode(d.mode || null); setSTime(new Date(d.time)); setDOpen(false); preloadEventData(d.items); }
         }
         // @ts-expect-error window.storage
         const reg = await window.storage?.get('event-registry');
@@ -135,8 +136,11 @@ export function useDisruptionState() {
 
   /** Run a scan using backend API with fallback to local SAMPLE data */
   const scan = useCallback(async (m: ScanMode) => {
-    setLoading(true); setError(null); setMode(m); setSel(null); setItems(null); setScanPct(0);
+    setLoading(true); setError(null); setMode(m); setSel(null); setScanPct(0);
     setDOpen(true); setDClosing(false);
+
+    // Preserve existing items during scan — only clear if we have nothing
+    setItems(prev => prev && prev.length > 0 ? prev : null);
 
     // Try backend API first
     setScanPct(10);
@@ -152,6 +156,7 @@ export function useDisruptionState() {
         setScanPct(100);
         setDataSource(apiResult.source === "live" ? "live" : "sample");
         mergeRegistry(sorted);
+        preloadEventData(sorted);
         setSTime(new Date());
         const now = new Date().toISOString();
         try {
@@ -164,7 +169,25 @@ export function useDisruptionState() {
       }
     }
 
-    // Fallback: use local SAMPLE data with chunked loading animation
+    // Scan failed — if we already have backend data loaded, keep it instead of falling back
+    const latestResult = await fetchLatestScan(m);
+    if (latestResult) {
+      const latestItems = extractItems(latestResult);
+      if (latestItems.length > 0) {
+        const sorted = sortBySeverity(latestItems);
+        setItems(sorted);
+        setScanPct(100);
+        setDataSource(latestResult.source === "live" ? "live" : "sample");
+        mergeRegistry(sorted);
+        preloadEventData(sorted);
+        setSTime(new Date(latestResult.scanned_at));
+        setLoading(false);
+        setTimeout(() => setScanPct(0), 600);
+        return;
+      }
+    }
+
+    // Final fallback: use local SAMPLE data only if nothing else available
     setDataSource("fallback");
     const data = SAMPLE[m] as ScanItem[];
     if (!data) { setError('Unknown mode'); setLoading(false); return; }
@@ -201,6 +224,7 @@ export function useDisruptionState() {
         setDataSource(res.source === "live" ? "live" : "sample");
         setDOpen(true);
         mergeRegistry(sorted);
+        preloadEventData(sorted);
         return true;
       }
     }

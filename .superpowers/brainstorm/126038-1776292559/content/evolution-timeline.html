@@ -1,0 +1,145 @@
+<h2>Evolution Timeline — ExpandedCard Placement</h2>
+<p class="subtitle">Where should the evolution story live inside the disruption detail view? Pick the layout that feels most natural.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>New "Evolution" Tab</h3>
+      <p>Add a 4th tab alongside Summary | Exposure | Act. Dedicated space for the full timeline — phase markers, severity trajectory chart, milestone list, and AI evolution narrative. Keeps Summary clean, but adds one more click.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Tab Bar</div>
+        <div class="mockup-body" style="padding:0">
+          <div style="display:flex; border-bottom:2px solid #1e293b; font-size:13px;">
+            <div style="flex:1; padding:10px 0; text-align:center; color:#64748b;">Summary</div>
+            <div style="flex:1; padding:10px 0; text-align:center; color:#64748b;">Exposure</div>
+            <div style="flex:1; padding:10px 0; text-align:center; color:#e2e8f0; border-bottom:2px solid #f59e0b; font-weight:700;">Evolution</div>
+            <div style="flex:1; padding:10px 0; text-align:center; color:#64748b;">Act</div>
+          </div>
+          <div style="padding:16px;">
+            <!-- Phase banner -->
+            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+              <span style="font-size:9px; font-weight:600; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">PHASE 3: STRUCTURAL TRADE SHIFT</span>
+              <span style="font-size:9px; padding:3px 8px; border-radius:4px; background:rgba(59,130,246,0.1); color:#60a5fa; border:1px solid rgba(59,130,246,0.2);">Since Mar 2025</span>
+            </div>
+            <!-- Severity trajectory -->
+            <div style="font-size:9px; color:#64748b; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">SEVERITY TRAJECTORY (12 months)</div>
+            <div style="background:#0f172a; border-radius:6px; padding:12px; border:1px solid #1e293b; margin-bottom:14px;">
+              <svg width="100%" height="60" viewBox="0 0 400 60">
+                <!-- Grid lines -->
+                <line x1="0" y1="15" x2="400" y2="15" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="4,4"/>
+                <line x1="0" y1="30" x2="400" y2="30" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="4,4"/>
+                <line x1="0" y1="45" x2="400" y2="45" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="4,4"/>
+                <!-- Labels -->
+                <text x="2" y="13" fill="#475569" font-size="7" font-family="monospace">75</text>
+                <text x="2" y="28" fill="#475569" font-size="7" font-family="monospace">50</text>
+                <text x="2" y="43" fill="#475569" font-size="7" font-family="monospace">25</text>
+                <!-- Severity line -->
+                <polyline points="20,40 50,38 80,30 110,25 140,22 170,18 200,15 230,14 260,12 290,13 320,12 350,11 380,12" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                <!-- Phase markers -->
+                <line x1="80" y1="2" x2="80" y2="58" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                <line x1="200" y1="2" x2="200" y2="58" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                <!-- Phase labels -->
+                <text x="82" y="8" fill="#ef4444" font-size="6" font-family="monospace">Invasion</text>
+                <text x="202" y="8" fill="#f59e0b" font-size="6" font-family="monospace">Trade shift</text>
+                <!-- Dots at phase transitions -->
+                <circle cx="80" cy="30" r="3" fill="#ef4444"/>
+                <circle cx="200" cy="15" r="3" fill="#f59e0b"/>
+              </svg>
+            </div>
+            <!-- Milestones -->
+            <div style="font-size:9px; color:#64748b; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">KEY MILESTONES</div>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
+              <div style="display:flex; gap:8px; font-size:10px; align-items:flex-start;">
+                <span style="color:#64748b; font-family:monospace; min-width:60px; flex-shrink:0;">Feb 2024</span>
+                <span style="color:#94a3b8;">Initial detection — logistics disruption from Black Sea route closures. Score 35.</span>
+              </div>
+              <div style="display:flex; gap:8px; font-size:10px; align-items:flex-start;">
+                <span style="color:#64748b; font-family:monospace; min-width:60px; flex-shrink:0;">Apr 2024</span>
+                <span style="color:#94a3b8;">Escalation — Schweinfurt MFG entered exposure zone. Score jumped 35→58.</span>
+              </div>
+              <div style="display:flex; gap:8px; font-size:10px; align-items:flex-start;">
+                <span style="color:#64748b; font-family:monospace; min-width:60px; flex-shrink:0;">Mar 2025</span>
+                <span style="color:#94a3b8;">Phase shift — reclassified from geopolitical to trade disruption. 2 new suppliers at risk.</span>
+              </div>
+            </div>
+            <!-- AI narrative -->
+            <div style="font-size:9px; color:#64748b; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">EVOLUTION ASSESSMENT</div>
+            <div style="font-size:11px; color:#94a3b8; line-height:1.6; background:#0f172a; padding:10px; border-radius:6px; border:1px solid #1e293b;">
+              This event has evolved through three distinct phases over 14 months. What began as a logistics disruption from Black Sea route closures has matured into a structural trade realignment affecting European manufacturing supply chains. SKF exposure deepened in April 2024 when the Schweinfurt plant entered the impact radius. The situation has stabilized at High severity (70-75 range) since Q3 2024, but the underlying trade patterns remain permanently altered.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Inline in Summary Tab</h3>
+      <p>Add the evolution section below the existing score breakdown in Summary. No extra tab — everything in one scrollable view. Simpler navigation, but Summary gets longer.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Summary Tab (scrolled down)</div>
+        <div class="mockup-body" style="padding:16px;">
+          <div style="color:#475569; font-size:10px; text-align:center; padding:8px; border:1px dashed #1e293b; border-radius:4px; margin-bottom:12px;">
+            ↑ existing: title, badges, description, SKF exposure, dimensions, score breakdown...
+          </div>
+          <!-- Compact evolution section -->
+          <div style="font-size:9px; color:#64748b; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">SITUATION EVOLUTION</div>
+          <div style="background:#0f172a; border-radius:6px; padding:10px; border:1px solid #1e293b;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <span style="font-size:9px; font-weight:600; padding:2px 6px; border-radius:3px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">PHASE 3</span>
+              <span style="font-size:10px; color:#94a3b8;">Structural Trade Shift</span>
+              <span style="font-size:9px; color:#64748b; margin-left:auto; font-family:monospace;">14 months tracked</span>
+            </div>
+            <!-- Mini sparkline -->
+            <svg width="100%" height="30" viewBox="0 0 300 30" style="margin-bottom:8px;">
+              <polyline points="10,25 40,23 70,18 100,14 130,12 160,9 190,8 220,7 250,8 280,7" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="70" cy="18" r="2.5" fill="#ef4444"/>
+              <circle cx="190" cy="8" r="2.5" fill="#f59e0b"/>
+            </svg>
+            <!-- Compact narrative -->
+            <div style="font-size:10px; color:#94a3b8; line-height:1.5;">
+              Evolved from logistics disruption (Feb '24) through active conflict escalation (Apr '24, Schweinfurt exposed) to structural trade realignment (Mar '25). Stabilized at High severity. 2 new suppliers entered risk zone.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid — Compact in Summary, Full in Tab</h3>
+      <p>Show a condensed evolution card in Summary (phase label + mini sparkline + one-liner). Click "View full timeline →" to open the dedicated Evolution tab with the complete view. Best of both: context at a glance, depth on demand.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Summary Tab — compact card</div>
+        <div class="mockup-body" style="padding:16px;">
+          <div style="color:#475569; font-size:10px; text-align:center; padding:8px; border:1px dashed #1e293b; border-radius:4px; margin-bottom:12px;">
+            ↑ existing content...
+          </div>
+          <div style="background:#0f172a; border-radius:6px; padding:10px; border:1px solid #1e293b; cursor:pointer;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:9px; font-weight:600; padding:2px 6px; border-radius:3px; background:rgba(239,68,68,0.15); color:#ef4444;">PHASE 3</span>
+                <span style="font-size:10px; color:#94a3b8;">Structural Trade Shift</span>
+              </div>
+              <span style="font-size:9px; color:#60a5fa;">View timeline →</span>
+            </div>
+            <svg width="100%" height="20" viewBox="0 0 300 20">
+              <polyline points="10,18 40,16 70,12 100,9 130,8 160,6 190,5 220,4 250,5 280,4" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="mockup" style="margin-top:8px;">
+        <div class="mockup-header">Evolution Tab — full detail (on click)</div>
+        <div class="mockup-body" style="padding:16px; color:#475569; font-size:10px; text-align:center;">
+          Same full view as Option A — trajectory chart, milestones, AI narrative
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

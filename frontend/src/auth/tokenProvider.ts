@@ -11,6 +11,12 @@ type TokenProviderFn = () => Promise<string | null>;
 
 let _tokenProvider: TokenProviderFn | null = null;
 
+/** Returns the current MSAL account's username (UPN / email). */
+export function getAccountEmail(): string | null {
+  const accounts = msalInstance.getAllAccounts();
+  return accounts.length > 0 ? (accounts[0].username || null) : null;
+}
+
 /** Called by AuthProvider to register the token acquisition function. */
 export function setTokenProvider(fn: TokenProviderFn): void {
   _tokenProvider = fn;

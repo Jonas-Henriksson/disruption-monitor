@@ -100,7 +100,7 @@ export function CorridorStrip({ selectedCorridor, onSelectCorridor }: CorridorSt
           >
             <span>{c.corridor}</span>
             <span style={{ fontSize: 8 }}>{arrow}</span>
-            {c.event_count > 1 && (
+            {c.event_count >= 1 && (
               <span style={{
                 fontSize: 8,
                 background: bg + '33',

@@ -44,14 +44,25 @@ class NarrativeUpdate(BaseModel):
 
 
 def _find_event(event_id: str) -> dict | None:
-    """Look up a disruption event by ID, first from DB then from sample data."""
-    event = get_event(event_id)
+    """Look up a disruption event by ID, first from DB then from sample data.
+
+    Handles URL-encoded IDs (%2F -> /, %7C -> |) since Starlette/nginx
+    may not fully decode path parameters containing special characters.
+    """
+    from urllib.parse import unquote
+    decoded_id = unquote(event_id)
+    event = get_event(decoded_id)
     if event:
         return event
+    # Try the original (un-decoded) ID as fallback
+    if decoded_id != event_id:
+        event = get_event(event_id)
+        if event:
+            return event
     # Fall back to sample data across all modes
     for loader in (load_disruptions, load_geopolitical, load_trade):
         for evt in loader():
-            if evt["id"] == event_id:
+            if evt["id"] == decoded_id or evt["id"] == event_id:
                 return evt
     return None
 

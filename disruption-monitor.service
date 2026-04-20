@@ -1,0 +1,16 @@
+[Unit]
+Description=SC Hub Disruption Monitor API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/disruption-monitor
+ExecStart=/home/ubuntu/disruption-monitor/.venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 3101
+Restart=always
+RestartSec=5
+Environment=PATH=/home/ubuntu/disruption-monitor/.venv/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-/home/ubuntu/disruption-monitor/.env
+
+[Install]
+WantedBy=multi-user.target

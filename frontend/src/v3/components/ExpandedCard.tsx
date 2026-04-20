@@ -19,6 +19,9 @@ import { useV3Theme } from '../ThemeContext';
 
 const TAB_KEY = 'v3-expanded-tab';
 
+/* ── Shared caches (populated by preloader, read here) ───── */
+import { assessmentCache as _assessmentCache, evolutionLatestCache as _evolutionLatestCache, evolutionAllCache as _evolutionAllCache, actionsCache as _actionsCache } from '../../services/preloader';
+
 /* ─────────────────────────────────────────────
    Props
    ───────────────────────────────────────────── */
@@ -296,13 +299,21 @@ function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: Disru
       setAssessment((event as any).assessment);
       return;
     }
+    const eventId = (event as any).id || (event as any).event_id || '';
+    if (!eventId) return;
+    // Check module-level cache first
+    const cached = _assessmentCache.get(eventId);
+    if (cached) { setAssessment(cached); return; }
     if (assessmentFetched.current) return;
     assessmentFetched.current = true;
     setAssessmentLoading(true);
-    const eventId = (event as any).id || (event as any).event_id || '';
-    if (!eventId) { setAssessmentLoading(false); return; }
     fetchAssessment(eventId)
-      .then(res => { if (res?.assessment) setAssessment(res.assessment); })
+      .then(res => {
+        if (res?.assessment) {
+          _assessmentCache.set(eventId, res.assessment);
+          setAssessment(res.assessment);
+        }
+      })
       .finally(() => setAssessmentLoading(false));
   }, [event]);
 
@@ -310,12 +321,18 @@ function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: Disru
   const evolutionFetched = useRef(false);
 
   useEffect(() => {
-    if (evolutionFetched.current) return;
-    evolutionFetched.current = true;
     const eventId = (event as any).id || (event as any).event_id || '';
     if (!eventId) return;
+    // Check module-level cache first
+    const cached = _evolutionLatestCache.get(eventId);
+    if (cached) { setEvolutionLatest(cached); return; }
+    if (evolutionFetched.current) return;
+    evolutionFetched.current = true;
     fetchEvolutionLatest(eventId).then(res => {
-      if (res?.summary) setEvolutionLatest(res.summary);
+      if (res?.summary) {
+        _evolutionLatestCache.set(eventId, res.summary);
+        setEvolutionLatest(res.summary);
+      }
     });
   }, [event]);
 
@@ -539,13 +556,29 @@ function SummaryTab({ event, sev, sevCol, theme: V3, handleTab }: { event: Disru
             try {
               const vals: number[] = JSON.parse(evolutionLatest.severity_values || '[]');
               if (vals.length < 2) return null;
-              const max = Math.max(...vals, 1);
-              const w = 200; const h = 20;
-              const pts = vals.map((v: number, i: number) => `${(i / (vals.length - 1)) * w},${h - (v / max) * (h - 2)}`).join(' ');
+              const w = 200; const h = 28; const pad = 2;
+              // Fixed 0-100 scale
+              const toY = (v: number) => pad + (h - 2 * pad) - (Math.min(v, 100) / 100) * (h - 2 * pad);
+              const pts = vals.map((v: number, i: number) => `${(i / (vals.length - 1)) * w},${toY(v)}`).join(' ');
+              const area = `0,${toY(0)} ${pts} ${w},${toY(0)}`;
+              const last = vals[vals.length - 1];
               return (
-                <svg width={w} height={h} style={{ display: 'block' }}>
-                  <polyline points={pts} fill="none" stroke={sevCol} strokeWidth={1.5} strokeLinecap="round" />
-                </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width={w} height={h} style={{ display: 'block', flexShrink: 0 }}>
+                    <defs>
+                      <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={sevCol} stopOpacity={0.2} />
+                        <stop offset="100%" stopColor={sevCol} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <polygon points={area} fill="url(#sparkFill)" />
+                    <polyline points={pts} fill="none" stroke={sevCol} strokeWidth={1.5} strokeLinecap="round" />
+                    <circle cx={w} cy={toY(last)} r={2.5} fill={sevCol} />
+                  </svg>
+                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: V3_FONT_MONO, color: sevCol }}>
+                    {Math.round(last)}
+                  </span>
+                </div>
               );
             } catch { return null; }
           })()}
@@ -1357,6 +1390,135 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: '#22c55e',
 };
 
+/* ── Group repetitive actions into collapsible clusters ────── */
+function GroupedActions({ actions, theme: V3, renderAction }: {
+  actions: BackendAction[];
+  theme: V3Theme;
+  renderAction: (action: BackendAction) => React.ReactNode;
+}) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Group actions by prefix pattern (e.g., "Review alternative suppliers for")
+  const { standalone, groups } = useMemo(() => {
+    const GROUP_THRESHOLD = 3; // min items to form a group
+    // Extract the action verb prefix (everything before "for X at Y" or "at Y")
+    const prefixOf = (title: string): string => {
+      // Match patterns like "Review alternative suppliers for Steel at Pune"
+      const m = title.match(/^(.+?)\s+(?:for\s+.+?\s+at\s+|at\s+)/i);
+      return m ? m[1].trim() : '';
+    };
+
+    const prefixMap = new Map<string, BackendAction[]>();
+    const solo: BackendAction[] = [];
+
+    // First pass: count prefix occurrences
+    const prefixCounts = new Map<string, number>();
+    for (const a of actions) {
+      const p = prefixOf(a.title);
+      if (p) prefixCounts.set(p, (prefixCounts.get(p) || 0) + 1);
+    }
+
+    // Second pass: group or keep standalone
+    for (const a of actions) {
+      const p = prefixOf(a.title);
+      if (p && (prefixCounts.get(p) || 0) >= GROUP_THRESHOLD) {
+        if (!prefixMap.has(p)) prefixMap.set(p, []);
+        prefixMap.get(p)!.push(a);
+      } else {
+        solo.push(a);
+      }
+    }
+
+    return { standalone: solo, groups: Array.from(prefixMap.entries()) };
+  }, [actions]);
+
+  if (groups.length === 0) {
+    // No grouping needed — render flat
+    return <>{actions.map(a => renderAction(a))}</>;
+  }
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Render: standalone first, then grouped
+  return (
+    <>
+      {standalone.map(a => renderAction(a))}
+      {groups.map(([prefix, items]) => {
+        const isExpanded = expandedGroups.has(prefix);
+        const pendingCount = items.filter(a => a.status === 'pending' || a.status === 'assigned').length;
+        const completedCount = items.filter(a => a.status === 'completed').length;
+        const dismissedCount = items.filter(a => a.status === 'dismissed').length;
+        // Extract unique site names from titles
+        const sites = items.map(a => {
+          const m = a.title.match(/at\s+(.+)$/i);
+          return m ? m[1] : '';
+        }).filter(Boolean);
+
+        return (
+          <div key={prefix} style={{ marginBottom: 2 }}>
+            <button
+              onClick={() => toggleGroup(prefix)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 0', cursor: 'pointer', background: 'none',
+                border: 'none', borderBottom: `1px solid ${V3.border.subtle}`,
+                fontFamily: V3_FONT, textAlign: 'left',
+              }}
+            >
+              <span style={{
+                fontSize: 8, color: V3.text.muted, fontFamily: V3_FONT_MONO,
+                width: 12, textAlign: 'center', flexShrink: 0,
+              }}>
+                {isExpanded ? '\u25BC' : '\u25B6'}
+              </span>
+              <span style={{
+                fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                fontFamily: V3_FONT_MONO, textTransform: 'uppercase' as const,
+                background: V3.accent.blue + '22', color: V3.accent.blue,
+                border: `1px solid ${V3.accent.blue}44`, flexShrink: 0,
+              }}>AI</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: V3.text.primary }}>
+                  {prefix} <span style={{ color: V3.text.muted, fontWeight: 400 }}>
+                    ({items.length} sites)
+                  </span>
+                </div>
+                <div style={{ fontSize: 9, color: V3.text.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {sites.slice(0, 4).join(', ')}{sites.length > 4 ? ` +${sites.length - 4} more` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                {pendingCount > 0 && (
+                  <span style={{ fontSize: 8, fontFamily: V3_FONT_MONO, color: V3.accent.blue, padding: '1px 4px', borderRadius: 3, background: V3.accent.blue + '15' }}>
+                    {pendingCount} open
+                  </span>
+                )}
+                {completedCount > 0 && (
+                  <span style={{ fontSize: 8, fontFamily: V3_FONT_MONO, color: V3.accent.green, padding: '1px 4px', borderRadius: 3, background: V3.accent.green + '15' }}>
+                    {completedCount} done
+                  </span>
+                )}
+                {dismissedCount > 0 && (
+                  <span style={{ fontSize: 8, fontFamily: V3_FONT_MONO, color: V3.text.muted, padding: '1px 4px', borderRadius: 3, background: V3.bg.badge }}>
+                    {dismissedCount} skip
+                  </span>
+                )}
+              </div>
+            </button>
+            {isExpanded && items.map(a => renderAction(a))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; theme: V3Theme; onStatusChange?: (eventId: string, newStatus: string) => void }) {
   const [actions, setActions] = useState<BackendAction[]>([]);
   const [backendLoaded, setBackendLoaded] = useState(false);
@@ -1386,42 +1548,53 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     return `${name}|${region}`;
   }, [event.id, event.event, event.risk, event.region]);
 
-  // Fetch backend actions on mount
+  // Map raw backend actions to typed BackendAction shape
+  const mapActions = useCallback((raw: any[], eid: string): BackendAction[] =>
+    raw.map(a => ({
+      id: a.id,
+      event_id: eid,
+      action_type: a.action_type || 'monitor_situation',
+      title: a.title || a.description || '',
+      description: a.description ?? null,
+      assignee_hint: a.assignee_hint ?? null,
+      priority: (a.priority || 'normal') as BackendAction['priority'],
+      status: (a.status || 'pending') as BackendAction['status'],
+      due_date: a.due_date ?? null,
+      source: ((a as any).source || 'ai') as BackendAction['source'],
+      assignee_email: (a as any).assignee_email ?? null,
+      assignee_name: (a as any).assignee_name ?? null,
+      created_by_email: (a as any).created_by_email ?? null,
+      created_by_name: (a as any).created_by_name ?? null,
+      completion_note: (a as any).completion_note ?? null,
+      evidence_url: (a as any).evidence_url ?? null,
+      completed_at: (a as any).completed_at ?? null,
+      completed_by_email: (a as any).completed_by_email ?? null,
+      completed_by_name: (a as any).completed_by_name ?? null,
+      dismissed_reason: (a as any).dismissed_reason ?? null,
+      dismissed_at: (a as any).dismissed_at ?? null,
+      dismissed_by_email: (a as any).dismissed_by_email ?? null,
+      created_at: (a as any).created_at || '',
+      updated_at: (a as any).updated_at || '',
+    })), []);
+
+  // Fetch backend actions — check preloader cache first
   useEffect(() => {
     if (!resolvedId || backendLoaded) return;
+    // Try cache from preloader
+    const cached = _actionsCache.get(resolvedId);
+    if (cached && cached.length > 0) {
+      setActions(mapActions(cached, resolvedId));
+      setBackendLoaded(true);
+      return;
+    }
     fetchEventActions(resolvedId).then(backendActions => {
       if (backendActions && backendActions.length > 0) {
-        // Map backend response to BackendAction shape
-        setActions(backendActions.map(a => ({
-          id: a.id,
-          event_id: resolvedId,
-          action_type: a.action_type || 'monitor_situation',
-          title: a.title || a.description || '',
-          description: a.description ?? null,
-          assignee_hint: a.assignee_hint ?? null,
-          priority: (a.priority || 'normal') as BackendAction['priority'],
-          status: (a.status || 'pending') as BackendAction['status'],
-          due_date: a.due_date ?? null,
-          source: ((a as any).source || 'ai') as BackendAction['source'],
-          assignee_email: (a as any).assignee_email ?? null,
-          assignee_name: (a as any).assignee_name ?? null,
-          created_by_email: (a as any).created_by_email ?? null,
-          created_by_name: (a as any).created_by_name ?? null,
-          completion_note: (a as any).completion_note ?? null,
-          evidence_url: (a as any).evidence_url ?? null,
-          completed_at: (a as any).completed_at ?? null,
-          completed_by_email: (a as any).completed_by_email ?? null,
-          completed_by_name: (a as any).completed_by_name ?? null,
-          dismissed_reason: (a as any).dismissed_reason ?? null,
-          dismissed_at: (a as any).dismissed_at ?? null,
-          dismissed_by_email: (a as any).dismissed_by_email ?? null,
-          created_at: (a as any).created_at || '',
-          updated_at: (a as any).updated_at || '',
-        })));
+        _actionsCache.set(resolvedId, backendActions);
+        setActions(mapActions(backendActions, resolvedId));
       }
       setBackendLoaded(true);
     });
-  }, [resolvedId, backendLoaded]);
+  }, [resolvedId, backendLoaded, mapActions]);
 
   // Progress computation (exclude dismissed from denominator)
   const activeActions = actions.filter(a => a.status !== 'dismissed');
@@ -1432,9 +1605,13 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
     const result = await assignAction(actionId, { email: user.email, name: user.displayName });
     if (result) {
       setActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'assigned' as const, assignee_email: user.email, assignee_name: user.displayName } : a));
+      // Invalidate preloader cache so re-open reflects the assignment
+      _actionsCache.delete(resolvedId);
+    } else {
+      console.warn('[SC Hub] Action assign failed for id', actionId);
     }
     setAssigningId(null);
-  }, []);
+  }, [resolvedId]);
 
   const handleComplete = useCallback(async (actionId: number) => {
     if (!completionNote.trim()) return;
@@ -1518,11 +1695,11 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
         </div>
       )}
 
-      {/* Action rows */}
+      {/* Action rows — grouped when repetitive */}
       {actions.length === 0 && backendLoaded && (
         <EmptyRow label="No actions yet -- add one below" theme={V3} />
       )}
-      {actions.map(action => {
+      <GroupedActions actions={actions} theme={V3} renderAction={(action) => {
         const isDismissed = action.status === 'dismissed';
         const isCompleted = action.status === 'completed';
         const isUnassigned = !action.assignee_email && action.status === 'pending';
@@ -1692,7 +1869,7 @@ function ActTab({ event, theme: V3, onStatusChange }: { event: DisruptionEvent; 
             )}
           </div>
         );
-      })}
+      }} />
 
       {/* Add Action button + menu */}
       <div style={{ marginTop: 8, position: 'relative' }}>
@@ -1893,18 +2070,22 @@ function CommBtn({ label, icon, href, theme: V3 }: { label: string; icon: string
    TAB: Evolution
    ══════════════════════════════════════════════ */
 function EvolutionTab({ event, sevCol, theme: V3 }: { event: DisruptionEvent; sevCol: string; theme: V3Theme }) {
-  const [summaries, setSummaries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const fetched = useRef(false);
+  const eventId = (event as any).id || (event as any).event_id || '';
+  const cached = eventId ? _evolutionAllCache.get(eventId) : undefined;
+  const [summaries, setSummaries] = useState<any[]>(cached || []);
+  const [loading, setLoading] = useState(!cached);
+  const fetched = useRef(!!cached);
 
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
-    const eventId = (event as any).id || (event as any).event_id || '';
     if (!eventId) { setLoading(false); return; }
     import('../../services/api').then(({ fetchEvolution }) =>
       fetchEvolution(eventId).then(res => {
-        if (res?.summaries) setSummaries(res.summaries);
+        if (res?.summaries) {
+          _evolutionAllCache.set(eventId, res.summaries);
+          setSummaries(res.summaries);
+        }
         setLoading(false);
       })
     );
@@ -1929,18 +2110,22 @@ function EvolutionTab({ event, sevCol, theme: V3 }: { event: DisruptionEvent; se
   const phaseLabel = latest.phase_label || 'Unknown';
   const phaseNumber = latest.phase_number || 1;
 
-  // Collect all severity values across summaries for trajectory chart
+  // Collect severity values with date labels from summaries
   const allSevValues: number[] = [];
+  const dateLabels: string[] = [];
   const phaseMarkers: { index: number; label: string; number: number }[] = [];
   let lastPhase = '';
   for (const s of summaries) {
     const vals: number[] = (() => { try { return JSON.parse(s.severity_values || '[]'); } catch { return []; } })();
-    for (const v of vals) {
+    const periodStart = s.period_start || '';
+    for (let vi = 0; vi < vals.length; vi++) {
       if (s.phase_label && s.phase_label !== lastPhase) {
         phaseMarkers.push({ index: allSevValues.length, label: s.phase_label, number: s.phase_number });
         lastPhase = s.phase_label;
       }
-      allSevValues.push(v);
+      allSevValues.push(vals[vi]);
+      // First point of each summary gets the date label
+      dateLabels.push(vi === 0 ? periodStart : '');
     }
   }
 
@@ -1963,10 +2148,51 @@ function EvolutionTab({ event, sevCol, theme: V3 }: { event: DisruptionEvent; se
   const forwardOutlook = latest.forward_outlook || '';
   const narrative = latest.narrative || '';
 
-  // Trajectory chart dimensions
-  const chartW = 300;
-  const chartH = 60;
-  const maxSev = Math.max(...allSevValues, 1);
+  // ── Severity trajectory chart (fixed 0-100 scale) ──
+  const chartW = 340;
+  const chartH = 130;
+  const padL = 28;  // left padding for Y labels
+  const padR = 8;
+  const padT = 8;
+  const padB = 18;  // bottom padding for X labels
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
+
+  // Severity zone bands (0-100 fixed scale)
+  const sevZones = [
+    { min: 75, max: 100, color: V3.severity.critical, label: 'Critical' },
+    { min: 50, max: 75, color: V3.severity.high, label: 'High' },
+    { min: 25, max: 50, color: V3.severity.medium, label: 'Medium' },
+    { min: 0, max: 25, color: V3.severity.low, label: 'Low' },
+  ];
+
+  const toX = (i: number) => padL + (allSevValues.length > 1 ? (i / (allSevValues.length - 1)) * plotW : plotW / 2);
+  const toY = (v: number) => padT + plotH - (Math.min(v, 100) / 100) * plotH;
+
+  // Build polyline and area fill
+  const linePoints = allSevValues.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+  const areaPoints = `${toX(0)},${toY(0)} ${linePoints} ${toX(allSevValues.length - 1)},${toY(0)}`;
+
+  // Select ~4-5 evenly spaced date labels for X axis
+  const xLabels: { x: number; label: string }[] = [];
+  const uniqueDates = dateLabels.map((d, i) => ({ date: d, index: i })).filter(d => d.date);
+  if (uniqueDates.length > 0) {
+    const step = Math.max(1, Math.floor(uniqueDates.length / 4));
+    for (let i = 0; i < uniqueDates.length; i += step) {
+      const d = uniqueDates[i];
+      const short = d.date.slice(5); // MM-DD
+      xLabels.push({ x: toX(d.index), label: short });
+    }
+    // Always include last date
+    const last = uniqueDates[uniqueDates.length - 1];
+    if (!xLabels.find(l => l.label === last.date.slice(5))) {
+      xLabels.push({ x: toX(last.index), label: last.date.slice(5) });
+    }
+  }
+
+  // Current value
+  const currentVal = allSevValues[allSevValues.length - 1];
+  const currentLabel = currentVal >= 75 ? 'Critical' : currentVal >= 50 ? 'High' : currentVal >= 25 ? 'Medium' : 'Low';
 
   return (
     <div>
@@ -1991,34 +2217,85 @@ function EvolutionTab({ event, sevCol, theme: V3 }: { event: DisruptionEvent; se
       {allSevValues.length >= 2 && (
         <div>
           <HoverTip tip={GLOSSARY.evolution_trajectory} theme={V3}>
-            <div style={sectionHeader}>Severity Trajectory</div>
+            <div style={{ ...sectionHeader, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Severity Trajectory</span>
+              <span style={{
+                fontSize: 11, fontWeight: 700, fontFamily: V3_FONT_MONO,
+                color: sevCol, padding: '1px 6px', borderRadius: 3,
+                background: sevCol + '18',
+              }}>
+                {Math.round(currentVal)}/100 {currentLabel}
+              </span>
+            </div>
           </HoverTip>
           <div style={{
-            background: V3.bg.base, borderRadius: 6, padding: '10px 12px',
+            background: V3.bg.base, borderRadius: 6, padding: '8px 4px 4px 4px',
             border: `1px solid ${V3.border.subtle}`, marginBottom: 10,
           }}>
-            <svg width="100%" height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none">
-              {/* Grid lines */}
-              {[25, 50, 75].map(v => (
-                <line key={v} x1={0} y1={chartH - (v / maxSev) * (chartH - 4)} x2={chartW} y2={chartH - (v / maxSev) * (chartH - 4)}
-                  stroke={V3.border.subtle} strokeWidth={0.5} strokeDasharray="4,4" />
+            <svg width="100%" height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <linearGradient id="sevFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={sevCol} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={sevCol} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+
+              {/* Severity zone bands */}
+              {sevZones.map(z => (
+                <rect key={z.label}
+                  x={padL} y={toY(z.max)} width={plotW} height={toY(z.min) - toY(z.max)}
+                  fill={z.color} opacity={0.06}
+                />
               ))}
-              {/* Severity line */}
-              <polyline
-                points={allSevValues.map((v, i) => `${(i / (allSevValues.length - 1)) * chartW},${chartH - (v / maxSev) * (chartH - 4)}`).join(' ')}
-                fill="none" stroke={sevCol} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+
+              {/* Horizontal grid lines at 25, 50, 75 with labels */}
+              {[25, 50, 75].map(v => (
+                <g key={v}>
+                  <line x1={padL} y1={toY(v)} x2={padL + plotW} y2={toY(v)}
+                    stroke={V3.border.subtle} strokeWidth={0.5} strokeDasharray="3,3" />
+                  <text x={padL - 3} y={toY(v) + 3} textAnchor="end"
+                    fill={V3.text.muted} fontSize={7} fontFamily={V3_FONT_MONO}>{v}</text>
+                </g>
+              ))}
+              {/* 0 and 100 labels */}
+              <text x={padL - 3} y={toY(0) + 3} textAnchor="end" fill={V3.text.muted} fontSize={7} fontFamily={V3_FONT_MONO}>0</text>
+              <text x={padL - 3} y={toY(100) + 3} textAnchor="end" fill={V3.text.muted} fontSize={7} fontFamily={V3_FONT_MONO}>100</text>
+
+              {/* X-axis date labels */}
+              {xLabels.map((lbl, i) => (
+                <text key={i} x={lbl.x} y={chartH - 2} textAnchor="middle"
+                  fill={V3.text.muted} fontSize={7} fontFamily={V3_FONT_MONO}>{lbl.label}</text>
+              ))}
+
+              {/* Area fill under curve */}
+              <polygon points={areaPoints} fill="url(#sevFill)" />
+
+              {/* Main severity line */}
+              <polyline points={linePoints}
+                fill="none" stroke={sevCol} strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round"
               />
-              {/* Phase markers */}
+
+              {/* Phase transition markers */}
               {phaseMarkers.map((pm, pi) => {
-                const x = allSevValues.length > 1 ? (pm.index / (allSevValues.length - 1)) * chartW : 0;
+                const x = toX(pm.index);
                 return (
                   <g key={pi}>
-                    <line x1={x} y1={2} x2={x} y2={chartH - 2} stroke={V3.accent.blue} strokeWidth={1} strokeDasharray="3,3" opacity={0.5} />
-                    <text x={x + 3} y={8} fill={V3.accent.blue} fontSize={6} fontFamily="monospace">{pm.label}</text>
-                    <circle cx={x} cy={chartH - ((allSevValues[pm.index] || 0) / maxSev) * (chartH - 4)} r={3} fill={sevCol} />
+                    <line x1={x} y1={padT} x2={x} y2={padT + plotH}
+                      stroke={V3.accent.blue} strokeWidth={1} strokeDasharray="3,3" opacity={0.4} />
+                    <text x={x + 3} y={padT + 7} fill={V3.accent.blue}
+                      fontSize={8} fontFamily={V3_FONT_MONO} opacity={0.8}>
+                      P{pm.number}
+                    </text>
+                    <circle cx={x} cy={toY(allSevValues[pm.index] || 0)} r={3}
+                      fill={V3.accent.blue} opacity={0.7} />
                   </g>
                 );
               })}
+
+              {/* Current value dot */}
+              <circle cx={toX(allSevValues.length - 1)} cy={toY(currentVal)}
+                r={4} fill={sevCol} stroke={V3.bg.base} strokeWidth={1.5} />
             </svg>
           </div>
         </div>

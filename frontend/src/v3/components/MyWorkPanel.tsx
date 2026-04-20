@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useV3Theme } from '../ThemeContext';
 import { V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
 import { fetchMyActions, completeAction, dismissAction } from '../../services/api';
+import { actionsCache as _actionsCache } from '../../services/preloader';
 import type { BackendAction } from '../../types';
 
 interface MyWorkPanelProps {
@@ -69,7 +70,14 @@ export function MyWorkPanel({ open, onClose, onNavigateToEvent }: MyWorkPanelPro
     if (!completionNote.trim()) return;
     const result = await completeAction(actionId, completionNote.trim());
     if (result) {
-      setActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'completed' as const, completed_at: new Date().toISOString(), completion_note: completionNote.trim() } : a));
+      setActions(prev => prev.map(a => {
+        if (a.id === actionId) {
+          // Invalidate preloader cache so ExpandedCard sees the update
+          _actionsCache.delete(a.event_id);
+          return { ...a, status: 'completed' as const, completed_at: new Date().toISOString(), completion_note: completionNote.trim() };
+        }
+        return a;
+      }));
     }
     setCompletingId(null);
     setCompletionNote('');
@@ -78,7 +86,13 @@ export function MyWorkPanel({ open, onClose, onNavigateToEvent }: MyWorkPanelPro
   const handleQuickDismiss = useCallback(async (actionId: number) => {
     const result = await dismissAction(actionId);
     if (result) {
-      setActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'dismissed' as const, dismissed_at: new Date().toISOString() } : a));
+      setActions(prev => prev.map(a => {
+        if (a.id === actionId) {
+          _actionsCache.delete(a.event_id);
+          return { ...a, status: 'dismissed' as const, dismissed_at: new Date().toISOString() };
+        }
+        return a;
+      }));
     }
   }, []);
 

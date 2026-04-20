@@ -35,15 +35,21 @@ _DEV_USER: dict[str, Any] = {
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> dict[str, Any]:
     """Validate Bearer token and return user info.
 
     If AUTH_ENABLED is False, returns a dev placeholder without validation.
-    If AUTH_ENABLED is True and the token is missing or invalid, raises 401.
+    Uses X-User-Email header as reliable email source from MSAL account.
     """
     if not settings.auth_enabled:
-        return _DEV_USER
+        user = dict(_DEV_USER)
+        # Use X-User-Email header from frontend MSAL account (most reliable)
+        x_email = request.headers.get("x-user-email", "")
+        if x_email:
+            user["email"] = x_email
+        return user
 
     if credentials is None:
         raise HTTPException(
@@ -56,6 +62,11 @@ async def get_current_user(
     try:
         claims = await validate_token(token)
         user = extract_user_info(claims)
+        # Supplement with X-User-Email if token didn't have email
+        if not user.get("email"):
+            x_email = request.headers.get("x-user-email", "")
+            if x_email:
+                user["email"] = x_email
         return user
     except Exception as exc:
         logger.warning("Token validation failed: %s", exc)
@@ -67,6 +78,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> dict[str, Any] | None:
     """Like get_current_user but returns None instead of raising 401.
@@ -75,7 +87,11 @@ async def get_optional_user(
     with enhanced features for authenticated ones.
     """
     if not settings.auth_enabled:
-        return _DEV_USER
+        user = dict(_DEV_USER)
+        x_email = request.headers.get("x-user-email", "")
+        if x_email:
+            user["email"] = x_email
+        return user
 
     if credentials is None:
         return None
@@ -83,7 +99,12 @@ async def get_optional_user(
     token = credentials.credentials
     try:
         claims = await validate_token(token)
-        return extract_user_info(claims)
+        user = extract_user_info(claims)
+        if not user.get("email"):
+            x_email = request.headers.get("x-user-email", "")
+            if x_email:
+                user["email"] = x_email
+        return user
     except Exception as exc:
         logger.debug("Optional token validation failed: %s", exc)
         return None

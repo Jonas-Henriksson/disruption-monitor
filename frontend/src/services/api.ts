@@ -6,7 +6,7 @@
  */
 
 import type { ScanMode, ScanItem, SupplierAlternativesResponse, SiteSuppliersResponse, Ticket, TicketStatus, WeeklySummary, BuExposure, WhatIfScenario, WhatIfResult, ExecutiveSummary, CorridorSummaryResponse, BackendAction, DirectoryUser } from "../types";
-import { getToken, getGraphToken } from "../auth/tokenProvider";
+import { getToken, getGraphToken, getAccountEmail } from "../auth/tokenProvider";
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3101";
 const API_PREFIX = "/api/v1";
@@ -21,6 +21,11 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
     }
   } catch {
     // Proceed without auth header — graceful fallback
+  }
+  // Always send account email so backend can identify user even if token decode fails
+  const email = getAccountEmail();
+  if (email) {
+    headers["X-User-Email"] = email;
   }
   return headers;
 }

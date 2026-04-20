@@ -128,9 +128,11 @@ async def my_actions(
 ) -> list[Action]:
     """Get all actions assigned to the current user."""
     email = user.get("email", "")
+    logger.info("GET /actions/mine — user email=%r", email)
     if not email:
         return []
     rows = get_actions(assignee_email=email, limit=200)
+    logger.info("GET /actions/mine — found %d actions for %s", len(rows), email)
     # Enrich with event title for display
     for row in rows:
         evt = get_event(row["event_id"])

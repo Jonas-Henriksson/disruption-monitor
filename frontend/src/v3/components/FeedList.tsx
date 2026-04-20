@@ -20,6 +20,8 @@ export interface FeedListProps {
   onSelectIndex: (idx: number | null) => void;
   onHoverIndex: (idx: number | null) => void;
   onStatusChange?: (eventId: string, newStatus: string) => void;
+  /** When items is a filtered subset, pass the full parent array so index lookups resolve correctly. */
+  parentItems?: ScanItem[];
 }
 
 const SEV_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
@@ -27,6 +29,7 @@ const SEV_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low
 export function FeedList({
   items,
   loading,
+  parentItems,
   error,
   severityFilter,
   searchQuery,
@@ -283,7 +286,7 @@ export function FeedList({
       }}>
         {/* High-priority items (Critical + High) — always shown */}
         {highPriority.map((item) => {
-          const origIdx = items!.indexOf(item);
+          const origIdx = parentItems ? parentItems.indexOf(item) : items!.indexOf(item);
           return (
             <FeedCard
               key={origIdx}
@@ -310,7 +313,7 @@ export function FeedList({
             </button>
 
             {showLowerSeverity && lowerPriority.map((item) => {
-              const origIdx = items!.indexOf(item);
+              const origIdx = parentItems ? parentItems.indexOf(item) : items!.indexOf(item);
               return (
                 <FeedCard
                   key={origIdx}
@@ -339,7 +342,7 @@ export function FeedList({
             </button>
 
             {showDuplicates && duplicates.map((item) => {
-              const origIdx = items!.indexOf(item);
+              const origIdx = parentItems ? parentItems.indexOf(item) : items!.indexOf(item);
               return (
                 <FeedCard
                   key={origIdx}

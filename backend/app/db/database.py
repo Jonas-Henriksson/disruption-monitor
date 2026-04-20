@@ -1679,7 +1679,12 @@ def get_event_severity_history(event_id: str) -> list[dict]:
     for row in rows:
         payload = json.loads(row["payload"])
         severity = payload.get("severity") or payload.get("risk_level", "Medium")
-        score = payload.get("severity_score") or payload.get("score", None)
+        # Score lives in computed_severity.score (primary) or top-level fallbacks
+        cs = payload.get("computed_severity")
+        if isinstance(cs, dict):
+            score = cs.get("score")
+        else:
+            score = payload.get("severity_score") or payload.get("score", None)
         result.append({
             "scan_id": row["scan_id"],
             "severity": severity,
@@ -1857,7 +1862,7 @@ def get_actions(
         conditions.append("event_id = ?")
         params.append(event_id)
     if assignee_email:
-        conditions.append("assignee_email = ?")
+        conditions.append("LOWER(assignee_email) = LOWER(?)")
         params.append(assignee_email)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     params.append(limit)

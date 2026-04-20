@@ -123,7 +123,12 @@ def extract_user_info(claims: dict[str, Any]) -> dict[str, Any]:
     return {
         "oid": claims.get("oid", ""),
         "name": claims.get("name", ""),
-        "email": claims.get("preferred_username", "") or claims.get("email", ""),
+        "email": (
+            claims.get("preferred_username", "")
+            or claims.get("email", "")
+            or claims.get("upn", "")
+            or claims.get("unique_name", "")
+        ),
         "roles": claims.get("roles", []),
         "scope": claims.get("scp", ""),
         "tenant_id": claims.get("tid", ""),

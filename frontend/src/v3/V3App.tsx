@@ -331,6 +331,7 @@ function V3AppInner({ version, onVersionChange }: V3AppProps) {
             onSelectIndex={handleSelectIndex}
             onHoverIndex={handleHoverIndex}
             onStatusChange={handleStatusChange}
+            parentItems={selectedCorridor ? dis.items : undefined}
           />
         </div>
 

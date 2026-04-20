@@ -25,6 +25,52 @@ from ..db.database import (
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_sev_values(snapshots: list) -> list[float]:
+    """Extract numeric severity scores from various snapshot shapes.
+
+    Handles: severity_history dicts ({score: N}), full event dicts
+    ({computed_severity: {score: N}}), and evolution summary dicts.
+    """
+    values = []
+    for s in snapshots:
+        if not isinstance(s, dict):
+            continue
+        # Direct score (from get_event_severity_history)
+        sc = s.get("score")
+        if sc is not None and isinstance(sc, (int, float)) and sc > 0:
+            values.append(float(sc))
+            continue
+        # Nested in computed_severity (from full event payload)
+        cs = s.get("computed_severity")
+        if isinstance(cs, str):
+            try:
+                cs = json.loads(cs)
+            except (json.JSONDecodeError, TypeError):
+                cs = {}
+        if isinstance(cs, dict):
+            sc = cs.get("score")
+            if sc is not None and isinstance(sc, (int, float)):
+                values.append(float(sc))
+                continue
+        # Nested in payload
+        payload = s.get("payload")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (json.JSONDecodeError, TypeError):
+                payload = {}
+        if isinstance(payload, dict):
+            cs2 = payload.get("computed_severity", {})
+            if isinstance(cs2, dict):
+                sc = cs2.get("score")
+                if sc is not None and isinstance(sc, (int, float)):
+                    values.append(float(sc))
+                    continue
+        values.append(0)
+    return values
+
+
 # Cadence per severity tier (hours between evolution analyses)
 _CADENCE: dict[str, int] = {
     "Critical": 6,
@@ -189,17 +235,8 @@ async def _generate_with_claude(
     parsed = json.loads(text)
 
     # Extract severity values from snapshots
-    sev_values = []
-    for s in snapshots:
-        if isinstance(s, dict):
-            cs = s.get("computed_severity") or s.get("payload", {})
-            if isinstance(cs, str):
-                try:
-                    cs = json.loads(cs)
-                except (json.JSONDecodeError, TypeError):
-                    cs = {}
-            sc = cs.get("score") or cs.get("computed_severity", {}).get("score", 0)
-            sev_values.append(sc if isinstance(sc, (int, float)) else 0)
+    # Snapshots may be severity_history dicts ({score: N}) or full event dicts
+    sev_values = _extract_sev_values(snapshots)
 
     return {
         "event_id": event_id,
@@ -226,12 +263,7 @@ def build_fallback_evolution_summary(
     prior_phases: list[dict],
 ) -> dict:
     """Template-based fallback when Claude is unavailable."""
-    sev_values = []
-    for s in snapshots:
-        if isinstance(s, dict):
-            cs = s.get("computed_severity", {})
-            if isinstance(cs, dict):
-                sev_values.append(cs.get("score", 0))
+    sev_values = _extract_sev_values(snapshots)
 
     phase_number = (prior_phases[-1]["number"] + 1) if prior_phases else 1
     phase_label = prior_phases[-1]["phase"] if prior_phases else "Initial Detection"

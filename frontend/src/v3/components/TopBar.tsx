@@ -7,6 +7,7 @@ import { TYPE, V3_FONT, V3_FONT_MONO, sevColor } from '../theme';
 import { useV3Theme } from '../ThemeContext';
 import type { ScanMode, Severity } from '../../types';
 import { relTime } from '../../utils/format';
+import { UserBadge } from '../../auth/UserBadge';
 
 export interface TopBarProps {
   mode: ScanMode | null;
@@ -382,6 +383,20 @@ export function TopBar({
           {'\uD83D\uDCCB'}
         </button>
       )}
+
+      {/* User badge */}
+      <UserBadge theme={{
+        bg: V3.bg.base,
+        border: V3.border.subtle,
+        avatarBg: V3.accent.blueDim,
+        avatarBorder: V3.accent.blue + '44',
+        avatarColor: V3.accent.blue,
+        nameColor: V3.text.primary,
+        emailColor: V3.text.muted,
+        btnBorder: V3.border.subtle,
+        btnColor: V3.text.muted,
+        font: V3_FONT_MONO,
+      }} />
 
       {/* Scan status + button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: V3.spacing.sm, flexShrink: 0 }}>

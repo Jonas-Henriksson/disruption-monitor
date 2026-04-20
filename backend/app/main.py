@@ -6,8 +6,10 @@ Start with:
 
 import logging
 from contextlib import asynccontextmanager
+from urllib.parse import unquote
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
@@ -59,6 +61,19 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# ── URL decode middleware ────────────────────────────────────────
+# Starlette/nginx don't always decode %2F and %7C in path params.
+# Event IDs contain / and | so we need to decode the raw path.
+class URLDecodeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        raw = request.scope.get("path", "")
+        decoded = unquote(raw)
+        if decoded != raw:
+            request.scope["path"] = decoded
+        return await call_next(request)
+
+app.add_middleware(URLDecodeMiddleware)
 
 # ── Request ID middleware ────────────────────────────────────────
 app.add_middleware(RequestIdMiddleware)

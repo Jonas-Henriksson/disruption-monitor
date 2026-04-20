@@ -113,29 +113,40 @@ def find_duplicates(
 
         # 1. Title similarity
         sim = _title_similarity(new_title, existing_title)
-        if sim < title_threshold:
+
+        # 2. High-signal anchor terms
+        anchors = _shared_anchors(new_title, existing_title)
+
+        # Allow through if anchors match (even with low Jaccard), otherwise apply threshold
+        if sim < title_threshold and not anchors:
             continue
 
-        # 2. Region compatibility
+        # 3. Region compatibility
         existing_region = existing.get("region", "Global")
         if not _regions_compatible(new_region, existing_region):
             continue
 
-        # 3. Geographic proximity
+        # 4. Geographic proximity
         existing_lat = existing.get("lat")
         existing_lng = existing.get("lng")
         distance = None
         if all(v is not None for v in [new_lat, new_lng, existing_lat, existing_lng]):
             distance = _haversine_km(new_lat, new_lng, existing_lat, existing_lng)
-            if distance > _DEDUP_RADIUS_KM:
+            if distance > _DEDUP_RADIUS_KM and not anchors:
                 continue
-        # If we can't compute distance, rely on title+region match alone
-        # but require higher title similarity
-        elif sim < 0.6:
+        # If we can't compute distance, rely on title+region+anchor match
+        elif sim < 0.6 and not anchors:
             continue
+
+        # Compute effective similarity including anchor boost
+        effective_sim = sim
+        if anchors:
+            effective_sim += 0.20 * min(len(anchors), 3)
 
         # Build reason string
         reasons = [f"title similarity {sim:.0%}"]
+        if anchors:
+            reasons.append(f"shared anchors: {', '.join(sorted(anchors))}")
         if new_region == existing_region:
             reasons.append(f"same region ({new_region})")
         else:
@@ -146,7 +157,7 @@ def find_duplicates(
         matches.append({
             "existing_event_id": existing_id,
             "existing_title": existing_title,
-            "similarity": round(sim, 3),
+            "similarity": round(effective_sim, 3),
             "distance_km": round(distance, 1) if distance is not None else None,
             "reason": "; ".join(reasons),
         })
@@ -242,9 +253,38 @@ def _extract_key_entities(text: str) -> set[str]:
         "rerouting", "congestion", "escalation", "volatility", "inflation",
         "shortage", "halt", "driving", "remains", "persists", "affecting",
         "compounding", "cascading", "secondary", "effective", "linked",
+        "ongoing", "continues", "continuing", "sustained", "elevated",
+        "threat", "attacks", "military", "conflict", "carriers", "routes",
+        "closed", "closure", "collapse", "reduced", "bypass", "avoidance",
+        "structural", "compound", "systemic", "persistent", "prolonged",
+        "broader", "increased", "traffic", "capacity", "pressure",
+        "congestion", "diversions", "diversion", "reroute", "rerouting",
+        "disrupted", "disruptions", "delay", "return", "refuse", "remain",
+        "revenue", "revenues", "entrenched", "suspended", "stress",
     }
     words = re.findall(r"\b[A-Z][a-z]{2,}\b", text)
     return {w.lower() for w in words if w.lower() not in _FILLER}
+
+
+# High-signal geographic/crisis terms — if two events share these, they're very
+# likely about the same disruption regardless of how different the surrounding
+# wording is.  Matched against lowercased title text, not just capitalized words.
+_ANCHOR_TERMS: list[str] = [
+    "red sea", "houthi", "hormuz", "suez", "malacca", "taiwan strait",
+    "bab el-mandeb", "bab-el-mandeb", "cape of good hope",
+    "panama canal", "black sea", "south china sea",
+    # Country/conflict anchors
+    "iran", "ukraine", "russia", "gaza", "yemen",
+    # Infrastructure
+    "tsmc", "samsung", "boeing", "airbus",
+]
+
+
+def _shared_anchors(title_a: str, title_b: str) -> set[str]:
+    """Find high-signal anchor terms shared by both titles."""
+    a_lower = title_a.lower()
+    b_lower = title_b.lower()
+    return {term for term in _ANCHOR_TERMS if term in a_lower and term in b_lower}
 
 
 def resolve_event_id(
@@ -283,22 +323,27 @@ def resolve_event_id(
 
         # 1. Title similarity (Jaccard)
         sim = _title_similarity(new_title, existing_title)
-        if sim < title_threshold:
+
+        # 2. High-signal anchor terms (checked early to bypass low Jaccard gate)
+        anchors = _shared_anchors(new_title, existing_title)
+
+        # Skip if Jaccard is too low AND no shared anchors
+        if sim < title_threshold and not anchors:
             continue
 
-        # 2. Region compatibility
+        # 3. Region compatibility
         existing_region = existing.get("region", "Global")
         if not _regions_compatible(new_region, existing_region):
             continue
 
-        # 3. Geographic distance
+        # 4. Geographic distance
         existing_lat = existing.get("lat")
         existing_lng = existing.get("lng")
         distance = None
         if all(v is not None for v in [new_lat, new_lng, existing_lat, existing_lng]):
             distance = _haversine_km(new_lat, new_lng, existing_lat, existing_lng)
 
-        # 4. Key entity overlap (Hormuz, Malacca, Toto, Houthi, etc.)
+        # 5. Key entity overlap
         existing_entities = _extract_key_entities(existing_title)
         shared_entities = new_entities & existing_entities
 
@@ -308,6 +353,8 @@ def resolve_event_id(
             score += 0.15  # nearby events get a proximity boost
         if shared_entities:
             score += 0.10 * min(len(shared_entities), 3)  # entity boost, capped at +0.30
+        if anchors:
+            score += 0.20 * min(len(anchors), 3)  # anchor boost, capped at +0.60
 
         # Accept if composite score >= 0.45 (the effective merge threshold)
         if score >= 0.45 and score > best_score:
