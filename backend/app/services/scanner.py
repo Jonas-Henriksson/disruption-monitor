@@ -18,7 +18,7 @@ from ..config import settings
 from .metrics import emit_count, emit_metric
 from ..data import load_disruptions, load_geopolitical, load_sites, load_trade, SUPPLY_GRAPH, REVERSE_GRAPH
 from ..services.dedup import tag_duplicates
-from ..services.serper import fetch_search_context
+from ..services.news import fetch_search_context
 from ..services.severity import compute_severity_score
 from ..utils.geo import haversine_km
 from ..utils.retry import retry_async
@@ -70,7 +70,7 @@ For each disruption found, return a JSON object with these exact fields:
 - affected_chokepoints: string[] (which maritime chokepoints this disruption directly affects — only include if the disruption specifically impacts that chokepoint. Valid values: "Suez Canal", "Str. of Malacca", "Str. of Hormuz", "Panama Canal", "Cape of Good Hope", "Taiwan Strait", "Rotterdam". Empty array [] if no chokepoints affected.)
 - affected_corridors: string[] (which trade corridors this disruption actually disrupts. Only include corridors where cargo flow is materially impacted. Valid values: "EU-CN", "EU-US", "EU-ASEAN", "EU-ME", "EU-IN", "EU-BR", "CN-US", "CN-ASEAN", "CN-EU", "CN-IN". Empty array [] if no corridors affected.)
 
-Return all significant disruptions you find. If fewer than 5 exist, return fewer. Do not pad with low-relevance items. Order by severity (Critical first).
+Return a JSON array of 15-20 disruptions, ordered by severity (Critical first). Cover all major regions where SKF operates. Do not pad with low-relevance items, but be thorough — include Medium and Low severity items that affect SKF supply routes.
 Only return the JSON array, no other text.
 """
 
@@ -699,12 +699,20 @@ async def run_scan(mode: ScanMode) -> dict:
             elapsed_ms = (time.monotonic() - t0) * 1000
             emit_metric("scan.duration_ms", round(elapsed_ms, 1), unit="Milliseconds", dimensions=dims)
             emit_count("scan.failure", dimensions=dims)
-            emit_count("scan.fallback_used", dimensions=dims)
-            logger.error("Live scan failed for %s, falling back to sample data: %s", mode, exc)
-            result = _build_sample_result(mode, scan_id, started_at)
-            result["fallback"] = True
-            result["error"] = str(exc)[:200]
-            return result
+            logger.error("Live scan failed for %s — returning error (no sample fallback): %s", mode, exc)
+            now = datetime.now(timezone.utc)
+            return {
+                "scan_id": scan_id,
+                "mode": mode,
+                "status": "error",
+                "source": "live",
+                "progress": 0,
+                "started_at": started_at.isoformat(),
+                "completed_at": now.isoformat(),
+                "items": [],
+                "count": 0,
+                "error": str(exc)[:200],
+            }
 
 
 def _build_sample_result(
@@ -745,8 +753,8 @@ async def _run_live_scan(
 ) -> dict:
     """Execute a live scan via Claude API (direct or Bedrock) with web search.
 
-    Pre-step: fetch recent news via Serper API and inject as prompt context.
-    Falls back gracefully if Serper is unavailable.
+    Pre-step: fetch recent news via RSS feeds and inject as prompt context.
+    Falls back gracefully if no feeds are available.
     """
     client = _get_claude_client()
 
@@ -755,7 +763,7 @@ async def _run_live_scan(
 
     logger.info("Starting live %s scan (id=%s) via %s", mode, scan_id, "Bedrock" if settings.use_bedrock else "Claude API")
 
-    # ── Serper web search pre-step ──────────────────────────────
+    # ── RSS news context pre-step ───────────────────────────────
     search_context = await fetch_search_context(mode)
     if search_context:
         prompt = (
@@ -766,14 +774,14 @@ async def _run_live_scan(
             f"repeat headlines — synthesize into actionable intelligence.\n\n"
             f"{search_context}"
         )
-        logger.info("Injected Serper context into %s prompt (%d chars)", mode, len(search_context))
+        logger.info("Injected RSS news context into %s prompt (%d chars)", mode, len(search_context))
     else:
-        logger.info("No Serper context for %s — Claude will use training knowledge only", mode)
+        logger.info("No RSS news context for %s — Claude will use training knowledge only", mode)
 
     # Build request kwargs — web_search tool is only available on direct Anthropic API, not Bedrock
     create_kwargs: dict[str, Any] = {
         "model": settings.resolved_model,
-        "max_tokens": 4096,
+        "max_tokens": 16384,
         "messages": [{"role": "user", "content": prompt}],
     }
     if not settings.use_bedrock:
@@ -876,6 +884,9 @@ def _validate_items(items: list[dict], mode: str) -> list[dict]:
     valid = []
 
     for item in items:
+        if not isinstance(item, dict):
+            logger.warning("Dropping non-dict item from %s scan: %s", mode, type(item).__name__)
+            continue
         # Check required fields
         missing = [f for f in required if f not in item or item[f] is None]
         if missing:

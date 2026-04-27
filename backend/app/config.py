@@ -46,7 +46,7 @@ class Settings(BaseSettings):
             return self.claude_model
         if self.use_bedrock:
             return "eu.anthropic.claude-sonnet-4-6"
-        return "claude-sonnet-4-20250514"
+        return "claude-sonnet-4-6-20250514"
 
     @property
     def analysis_model(self) -> str:
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
             return self.claude_model
         if self.use_bedrock:
             return "eu.anthropic.claude-opus-4-6-v1"
-        return "claude-sonnet-4-20250514"
+        return "claude-sonnet-4-6-20250514"
 
     @property
     def resolved_model(self) -> str:

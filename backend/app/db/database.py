@@ -21,7 +21,7 @@ import logging
 import sqlite3
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -277,6 +277,20 @@ CREATE TABLE IF NOT EXISTS evolution_summaries (
     created_at      TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
 );
 CREATE INDEX IF NOT EXISTS idx_evolution_event ON evolution_summaries(event_id, period_type, period_start);
+
+CREATE TABLE IF NOT EXISTS news_cache (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    title_hash   TEXT UNIQUE NOT NULL,
+    title        TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    url          TEXT,
+    summary      TEXT,
+    published_at TEXT,
+    mode_tags    TEXT NOT NULL DEFAULT '[]',
+    fetched_at   TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+);
+CREATE INDEX IF NOT EXISTS idx_news_cache_mode ON news_cache(mode_tags);
+CREATE INDEX IF NOT EXISTS idx_news_cache_fetched ON news_cache(fetched_at);
 """
 
 
@@ -2297,3 +2311,88 @@ def simulate_what_if(scenario_type: str, target: str, duration_weeks: int = 2) -
         "sole_source_risks": sole_source_risks,
         "total_factories_affected": len(affected_factories),
     }
+
+
+# ── News cache helpers ────────────────────────────────────────────
+
+
+def get_news_cache_age(mode: str) -> float | None:
+    """Return age in seconds of the most recent cached article for this mode, or None."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT MAX(fetched_at) FROM news_cache WHERE mode_tags LIKE ?",
+            (f'%"{mode}"%',),
+        ).fetchone()
+    if not row or not row[0]:
+        return None
+    fetched = datetime.fromisoformat(row[0].replace("Z", "+00:00"))
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - fetched).total_seconds()
+
+
+def get_cached_news(mode: str, max_age_hours: int = 24, limit: int = 40) -> list[dict]:
+    """Return cached news articles for a mode, newest first."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT title, source, url, summary, published_at, title_hash
+               FROM news_cache
+               WHERE mode_tags LIKE ? AND fetched_at > ?
+               ORDER BY fetched_at DESC
+               LIMIT ?""",
+            (f'%"{mode}"%', cutoff, limit),
+        ).fetchall()
+    return [
+        {
+            "title": r[0],
+            "source": r[1],
+            "url": r[2],
+            "summary": r[3],
+            "published_at": r[4],
+            "title_hash": r[5],
+        }
+        for r in rows
+    ]
+
+
+def save_news_articles(articles: list[dict], mode: str) -> int:
+    """Insert articles into news_cache, skipping duplicates. Returns count inserted."""
+    now = datetime.now(timezone.utc).isoformat()
+    inserted = 0
+    with get_db() as conn:
+        for a in articles:
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO news_cache
+                       (title_hash, title, source, url, summary, published_at, mode_tags, fetched_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        a["title_hash"],
+                        a["title"],
+                        a.get("source", ""),
+                        a.get("url", ""),
+                        a.get("summary", ""),
+                        a.get("published", ""),
+                        json.dumps(a.get("mode_tags", [mode])),
+                        now,
+                    ),
+                )
+                if conn.execute("SELECT changes()").fetchone()[0] > 0:
+                    inserted += 1
+            except Exception as exc:
+                logger.debug("news_cache insert failed for '%s': %s", a.get("title", "?")[:50], exc)
+    if inserted:
+        _s3_upload_db()
+    return inserted
+
+
+def prune_old_news(max_age_hours: int = 48) -> int:
+    """Delete news_cache entries older than max_age_hours. Returns count deleted."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    with get_db() as conn:
+        conn.execute("DELETE FROM news_cache WHERE fetched_at < ?", (cutoff,))
+        deleted = conn.execute("SELECT changes()").fetchone()[0]
+    if deleted:
+        logger.info("Pruned %d old news_cache entries", deleted)
+    return deleted
